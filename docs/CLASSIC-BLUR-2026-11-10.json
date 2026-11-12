@@ -1,0 +1,96 @@
+{
+  "refreshRate": 180,
+  "dpi": 1.6041666666666667,
+  "measurements": [
+    {
+      "mode": "LiquidGlass",
+      "round": 1,
+      "durationMs": 4878.0063,
+      "callbackMeanMs": 40.502230833333336,
+      "callbackP95Ms": 69.78690000000006,
+      "callbackP99Ms": 76.28770000000009,
+      "cpuCorePercent": 203.85387745871202,
+      "workingSetMiB": 282.02734375,
+      "privateBytesMiB": 562.74609375,
+      "actualPresentFps": null,
+      "gpuFrameMs": null
+    },
+    {
+      "mode": "ClassicBlur",
+      "round": 1,
+      "durationMs": 4869.6891,
+      "callbackMeanMs": 9.181094507575757,
+      "callbackP95Ms": 13.827999999999975,
+      "callbackP99Ms": 16.769999999999982,
+      "cpuCorePercent": 155.28986904910997,
+      "workingSetMiB": 278.37890625,
+      "privateBytesMiB": 495.5,
+      "actualPresentFps": null,
+      "gpuFrameMs": null
+    },
+    {
+      "mode": "ClassicBlur",
+      "round": 2,
+      "durationMs": 4857.2069,
+      "callbackMeanMs": 9.21328,
+      "callbackP95Ms": 13.518299999999954,
+      "callbackP99Ms": 16.652700000000095,
+      "cpuCorePercent": 149.88552605522497,
+      "workingSetMiB": 287.13671875,
+      "privateBytesMiB": 500.421875,
+      "actualPresentFps": null,
+      "gpuFrameMs": null
+    },
+    {
+      "mode": "LiquidGlass",
+      "round": 2,
+      "durationMs": 4856.6049,
+      "callbackMeanMs": 37.80801015625,
+      "callbackP95Ms": 68.9176,
+      "callbackP99Ms": 70.45150000000012,
+      "cpuCorePercent": 152.49662062341133,
+      "workingSetMiB": 286.26171875,
+      "privateBytesMiB": 535.51953125,
+      "actualPresentFps": null,
+      "gpuFrameMs": null
+    }
+  ],
+  "responses": [
+    {
+      "phase": 0,
+      "uploadMs": 49.3768,
+      "screenResponseMs": 77.4293
+    },
+    {
+      "phase": 1,
+      "uploadMs": 50.6063,
+      "screenResponseMs": 57.9168
+    },
+    {
+      "phase": 2,
+      "uploadMs": 72.8125,
+      "screenResponseMs": 90.8979
+    },
+    {
+      "phase": 3,
+      "uploadMs": 37.7744,
+      "screenResponseMs": 54.7298
+    },
+    {
+      "phase": 4,
+      "uploadMs": 49.1644,
+      "screenResponseMs": 64.6095
+    },
+    {
+      "phase": 5,
+      "uploadMs": 46.8271,
+      "screenResponseMs": 62.0225
+    },
+    {
+      "phase": 6,
+      "uploadMs": 42.9379,
+      "screenResponseMs": 92.2414
+    }
+  ],
+  "note": "Rendering callback intervals are diagnostic only, NOT actual present FPS. CPU core percent is not normalized by logical processor count. Screen response includes source rendering, WGC, blur, DWM and polling; not input-to-photon. No GPU/actual-present measurement available."
+}

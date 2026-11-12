@@ -1,0 +1,27 @@
+{
+  "checks": 42,
+  "protectedPipelineFilesUnchanged": 28,
+  "existingOpticalMetricsUnchanged": true,
+  "newModules": [
+    "NightLight",
+    "Airplane",
+    "MobileHotspot"
+  ],
+  "hotspotHardwareToggleTested": false,
+  "actualPresentationFpsMeasured": false,
+  "callbackProbe": "frames=1403; callback FPS=92.33; mean=10.83ms; P95=17.44ms; P99=25.23ms; max=52.23ms; response mean=14.30ms; response P95=36.49ms; layout events=1183; UI allocations=124.15MB; captures=2524; WPF tier=2\r\nPASS Wi-Fi repeated open/return and rapid reversals; callbacks are not GPU presentation FPS",
+  "assets": {
+    "airplane": {
+      "source": "https://raw.githubusercontent.com/ionic-team/ionicons/v8.0.0/src/svg/airplane.svg",
+      "sha256": "5eab74faa595d1239c0adf73cef70999aecc2d65ce1a21edb8a3d0d8588be7a8"
+    },
+    "radio": {
+      "source": "https://raw.githubusercontent.com/ionic-team/ionicons/v8.0.0/src/svg/radio.svg",
+      "sha256": "ca3af1e37e79ccdaa68b7226e02a63f196bf771e202d0f4e474e1e5e19a5c24c"
+    },
+    "notifications": {
+      "source": "https://raw.githubusercontent.com/ionic-team/ionicons/v8.0.0/src/svg/notifications.svg",
+      "sha256": "b05cbe3c082ac561ffcdb7a1e4311cc3cf4bdb1f3a37eb7fed851687bc63903b"
+    }
+  }
+}

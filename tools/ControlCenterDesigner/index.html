@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>控制中心 · 形状调节器</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header"><div class="brand"><span class="brand-mark">◉</span><div><strong>控制中心 <span>形状调节器</span></strong><small>DockForWindows · 本地设计工具</small></div></div><div class="header-actions"><span id="save-state" role="status">自动保存到此浏览器</span><button id="import-button">导入参数</button><button id="export-button" class="primary">导出参数 ↓</button></div></header>
+<main class="workspace">
+<aside class="inspector" aria-label="设计参数">
+  <nav class="inspector-tabs"><button class="selected" data-tab="shape" aria-pressed="true">形状与间距</button><button data-tab="modules" aria-pressed="false">模块排列</button></nav>
+  <div id="shape-controls">
+    <section><h2>整体轮廓</h2><p>四种规格共享统一网格。编辑控制后拖动卡片排列，拖动右下角吸附形状；其余卡片自动让位。</p><div id="geometry-controls"></div></section>
+    <section><h2>内容与对齐</h2><div id="content-controls"></div><label class="select-row">普通卡片内容<select id="alignment"><option value="Center">居中对齐</option><option value="Left">左对齐</option></select></label><p>亮度、音量保留现有横向滑条和排版。</p></section>
+    <details><summary>材质预览</summary><p>网页近似预览。原生折射继续使用 Dock 现有引擎；此处不导出材质改动。</p><label class="range-field"><span>网页玻璃模糊<output id="blur-output">6 px</output></span><input id="preview-blur" aria-label="网页玻璃模糊" type="range" min="0" max="24" step=".5" value="6"></label><label class="range-field"><span>网页衬色<output id="tint-output">8%</output></span><input id="preview-tint" aria-label="网页衬色" type="range" min="0" max="30" value="8"></label><label class="select-row">文字颜色<select id="preview-ink"><option value="light">浅色</option><option value="dark">深色</option></select></label></details>
+    <button id="reset-button" class="quiet">恢复本次建议值</button>
+  </div>
+  <div id="module-controls" hidden><section><h2>添加与排列</h2><p>拖动行或用上下按钮排序。勾选控制显示，小按钮始终为圆形。</p><div id="module-list"></div></section></div>
+</aside>
+<section class="preview-workspace" aria-label="控制中心实时预览">
+  <div class="preview-toolbar"><div class="segmented" id="view-tabs" aria-label="预览页面"><button data-view="main" class="selected" aria-pressed="true">主面板</button><button data-view="bluetooth" aria-pressed="false">蓝牙</button><button data-view="wifi" aria-pressed="false">Wi-Fi</button><button data-view="audio" aria-pressed="false">音频设备</button><button data-view="media" aria-pressed="false">播放器</button></div><button id="background-button">切换背景</button></div>
+  <div class="scene" id="scene"><div class="wallpaper" id="wallpaper"></div><div class="sample-window" id="sample-window" hidden><div class="sample-title"><i></i><i></i><i></i><span>背景应用窗口 · 拖动这里</span></div><div class="sample-content"><b>一段在玻璃后面的内容</b><span>用来观察对比、对齐和背景透射</span><div></div><div></div><div></div></div></div><div class="panel-positioner"><div id="cc-panel" class="cc-panel"><div class="cc-heading"><b>控制中心</b><button id="panel-settings" aria-label="返回形状设置"></button></div><div id="tiles" class="tiles"></div><div id="detail-panel" class="detail-panel" hidden></div><button id="edit-controls" class="edit-controls">编辑控制</button></div></div><div class="scene-caption">设计预览 · 按钮不会操作 Windows 系统</div></div>
+  <div class="preview-status"><span id="size-status"></span><label><input id="show-background-window" type="checkbox"> 显示背景窗口</label><label class="upload-label">自己的壁纸<input id="wallpaper-file" type="file" accept="image/*" hidden></label></div>
+  <div class="handoff"><div><b>调好后，在程序坞设置中导入</b><p>只导出控制中心形状与排版，保留 Dock 功能、亮度与音量布局，以及现有玻璃引擎。</p></div><button id="code-button">查看 / 导出代码</button></div>
+</section>
+</main>
+<input id="import-file" type="file" accept=".json,application/json" hidden>
+<dialog id="export-dialog"><div class="dialog-heading"><div><h2>设计参数</h2><p>下载 JSON 后，在程序坞设置 → 控制中心 → 导入网页设计参数中打开。</p></div><button id="close-dialog" aria-label="关闭">×</button></div><div class="segmented"><button id="show-json" class="selected">JSON 参数</button><button id="show-csharp">C# 参数代码</button></div><textarea id="export-code" readonly spellcheck="false" aria-label="导出的代码"></textarea><div class="dialog-actions"><span id="copy-state" role="status"></span><button id="copy-code">复制</button><button id="download-json">下载 JSON</button><button id="download-csharp" class="primary">下载 C#</button></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body></html>

@@ -1,0 +1,50 @@
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+
+namespace DockForWindows.Views;
+
+public static class SettingsSwitchMotion
+{
+    public static readonly DependencyProperty EnabledProperty=DependencyProperty.RegisterAttached("Enabled",typeof(bool),typeof(SettingsSwitchMotion),new PropertyMetadata(false,Changed));
+    public static bool GetEnabled(DependencyObject owner)=>(bool)owner.GetValue(EnabledProperty);
+    public static void SetEnabled(DependencyObject owner,bool value)=>owner.SetValue(EnabledProperty,value);
+    private static void Changed(DependencyObject owner,DependencyPropertyChangedEventArgs args)
+    {
+        if(owner is not CheckBox box)return;
+        if((bool)args.NewValue){box.Loaded+=Loaded;box.Unloaded+=Unloaded;box.Checked+=Toggled;box.Unchecked+=Toggled;box.PreviewMouseLeftButtonDown+=Pressed;box.PreviewMouseLeftButtonUp+=Released;box.LostMouseCapture+=Released;box.PreviewKeyDown+=KeyDown;box.PreviewKeyUp+=KeyUp;}
+        else{box.Loaded-=Loaded;box.Unloaded-=Unloaded;box.Checked-=Toggled;box.Unchecked-=Toggled;box.PreviewMouseLeftButtonDown-=Pressed;box.PreviewMouseLeftButtonUp-=Released;box.LostMouseCapture-=Released;box.PreviewKeyDown-=KeyDown;box.PreviewKeyUp-=KeyUp;Update(box,false,false);}
+    }
+    private static void Loaded(object sender,RoutedEventArgs args)=>Update((CheckBox)sender,false,false);
+    private static void Unloaded(object sender,RoutedEventArgs args)=>Update((CheckBox)sender,false,false);
+    private static void Toggled(object sender,RoutedEventArgs args)=>Update((CheckBox)sender,true,false);
+    private static void Pressed(object sender,MouseButtonEventArgs args)=>Update((CheckBox)sender,true,true);
+    private static void Released(object sender,RoutedEventArgs args)=>Update((CheckBox)sender,true,false);
+    private static void KeyDown(object sender,KeyEventArgs args){if(args.Key==Key.Space)Update((CheckBox)sender,true,true);}
+    private static void KeyUp(object sender,KeyEventArgs args){if(args.Key==Key.Space)Update((CheckBox)sender,true,false);}
+    private static void Update(CheckBox box,bool animate,bool pressed)
+    {
+        if(box.Template?.FindName("SwitchKnob",box) is not Border knob||box.Template.FindName("SwitchTrack",box) is not Border track)return;
+        var transforms=(TransformGroup)knob.RenderTransform;
+        if(transforms.IsFrozen||transforms.Children[0].IsFrozen||transforms.Children[1].IsFrozen){transforms=transforms.CloneCurrentValue();knob.RenderTransform=transforms;}
+        var scale=(ScaleTransform)transforms.Children[0];var shift=(TranslateTransform)transforms.Children[1];
+        bool enabled=box.IsChecked==true;knob.RenderTransformOrigin=new Point(enabled?1:0,.5);
+        bool motion=animate&&box.IsLoaded&&SystemParameters.ClientAreaAnimation&&!SystemParameters.HighContrast;
+        if(motion){var movement=new DoubleAnimationUsingKeyFrames{Duration=TimeSpan.FromSeconds(.2)};movement.KeyFrames.Add(new SplineDoubleKeyFrame(enabled?18:0,KeyTime.FromTimeSpan(TimeSpan.FromSeconds(.2)),new KeySpline(0,0,.58,1)));shift.BeginAnimation(TranslateTransform.XProperty,movement,HandoffBehavior.SnapshotAndReplace);}
+        else Move(shift,TranslateTransform.XProperty,enabled?18:0,0);
+        Move(scale,ScaleTransform.ScaleXProperty,1,motion ? .1 : 0);
+        var brush=(SolidColorBrush)track.Background;if(brush.IsFrozen){brush=brush.CloneCurrentValue();track.Background=brush;}
+        var off=box.TryFindResource("SettingsSwitchOff") as SolidColorBrush;
+        var color=enabled?Color.FromRgb(8,8,8):off?.Color??Color.FromRgb(233,233,235);
+        if(motion)brush.BeginAnimation(SolidColorBrush.ColorProperty,new ColorAnimation(color,TimeSpan.FromSeconds(.18)){EasingFunction=new CubicEase{EasingMode=EasingMode.EaseOut}},HandoffBehavior.SnapshotAndReplace);
+        else{brush.BeginAnimation(SolidColorBrush.ColorProperty,null);brush.Color=color;}
+    }
+    internal static void Move(Animatable owner,DependencyProperty property,double target,double seconds)
+    {
+        if(seconds==0){owner.BeginAnimation(property,null);owner.SetValue(property,target);return;}
+        owner.BeginAnimation(property,new DoubleAnimation(target,TimeSpan.FromSeconds(seconds)){EasingFunction=new CubicEase{EasingMode=EasingMode.EaseOut}},HandoffBehavior.SnapshotAndReplace);
+    }
+}

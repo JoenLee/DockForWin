@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\$(Configuration)\net10.0-windows\</OutputPath>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseAppHost>false</UseAppHost>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AssemblyName>DockForWindows</AssemblyName>
+    <Version>0.6.0</Version>
+    <Product>DockForWin</Product>
+    <Description>Windows 程序坞</Description>
+    <ApplicationIcon>Assets\DockForWindows.ico</ApplicationIcon>
+    <RootNamespace>DockForWindows</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup><Resource Include="Shaders\LiquidGlass.ps" /><Resource Include="Shaders\LiquidGlass.ControlCenterLighting.ps" /></ItemGroup>
+  <ItemGroup><Resource Include="Assets\PreviewWallpaper.png" /><Resource Include="Assets\Ionicons\*.svg" /><Resource Include="Assets\Ionicons\LICENSE" /></ItemGroup>
+  <ItemGroup><Resource Include="Assets\Fonts\VarelaRound-Regular.ttf" /><Resource Include="Assets\Fonts\VarelaRound-OFL.txt" /></ItemGroup>
+  <ItemGroup><Content Include="Assets\Fonts\VarelaRound-OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><PackageReference Include="System.Management" Version="10.0.0" /></ItemGroup>
+</Project>

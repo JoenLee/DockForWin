@@ -1,0 +1,5 @@
+请接手现有工程。先读取 D:\DockForWindows\HANDOFF-2026-11-11.md、D:\DockForWindows\AGENTS.md 和 PROJECT_HANDOFF.md 最新章节，再核对实际源码与运行实例。
+实际源码 D:\DockForWindows；C:\Users\HENG\Documents\ChatGPT\DockForWindows 是会话证据目录，不要在这里重建应用。保持C#/WPF/.NET10，不迁移栈、不重写整个渲染架构。
+保留双材质、实时背景、现有UI/弹簧/功能，以及最新Dock堆叠预览、滚轮切窗、新建窗口菜单和图标修复。控制中心玻璃阴影已按明确要求删除，Dock阴影保留。
+先报告当前状态与待办。最新Dock专项24项通过，但交互旧回归在鼠标捕获失败；实际呈现FPS及玻璃追平磨砂仍未验收，不得用回调率冒充FPS。
+保护未保存设置、data与用户后续改动；不重复跑无变化的已完成测试，不盲目执行旧变更脚本或覆盖实验快照。本轮先不要擅自添加新功能。

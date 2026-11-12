@@ -1,0 +1,24 @@
+{
+  "protectedSourcesUnchanged": 67,
+  "fullSettingsChecks": 40,
+  "dashboardChecks": 11,
+  "switchChecks": 6,
+  "rebuildChecks": 8,
+  "focusChecks": 7,
+  "sidebarDip": 240,
+  "collapsedSidebarDip": 68,
+  "switch": {
+    "track": [
+      55,
+      33
+    ],
+    "thumb": [
+      25,
+      25
+    ],
+    "inset": 4,
+    "travel": 22,
+    "durationMs": 200
+  },
+  "notes": "Real WPF isolated-profile checks, 160.42% DPI. No actual presentation FPS/GPU/long-running memory claims."
+}

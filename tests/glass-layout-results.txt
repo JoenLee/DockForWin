@@ -1,0 +1,25 @@
+INFO root=984.3116883116883x165.19480519480518 surface=647,1443 788,92 strip=952.3116883116883,165.19480519480518
+PASS 真实窗口背景已采样用于玻璃折射
+PASS 采样来自底板正后方的区域，坐标没有被窗口重置
+INFO visible glass RGB=239,0,239
+PASS 屏幕实际玻璃显示应用窗口而非壁纸
+PASS 后方窗口变化实时进入玻璃且没有自身重影
+PASS 先折射后高斯模糊，图标不参与背景滤镜
+PASS 磨砂零端点为清透玻璃
+PASS 磨砂连续覆盖完整范围且不修改折射与扭曲参数
+INFO Gaussian screen variance clear=6524.7 frosted=0.2
+PASS 屏幕实际高斯模糊消除细节且不缩放背景
+PASS 背景按屏幕像素一比一对齐
+PERF moving-window background=39.5fps UI=135.0fps pixelTransitions=2 GPU tier=2
+PASS 窗口拖动过程中玻璃取样持续流畅更新
+PASS 70 个固定图标自动整体缩小
+PASS 70 个应用与回收站全部位于工作区内
+PASS 图标和底板同时保持屏幕居中
+PASS 减少应用后恢复尺寸且不覆盖用户设置
+PASS 设置窗口切换深色即时生效
+PASS 界面深色切换保留液态玻璃底板
+INFO fullscreen hidden=True topmost=False
+PASS 最大化应用前台时程序坞柔和退下并下沉
+PASS 普通窗口恢复后程序坞重新出现并置顶
+PASS 反复切换窗口状态后可稳定恢复
+GUI RESULT PASS
