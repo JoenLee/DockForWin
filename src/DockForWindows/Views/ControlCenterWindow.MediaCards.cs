@@ -96,7 +96,9 @@ public sealed partial class ControlCenterWindow
     private void UpdatePlayer(PlayerParts view)
     {
         var state=_mediaState;view.Title.Text=string.IsNullOrWhiteSpace(state?.Title)?"未在播放":state.Title;view.Artist.Text=state?.Artist??"";SetIcon(view.Play,state?.Playing==true?"Pause":"Play");view.Play.IsEnabled=state?.CanPlay==true;view.Previous.IsEnabled=state?.CanPrevious==true;view.Next.IsEnabled=state?.CanNext==true;
-        bool known=state is not null&&state.Duration>TimeSpan.Zero;view.FormattedSecond=-1;view.Progress.IsEnabled=known&&state!.CanSeek;if(!view.Progress.IsMouseCaptureWithin){view.Progress.Maximum=known?Math.Max(1,state!.Duration.TotalSeconds):1;view.Progress.Value=known?Math.Clamp(state!.Position.TotalSeconds,0,view.Progress.Maximum):0;}view.Elapsed.Text=known?MediaTime(state!.Position):"—:—";view.Remaining.Text=known?"−"+MediaTime(TimeSpan.FromSeconds(Math.Max(0,(state!.Duration-state.Position).TotalSeconds))):"";
+        bool known=state is not null&&state.Duration>TimeSpan.Zero;view.FormattedSecond=-1;view.Progress.IsEnabled=known&&state!.CanSeek;if(!view.Progress.IsMouseCaptureWithin){view.Progress.Maximum=known?Math.Max(1,state!.Duration.TotalSeconds):1;view.Progress.Value=known?Math.Clamp(state!.Position.TotalSeconds,0,view.Progress.Maximum):0;}view.Elapsed.Text=known?MediaTime(state!.Position):state is null?"—:—":"此播放器未提供进度";view.Remaining.Text=known?"−"+MediaTime(TimeSpan.FromSeconds(Math.Max(0,(state!.Duration-state.Position).TotalSeconds))):"";
+        // A timeline without seeking reads as progress only; say so instead of looking broken.
+        view.Progress.ToolTip=known&&!state!.CanSeek?"此播放器不支持在这里拖动进度":null;ToolTipService.SetShowOnDisabled(view.Progress,true);
         if(view.Volume is not null&&!view.Volume.IsMouseCaptureWithin){view.Volume.Value=_volume.Value;view.Volume.IsEnabled=_volume.IsEnabled;}UpdatePlayerArtwork(view);
     }
 }

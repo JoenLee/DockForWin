@@ -27,7 +27,8 @@ internal static class MaterialPerfChecks
     internal static int Run(string directory)
     {
         Directory.CreateDirectory(directory);var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};int result=1;
-        var settings=new SettingsService("D:/DockForWindows/data").Load();settings.Animations=true;
+        // DOCK_PERF_DATA points at a real profile to measure its layout; otherwise an isolated default profile is used.
+        var settings=new SettingsService(Environment.GetEnvironmentVariable("DOCK_PERF_DATA") is {Length:>0} profile?profile:Path.Combine(directory,"profile")).Load();settings.Animations=true;
         settings.GlassIntensity=settings.GlassDistortion=settings.GlassFrost=settings.GlassOpacity=settings.GlassHighlight=settings.GlassSideDarkness=settings.GlassGrain=1;
         var area=SystemParameters.WorkArea;var background=new Window{Left=area.Left,Top=area.Top,Width=area.Width,Height=area.Height,WindowStyle=WindowStyle.None,ShowInTaskbar=false,Topmost=true,Background=new LinearGradientBrush(Colors.DarkSlateBlue,Colors.Teal,35)};
         background.Loaded+=async(_,_)=>{
