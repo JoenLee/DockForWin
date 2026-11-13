@@ -73,7 +73,7 @@ public sealed partial class ControlCenterWindow
         if(_openKind is not (ControlModule.Wifi or ControlModule.Bluetooth)||_page!=ControlPage.Module||!_detailRefresh.IsEnabled)return;
         var kind=_openKind.Value;_detailRefresh.IsEnabled=false;
         try{
-            if(kind==ControlModule.Wifi){await _connectivity.ReadNetworks(true);await Task.Delay(450,_lifetime.Token);_networks=await _connectivity.ReadNetworks();}
+            if(kind==ControlModule.Wifi){if(_connectivity.CanListNetworks){await _connectivity.ReadNetworks(true);await Task.Delay(450,_lifetime.Token);_networks=await _connectivity.ReadNetworks();}}
             else{_connectivity.StopBluetoothDiscovery();_connectivity.StartBluetoothDiscovery();await Task.Delay(650,_lifetime.Token);}
             if(!_closing&&_openKind==kind&&_detailVisible)OpenModule(kind,true);
         }finally{if(!_closing)_detailRefresh.IsEnabled=true;}

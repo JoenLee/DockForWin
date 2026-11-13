@@ -18,37 +18,68 @@ namespace DockForWindows.Views;
 
 public sealed partial class ControlCenterWindow
 {
-    private string? _networkError;
+    private string? _networkError;private bool _networkPolling,_networksRead;
     private void SystemChanged(){if(!_closing&&!Dispatcher.HasShutdownStarted)Dispatcher.BeginInvoke(()=>{if(!_closing&&!_stateRefresh.IsEnabled)_stateRefresh.Start();});}
+    // Each reading updates its own card as soon as it arrives. The WLAN list (seconds when a driver or the
+    // location consent stalls it) and WMI brightness no longer hold every other status at "正在读取".
     private async Task PollSystem()
     {
         if(_polling||_closing)return;_polling=true;
         try
         {
+            _ = PollNetworks();
+            var brightness=Task.Run(()=>{try{return(Value:SystemControlService.ReadBrightness(),Error:(string?)null);}catch(Exception ex){return(Value:(byte?)null,Error:ex.Message);}});
             var state=await Task.Run(()=>
             {
-                AudioState? audio=null;byte? brightness=null;string? brightnessError=null;Exception? networkError=null;IReadOnlyList<WifiNetwork>? networks=null;bool? dark=null,saver=null;
+                AudioState? audio=null;bool? dark=null,saver=null;
                 try{audio=SystemControlService.ReadAudio();}catch(Exception ex){_log?.Invoke("读取音频",ex);}
-                try{brightness=SystemControlService.ReadBrightness();}catch(Exception ex){brightnessError=ex.Message;}
-                try{networks=_connectivity.ReadNetworks().GetAwaiter().GetResult();}catch(Exception ex){networkError=ex;}
                 try{dark=SystemControlService.ReadDarkMode();}catch{ }
                 try{saver=SystemControlService.ReadPowerSaver();}catch{ }
-                return(audio,brightness,brightnessError,networks,networkError,power:SystemControlService.ReadPower(),dark,saver);
-            });if(_closing)return;_updating=true;
-            _volume.IsEnabled=state.audio is not null;if(state.audio is not null){_muted=state.audio.Muted;if(!_volume.IsMouseCaptureWithin&&!_volumeBusy&&_pendingVolume is null)_volume.Value=state.audio.Volume;Status(ControlModule.Volume,_muted?"已静音":$"{_volume.Value:0}%");if(_mute is not null)SetIcon(_mute,_muted?"Muted":"Volume");}else Status(ControlModule.Volume,"无音频设备");
-            _brightness.IsEnabled=state.brightness.HasValue;if(state.brightness is byte b){if(!_brightness.IsMouseCaptureWithin&&!_brightnessDelay.IsEnabled&&!_brightnessBusy)_brightness.Value=b;Status(ControlModule.Brightness,$"{_brightness.Value:0}%");}else{Status(ControlModule.Brightness,"显示器不支持调节");_brightness.ToolTip=state.brightnessError??"内置屏幕使用 WMI；未提供亮度接口的外接屏幕请使用显示器按键。";}
-            Status(ControlModule.Battery,state.power.Percent is int p?$"{p}% · {(state.power.PluggedIn?"充电中":"电池供电")}":"已接通电源");if(state.networks is not null)_networks=state.networks;
-            if(state.networkError?.Message!=_networkError){_networkError=state.networkError?.Message;if(state.networkError is not null)_log?.Invoke("读取 Wi-Fi",state.networkError);}
-            var wifi=_connectivity.State(RadioKind.WiFi);Status(ControlModule.Wifi,wifi==RadioState.Off?"已关闭":wifi is null?"无无线设备":state.networkError is not null?(_networkError?.Contains("位置权限")==true?"需要位置权限":"状态不可用"):_networks.FirstOrDefault(n=>n.Connected)?.Name??"未连接");Active(ControlModule.Wifi,wifi==RadioState.On);var bt=_connectivity.State(RadioKind.Bluetooth);Status(ControlModule.Bluetooth,bt==RadioState.On?"已打开":bt is null?"无蓝牙设备":"已关闭");
-            Active(ControlModule.Bluetooth,bt==RadioState.On);
-            Status(ControlModule.DarkMode,state.dark is null?"系统不支持":state.dark==true?"深色":"浅色");Active(ControlModule.DarkMode,state.dark==true);
-            Status(ControlModule.PowerSaver,state.saver is null?"系统不支持":state.saver==true?"已开启":"已关闭");Active(ControlModule.PowerSaver,state.saver==true);
+                return(audio,power:SystemControlService.ReadPower(),dark,saver);
+            });if(_closing)return;
+            _updating=true;
+            try{
+                _volume.IsEnabled=state.audio is not null;if(state.audio is not null){_muted=state.audio.Muted;if(!_volume.IsMouseCaptureWithin&&!_volumeBusy&&_pendingVolume is null)_volume.Value=state.audio.Volume;Status(ControlModule.Volume,_muted?"已静音":$"{_volume.Value:0}%");if(_mute is not null)SetIcon(_mute,_muted?"Muted":"Volume");}else Status(ControlModule.Volume,"无音频设备");
+                Status(ControlModule.Battery,state.power.Percent is int p?$"{p}% · {(state.power.PluggedIn?"充电中":"电池供电")}":"已接通电源");
+                UpdateWifiStatus();var bt=_connectivity.State(RadioKind.Bluetooth);Status(ControlModule.Bluetooth,bt==RadioState.On?"已打开":bt is null?"无蓝牙设备":"已关闭");
+                Active(ControlModule.Bluetooth,bt==RadioState.On);
+                Status(ControlModule.DarkMode,state.dark is null?"系统不支持":state.dark==true?"深色":"浅色");Active(ControlModule.DarkMode,state.dark==true);
+                Status(ControlModule.PowerSaver,state.saver is null?"系统不支持":state.saver==true?"已开启":"已关闭");Active(ControlModule.PowerSaver,state.saver==true);
+            }finally{_updating=false;}
+            var light=await brightness;if(_closing)return;_updating=true;
+            _brightness.IsEnabled=light.Value.HasValue;if(light.Value is byte b){if(!_brightness.IsMouseCaptureWithin&&!_brightnessDelay.IsEnabled&&!_brightnessBusy)_brightness.Value=b;Status(ControlModule.Brightness,$"{_brightness.Value:0}%");}else{Status(ControlModule.Brightness,"显示器不支持调节");_brightness.ToolTip=light.Error??"内置屏幕使用 WMI；未提供亮度接口的外接屏幕请使用显示器按键。";}
             try{Status(ControlModule.Focus,MediaControlService.ReadFocus()==true?"专注中":"Windows 专注");}catch{Status(ControlModule.Focus,"Windows 专注");}try{Status(ControlModule.Projection,await Task.Run(ProjectionService.ReadTopology));}catch{Status(ControlModule.Projection,"投影与无线显示");}
             await UpdateExtraState();if(_closing)return;
             _ = RefreshMedia();
-            
         }
         catch(Exception ex){Report(ex);}finally{_updating=false;_polling=false;if(!_closing){SyncDetailToggles();RefreshVisibleDetails();}}
+    }
+    // Runs beside PollSystem with its own guard. Without location consent (Windows 11 24H2+) it does not
+    // call the WLAN list at all, so a status poll never raises the system location prompt.
+    private async Task PollNetworks()
+    {
+        if(_networkPolling||_closing)return;
+        if(!_connectivity.CanListNetworks){SetNetworkError(ConnectivityService.LocationRequiredMessage,null);UpdateWifiStatus();return;}
+        _networkPolling=true;
+        try{
+            IReadOnlyList<WifiNetwork>? networks=null;Exception? error=null;
+            try{networks=await _connectivity.ReadNetworks();}catch(Exception ex){error=ex;}
+            if(_closing)return;
+            if(networks is not null){_networks=networks;_networksRead=true;}
+            SetNetworkError(error?.Message,error);UpdateWifiStatus();
+        }
+        catch(Exception ex){Report(ex);}finally{_networkPolling=false;}
+    }
+    private void SetNetworkError(string? message,Exception? error)
+    {
+        if(message==_networkError)return;_networkError=message;
+        if(message is not null)_log?.Invoke(error is null?"读取 Wi-Fi："+message:"读取 Wi-Fi",error);
+    }
+    private void UpdateWifiStatus()
+    {
+        var wifi=_connectivity.State(RadioKind.WiFi);Active(ControlModule.Wifi,wifi==RadioState.On);
+        string? text=wifi==RadioState.Off?"已关闭":wifi is null?"无无线设备":_networkError is not null?(_networkError.Contains("位置权限")?"需要位置权限":"状态不可用"):_networksRead?_networks.FirstOrDefault(n=>n.Connected)?.Name??"未连接":null;
+        if(text is not null)Status(ControlModule.Wifi,text);
     }
     private async Task ToggleRadio(RadioKind kind){await _connectivity.SetRadio(kind,_connectivity.State(kind)!=RadioState.On);await PollSystem();}
     private Task ToggleMute()=>Execute(ControlModule.Volume,"正在切换…",()=>Task.Run(()=>SystemControlService.SetMute(!_muted)));
@@ -75,7 +106,12 @@ public sealed partial class ControlCenterWindow
         {
             case ControlModule.Wifi:
                 AddRadioToggle(RadioKind.WiFi);
-                if(_connectivity.State(RadioKind.WiFi)==RadioState.On){
+                if(_connectivity.State(RadioKind.WiFi)==RadioState.On&&!_connectivity.CanListNetworks){
+                    // Listing would make Windows show its own location prompt (signed ".NET Host"); explain instead.
+                    AddStatusRow("Wifi","需要位置权限","Windows 11 列出附近的 Wi-Fi 需要开启位置服务。开启后回到这里刷新即可。");
+                    AddDetail("打开位置设置…",()=>Native(WifiLocationConsent.SettingsUri));
+                }
+                else if(_connectivity.State(RadioKind.WiFi)==RadioState.On){
                     var networks=await _connectivity.ReadNetworks(scan:!refresh);if(!Current())return;_networks=networks;
                     foreach(var n in networks){
                         var button=AddDetail(NetworkText(n),()=>Run(async()=>{
