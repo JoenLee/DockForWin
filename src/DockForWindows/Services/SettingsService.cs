@@ -92,14 +92,19 @@ public sealed class SettingsService
         else File.Move(temporary, SettingsPath);
     }
 
+    // Background workers (capture, WLAN, audio) log too; concurrent appends used to lose lines to sharing violations.
+    private static readonly object LogGate = new();
     public void Log(string message, Exception? error = null)
     {
         try
         {
-            var log = Path.Combine(DataDirectory, "dock.log");
-            if (File.Exists(log) && new FileInfo(log).Length > 2_000_000)
-                File.Move(log, log + ".previous", true);
-            File.AppendAllText(log, $"{DateTime.Now:O} {message} {error}\n");
+            lock (LogGate)
+            {
+                var log = Path.Combine(DataDirectory, "dock.log");
+                if (File.Exists(log) && new FileInfo(log).Length > 2_000_000)
+                    File.Move(log, log + ".previous", true);
+                File.AppendAllText(log, $"{DateTime.Now:O} {message} {error}\n");
+            }
         }
         catch { /* A logging failure must not terminate the desktop process. */ }
     }
