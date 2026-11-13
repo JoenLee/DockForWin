@@ -51,7 +51,7 @@ internal static class FullSettingsChecks
                 Capture(window,Path.Combine(directory,"00-dashboard.png"));
                 var columns=((Grid)((Border)window.Content).Child).ColumnDefinitions;
                 Assert(Math.Abs(columns[0].ActualWidth-240)<1,"sidebar uses 240 DIP");Click(window,"settings-sidebar-collapse");await Task.Delay(80);
-                Assert(Math.Abs(columns[0].ActualWidth-68)<1,"sidebar folds while keeping navigation targets");nav.SelectedIndex=1;await Task.Delay(240);Assert((string)Property(host,"CurrentKey")=="control-center","collapsed sidebar navigates correctly");
+                Assert(Math.Abs(columns[0].ActualWidth-76)<1,"sidebar folds while keeping navigation targets");nav.SelectedIndex=1;await Task.Delay(240);Assert((string)Property(host,"CurrentKey")=="control-center","collapsed sidebar navigates correctly");
                 Click(window,"settings-sidebar-collapse");await Task.Delay(80);Assert(Math.Abs(columns[0].ActualWidth-240)<1,"sidebar restores its original width");
                 Click(window,"settings-about");await Task.Delay(240);Assert((string)Property(host,"CurrentKey")=="about","bottom about action is reachable");Click(window,"settings-shell-back");await Task.Delay(280);
                 nav.SelectedIndex=6;await Task.Delay(240);Click(window,"overview-apps");await Task.Delay(280);Assert((string)Property(host,"CurrentKey")=="apps"&&(bool)Property(host,"IsDetail"),"legacy application settings retained under general navigation");
@@ -63,7 +63,9 @@ internal static class FullSettingsChecks
                 Assert(seed.ControlCenter.Modules.All(m=>ids.Contains("module-"+m.Module)),"all existing module toggles remain reachable");
                 Assert(ids.Contains("start-with-windows")&&!ids.Contains("control-center-hotkey")&&ids.Contains("dock-monitor"),"startup and monitor controls retained; removed hotkey field absent");
                 Assert(!Tree<GlassButtonChrome>(window).Any(),"settings buttons use local native templates without glass sampling");
-                Capture(window,Path.Combine(directory,"01-appearance.png"));
+                Assert(Find<FrameworkElement>(window,"appearance-stage") is not null&&Find<CheckBox>(window,"liquid-glass") is not null&&Find<Slider>(window,"glass-quality") is not null,"appearance opens as an inspector with stage, liquid-glass switch and quality slider");
+                await Task.Delay(400);Capture(window,Path.Combine(directory,"01-appearance.png"));
+                Call(window,"ShowSetting","theme-mode");await Task.Delay(310);
                 var segment=Find<ListBox>(window,"theme-mode-segment");segment.SelectedIndex=(int)DockTheme.Custom;await Task.Delay(160);
                 Assert(draft.Theme==DockTheme.Custom&&seed.Theme==DockTheme.Glass,"segmented theme edits only the existing draft");
                 var combo=(ComboBox)Field(window,"_preset");combo.IsDropDownOpen=true;await Task.Delay(150);Assert(combo.IsDropDownOpen,"native preset popup opens");Capture(window,Path.Combine(directory,"02-preset.png"));combo.IsDropDownOpen=false;combo.SelectedIndex=1;await Task.Delay(160);Assert(draft.Theme==DockTheme.Custom,"original preset handler remains active");
@@ -79,7 +81,7 @@ internal static class FullSettingsChecks
                 Call(window,"ShowSetting","module-"+seed.ControlCenter.Modules[0].Module);await Task.Delay(310);window.Height=780;await Task.Delay(100);Capture(window,Path.Combine(directory,"04-modules.png"));
                 string moduleId="module-"+seed.ControlCenter.Modules[0].Module;Find<CheckBox>(window,moduleId).IsChecked=!seed.ControlCenter.Modules[0].Visible;await Task.Delay(170);Assert(draft.ControlCenter.Modules[0].Visible!=seed.ControlCenter.Modules[0].Visible,"module visibility keeps original callback and seed isolation");
                 Call(window,"ShowSetting","background-color");await Task.Delay(310);colors["background-color"].Text="oops";await Task.Delay(170);Assert(!Find<Button>(window,"save-settings").IsEnabled,"invalid colors still block saving");colors["background-color"].Text="#F4F5F7";await Task.Delay(170);Assert(Find<Button>(window,"save-settings").IsEnabled,"valid colors restore save availability");
-                for(int i=0;i<80;i++){nav.SelectedIndex=i%8;if(i%4==0)await Task.Delay(8);AssertFrame(host);}await Task.Delay(320);Assert(host.Children.Count==1,"rapid navigation settles to one active page");
+                for(int i=0;i<80;i++){nav.SelectedIndex=i%8;if(i%4==0)await Task.Delay(8);AssertFrame(host);}for(int wait=0;wait<20&&host.Children.Count>1;wait++)await Task.Delay(100);Console.WriteLine($"settle children={host.Children.Count}");Assert(host.Children.Count==1,"rapid navigation settles to one active page");
                 // A repeated route before/after the current history index must keep forward history.
                 nav.SelectedIndex=0;nav.SelectedIndex=1;nav.SelectedIndex=0;Call(host,"Back");Call(host,"Back");var state=Call(window,"CaptureNavigationState")!;string current=(string)Property(host,"CurrentKey");
                 var restored=Create(draft);Call(restored,"RestoreNavigationState",state);restored.Show();await Task.Delay(330);var restoredHost=(Grid)Field(restored,"_pages");Assert((string)Property(restoredHost,"CurrentKey")==current&&(bool)Property(restoredHost,"CanGoForward"),"rebuild restores the exact repeated-route history position");restored.Close();

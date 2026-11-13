@@ -120,7 +120,7 @@ internal partial class SettingsShellWindow
     // Folded, the sidebar keeps the window controls and the category tiles.
     private void ToggleSidebar()
     {
-        _collapsed=!_collapsed;_sidebarColumn.Width=new GridLength(_collapsed?68:240);
+        _collapsed=!_collapsed;_sidebarColumn.Width=new GridLength(_collapsed?76:240);
         foreach(ListBoxItem item in _navigation.Items){var row=(Grid)item.Content;row.Children[1].Visibility=_collapsed?Visibility.Collapsed:Visibility.Visible;}
         _searchFrame.Visibility=_collapsed?Visibility.Hidden:Visibility.Visible;_sidebarFooter.Visibility=_collapsed?Visibility.Collapsed:Visibility.Visible;
         UpdateSelection(false);

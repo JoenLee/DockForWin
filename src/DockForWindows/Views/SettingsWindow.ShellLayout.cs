@@ -28,6 +28,19 @@ internal sealed partial class SettingsWindow
             body.Children.Insert(0,PageHeader(i,FullTitles[i],subtitles[i]));
             var groups=_settingsSections.Where(s=>ReferenceEquals(s.Parent,body)).ToArray();
             SetSettingsSearch(i,string.Join(" ",groups.Select(g=>g.Title+" "+g.Help)));
+            if(i==0){
+                // 外观与主题 is an inspector (SettingsWindow.Appearance); every detailed group becomes a page it links to.
+                var details=new Dictionary<int,string>();
+                for(int g=0;g<groups.Length;g++){
+                    var group=groups[g];string key=$"settings-section-{i}-{g}";body.Children.Remove(group.Outer);
+                    if(group.Outer.Children.Count>0&&group.Outer.Children[0] is TextBlock groupTitle)groupTitle.Visibility=Visibility.Collapsed;
+                    var detailBody=PageBody();detailBody.Children.Add(PageHeader(i,group.Title,""));detailBody.Children.Add(group.Outer);
+                    if(g==0){var resetButton=body.Children.OfType<Button>().FirstOrDefault();if(resetButton is not null){body.Children.Remove(resetButton);detailBody.Children.Add(resetButton);}}
+                    RegisterFullPage(key,section,group.Title,true,new ScrollViewer{Content=detailBody,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});details[g]=key;
+                }
+                RegisterFullPage(FullKeys[0],0,FullTitles[0],false,(ScrollViewer)BuildAppearanceInspector(g=>details.TryGetValue(g,out var k)?k:null));
+                continue;
+            }
             // The first group stays inline; the rest become rows of one "更多设置" list that open detail pages.
             StackPanel? more=null;
             StackPanel More(int at){if(more is not null)return more;more=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(more);surface.Margin=new Thickness(0,0,0,26);body.Children.Insert(at,surface);body.Children.Insert(at,GroupTitle("更多设置"));return more;}

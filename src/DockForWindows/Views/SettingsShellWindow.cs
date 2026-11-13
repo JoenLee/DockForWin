@@ -14,9 +14,9 @@ using DockForWindows.Services;
 
 namespace DockForWindows.Views;
 
-// The settings window frame in the manner of macOS System Settings: traffic lights and a search field at the
-// top of a translucent sidebar (Mica on Windows 11), colour-tiled categories, and a quiet toolbar with
-// back/forward and the page title above the content.
+// The settings window frame in the manner of macOS 26 System Settings: a floating Liquid Glass sidebar with the
+// traffic lights, a search field and colour-tiled categories; a toolbar of glass capsules (back/forward) with the
+// page title; pages that fade under the toolbar. The material lives in SettingsShellWindow.Material.cs.
 internal partial class SettingsShellWindow:Window
 {
     private readonly DockSettings _draft;
@@ -29,13 +29,11 @@ internal partial class SettingsShellWindow:Window
     protected DockSettings SharedDraft=>_draft;
     protected ListBox SidebarNavigation=>_navigation;
     protected SettingsPageHost PageHost=>_pages;
-    // True when the sidebar shows the system Mica material (Windows 11 22H2+, transparency on).
-    protected bool MicaBackdrop { get; } = OperatingSystem.IsWindowsVersionAtLeast(10,0,22621)&&!SystemParameters.HighContrast&&!SystemParameters.IsRemoteSession&&TransparencyEnabled();
     private readonly ListBox _navigation=new(){Background=Brushes.Transparent,BorderThickness=new Thickness(0)};
     private readonly TextBox _search=new();private readonly Grid _navigationFrame=new(){ClipToBounds=true};
-    private readonly Border _selection=new(){Height=34,CornerRadius=new CornerRadius(7),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top,IsHitTestVisible=false,Visibility=Visibility.Hidden,RenderTransform=new TranslateTransform()};
-    private readonly TextBlock _noMatches=new(){Text="没有匹配的设置",FontSize=12.5,Margin=new Thickness(22,10,12,0),VerticalAlignment=VerticalAlignment.Top,Visibility=Visibility.Collapsed};
-    private readonly TextBlock _title=new(){FontSize=14,FontWeight=FontWeights.SemiBold,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis};
+    private readonly Border _selection=new(){Height=36,CornerRadius=new CornerRadius(10),HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top,IsHitTestVisible=false,Visibility=Visibility.Hidden,RenderTransform=new TranslateTransform()};
+    private readonly TextBlock _noMatches=new(){Text="没有匹配的设置",FontSize=12.5,Margin=new Thickness(18,10,12,0),VerticalAlignment=VerticalAlignment.Top,Visibility=Visibility.Collapsed};
+    private readonly TextBlock _title=new(){FontFamily=DesignSystem.DisplayFont,FontSize=15,FontWeight=FontWeights.SemiBold,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis};
     private readonly List<Action> _availability=new();private Button _back=null!,_forward=null!;private bool _syncNavigation;
     private static readonly string[] Names={"概览","控制中心","桌面小组件","外观与主题","动画与交互","性能与渲染","通用设置","关于"};
     // Icon tile per category: colour index into DesignSystem.TileColors and an Ionicons glyph.
@@ -48,34 +46,44 @@ internal partial class SettingsShellWindow:Window
     private static int NavigationIndex(int section)=>section switch{8=>0,7=>1,9=>2,0 or 1=>3,2=>4,10=>5,12=>7,_=>6};
     private static string SectionKey(int section)=>section switch{8=>"dashboard",9=>"widgets",10=>"performance",11=>"general",12=>"about",_=>Keys[Math.Clamp(section,0,7)]};
     // Tile shown in a page header for a page section.
-    protected static FrameworkElement SectionTile(int section,double size)=>DesignSystem.IconTile(Tiles[NavigationIndex(section)].Color,Tiles[NavigationIndex(section)].Glyph,size);
+    // Page headers carry the category's line glyph in a soft glass chip (no heavy colour tiles).
+    protected static FrameworkElement SectionTile(int section,double size)
+    {
+        var glyph=new System.Windows.Shapes.Path{Data=LineGlyph(NavigationIndex(section)),StrokeThickness=1.5,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round,Width=18,Height=18,Stretch=Stretch.None,RenderTransformOrigin=new Point(.5,.5),RenderTransform=new ScaleTransform(size/34,size/34),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
+        glyph.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty,"SettingsAccent");
+        var chip=new Border{Width=size,Height=size,CornerRadius=new CornerRadius(size*.3),BorderThickness=new Thickness(1),Child=glyph};
+        chip.SetResourceReference(Border.BackgroundProperty,"SettingsCard");chip.SetResourceReference(Border.BorderBrushProperty,"SettingsGroupEdge");return chip;
+    }
     internal SettingsShellWindow(DockSettings draft,Action<DockSettings,int> review,int initialPage=8) : this(draft,review,initialPage,false) {}
     internal SettingsShellWindow(DockSettings draft,Action<DockSettings,int> review,int initialPage,bool fullSettings)
     {
         _draft=draft.Copy();_review=review;
         Title="设置 · DockForWin";Icon=IosStyles.AppIcon();FontFamily=DesignSystem.TextFont;FontSize=13.5;
-        TextOptions.SetTextFormattingMode(this,TextFormattingMode.Ideal);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Auto);
-        Width=Math.Min(1000,SystemParameters.WorkArea.Width-32);Height=Math.Min(720,SystemParameters.WorkArea.Height-32);MinWidth=Math.Min(760,Width);MinHeight=Math.Min(520,Height);
+        // Pixel-aligned text: the transparent window renders grayscale, where Display mode keeps small glyphs sharp.
+        TextOptions.SetTextFormattingMode(this,TextFormattingMode.Display);TextOptions.SetTextRenderingMode(this,TextRenderingMode.Grayscale);TextOptions.SetTextHintingMode(this,TextHintingMode.Fixed);
+        // The window carries a transparent margin for its own shadow (ShadowMargin on each side).
+        Width=Math.Min(1120,SystemParameters.WorkArea.Width-32)+2*ShadowMargin;Height=Math.Min(760,SystemParameters.WorkArea.Height-32)+2*ShadowMargin;MinWidth=Math.Min(800,Width);MinHeight=Math.Min(560,Height);
         WindowStartupLocation=WindowStartupLocation.CenterOwner;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.CanResize;UseLayoutRounding=true;SnapsToDevicePixels=true;
-        Background=MicaBackdrop?Brushes.Transparent:DesignSystem.Brush(DesignSystem.Porcelain.Canvas);
+        // One slab of glass with its own rounded outline and shadow: a per-pixel transparent window.
+        AllowsTransparency=true;Background=Brushes.Transparent;
         Resources.MergedDictionaries.Add(new ResourceDictionary{Source=new Uri("/DockForWindows;component/Views/SettingsShellStyles.xaml",UriKind.Relative)});
-        WindowChrome.SetWindowChrome(this,new WindowChrome{CaptionHeight=52,ResizeBorderThickness=new Thickness(6),CornerRadius=new CornerRadius(0),GlassFrameThickness=MicaBackdrop?new Thickness(-1):new Thickness(0),UseAeroCaptionButtons=false});
-        SourceInitialized+=(_,_)=>ApplyBackdrop();Activated+=(_,_)=>PaintLights(true);Deactivated+=(_,_)=>PaintLights(false);
+        WindowChrome.SetWindowChrome(this,new WindowChrome{CaptionHeight=ShadowMargin+FrameInset+48,ResizeBorderThickness=new Thickness(ShadowMargin+4),CornerRadius=new CornerRadius(0),GlassFrameThickness=new Thickness(0),UseAeroCaptionButtons=false});
+        SourceInitialized+=(_,_)=>{ApplyBackdrop();WallpaperFrost.Warm(new WindowInteropHelper(this).Handle);};Activated+=(_,_)=>PaintLights(true);Deactivated+=(_,_)=>PaintLights(false);
         Resources.MergedDictionaries.Add(new ResourceDictionary{Source=new Uri("/DockForWindows;component/Assets/Ionicons/SettingsIonicons.xaml",UriKind.Relative)});
         var root=new Grid();_sidebarColumn=new(){Width=new GridLength(240)};root.ColumnDefinitions.Add(_sidebarColumn);root.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});AutomationProperties.SetAutomationId(root,"settings-shell-two-columns");
-        _shellContent=new Border{Child=root};Content=_shellContent;
+        _shellContent=_windowBody=new Border{Child=root,Padding=new Thickness(ShadowMargin)};Content=_shellContent;InstallWindowMaterial(root);
 
-        // Sidebar: window controls, search, categories, about.
+        // Sidebar: window controls, search, categories, about — on a floating pane of glass.
         var sidebar=_sidebar=new Grid();
-        sidebar.RowDefinitions.Add(new(){Height=new GridLength(52)});sidebar.RowDefinitions.Add(new(){Height=new GridLength(46)});sidebar.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});sidebar.RowDefinitions.Add(new(){Height=GridLength.Auto});root.Children.Add(sidebar);
-        var header=new Grid{Margin=new Thickness(13,0,10,0)};
+        sidebar.RowDefinitions.Add(new(){Height=new GridLength(44)});sidebar.RowDefinitions.Add(new(){Height=new GridLength(44)});sidebar.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});sidebar.RowDefinitions.Add(new(){Height=GridLength.Auto});root.Children.Add(SidebarGlass(sidebar));
+        var header=new Grid{Margin=new Thickness(11,0,10,0)};
         var lights=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Left,Background=Brushes.Transparent};
         lights.Children.Add(Light("关闭","×","settings-shell-window-close",Close));
         lights.Children.Add(Light("最小化","−","settings-shell-window-minimize",()=>WindowState=WindowState.Minimized));
         lights.Children.Add(Light("缩放","+","settings-shell-window-maximize",()=>WindowState=WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized));
         WindowChrome.SetIsHitTestVisibleInChrome(lights,true);header.Children.Add(lights);sidebar.Children.Add(header);
 
-        _searchFrame=new Border{CornerRadius=new CornerRadius(8),Height=30,Margin=new Thickness(12,0,12,10),VerticalAlignment=VerticalAlignment.Top,BorderThickness=new Thickness(1),BorderBrush=Brushes.Transparent};_searchFrame.SetResourceReference(Border.BackgroundProperty,"SettingsQuiet");
+        _searchFrame=new Border{CornerRadius=new CornerRadius(15),Height=30,Margin=new Thickness(10,4,10,0),VerticalAlignment=VerticalAlignment.Top,BorderThickness=new Thickness(1),BorderBrush=Brushes.Transparent};_searchFrame.SetResourceReference(Border.BackgroundProperty,"SettingsQuiet");
         var searchGrid=new Grid();_search.Background=Brushes.Transparent;_search.BorderThickness=new Thickness(0);_search.Padding=new Thickness(26,0,8,0);_search.FontSize=13;_search.VerticalContentAlignment=VerticalAlignment.Center;
         _search.Template=PlainTextBoxTemplate();AutomationProperties.SetAutomationId(_search,"settings-shell-search");AutomationProperties.SetName(_search,"搜索设置与小组件");
         var placeholder=new TextBlock{Text="搜索",FontSize=13,Margin=new Thickness(28,0,0,1),VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false};placeholder.SetResourceReference(TextBlock.ForegroundProperty,"SettingsTertiary");
@@ -88,34 +96,35 @@ internal partial class SettingsShellWindow:Window
         KeyboardNavigation.SetTabNavigation(_navigation,KeyboardNavigationMode.Once);AutomationProperties.SetAutomationId(_navigation,fullSettings?"settings-navigation":"settings-shell-navigation");
         for(int i=0;i<Names.Length;i++){
             var row=new Grid();row.ColumnDefinitions.Add(new(){Width=new GridLength(32)});row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
-            var tile=DesignSystem.IconTile(Tiles[i].Color,Tiles[i].Glyph,22);tile.HorizontalAlignment=HorizontalAlignment.Left;tile.VerticalAlignment=VerticalAlignment.Center;AutomationProperties.SetAutomationId(tile,"navigation-glyph-"+i);row.Children.Add(tile);
-            var text=new TextBlock{Text=Names[i],FontSize=13.5,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis};Grid.SetColumn(text,1);row.Children.Add(text);
+            var tile=NavigationGlyph(i);tile.HorizontalAlignment=HorizontalAlignment.Left;tile.VerticalAlignment=VerticalAlignment.Center;AutomationProperties.SetAutomationId(tile,"navigation-glyph-"+i);row.Children.Add(tile);
+            var text=new TextBlock{Text=Names[i],FontSize=13.5,Margin=new Thickness(2,0,0,0),VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis};Grid.SetColumn(text,1);row.Children.Add(text);
             text.SetBinding(TextBlock.ForegroundProperty,new System.Windows.Data.Binding("Foreground"){RelativeSource=new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor,typeof(ListBoxItem),1)});
             var item=new ListBoxItem{Content=row,ToolTip=Names[i],Visibility=i==7?Visibility.Collapsed:Visibility.Visible};AutomationProperties.SetAutomationId(item,"settings-shell-category-"+i);AutomationProperties.SetName(item,Names[i]);_navigation.Items.Add(item);
         }
         if(!fullSettings)for(int i=0;i<8;i++){int section=i;_pages.Register(Keys[i],i,LegacyTitles[i],false,()=>BuildPage(section));}
         RegisterOverviewPages();
         if(!fullSettings){_pages.Register("material",0,"材质与边缘",true,BuildMaterial);_pages.Register("motion-parameters",2,"动画参数",true,BuildMotionParameters);_pages.Register("panel-proportions",7,"面板尺寸与间距",true,BuildPanelProportions);}
-        var footer=new StackPanel{Margin=new Thickness(22,10,14,16)};var about=new Button{Content="关于 DockForWin",Style=(Style)FindResource("SettingsToolButton"),Width=double.NaN,HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(6,0,6,0),Margin=new Thickness(-6,0,0,0),FontSize=12.5};about.Click+=(_,_)=>_pages.Navigate("about");AutomationProperties.SetAutomationId(about,"settings-about");
+        var footer=new StackPanel{Margin=new Thickness(18,8,14,14)};var about=new Button{Content="关于 DockForWin",Style=(Style)FindResource("SettingsToolButton"),Width=double.NaN,HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(6,0,6,0),Margin=new Thickness(-6,0,0,0),FontSize=12.5};about.Click+=(_,_)=>_pages.Navigate("about");AutomationProperties.SetAutomationId(about,"settings-about");
         footer.Children.Add(about);var version=new TextBlock{Text="版本 "+typeof(SettingsShellWindow).Assembly.GetName().Version?.ToString(3),FontSize=11,Margin=new Thickness(0,2,0,0)};version.SetResourceReference(TextBlock.ForegroundProperty,"SettingsTertiary");footer.Children.Add(version);
         _sidebarFooter=footer;Grid.SetRow(footer,3);sidebar.Children.Add(footer);
-        var edge=new Border{Width=1,HorizontalAlignment=HorizontalAlignment.Right,IsHitTestVisible=false};edge.SetResourceReference(Border.BackgroundProperty,"SettingsLine");Grid.SetRowSpan(edge,4);sidebar.Children.Add(edge);
 
-        // Content: toolbar (back / forward / title), pages, action bar.
-        var right=_right=new Grid();right.RowDefinitions.Add(new(){Height=new GridLength(52)});right.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});right.RowDefinitions.Add(new(){Height=GridLength.Auto});Grid.SetColumn(right,1);root.Children.Add(right);
-        var toolbar=new Grid{Margin=new Thickness(14,0,20,0)};toolbar.ColumnDefinitions.Add(new(){Width=GridLength.Auto});toolbar.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
+        // Content: toolbar (glass capsules and the title), pages, action bar.
+        var right=_right=new Grid();right.RowDefinitions.Add(new(){Height=new GridLength(52)});right.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});right.RowDefinitions.Add(new(){Height=GridLength.Auto});var contentPane=ContentGlass(right);Grid.SetColumn(contentPane,1);root.Children.Add(contentPane);
+        var toolbar=new Grid{Margin=new Thickness(10,0,12,0)};toolbar.ColumnDefinitions.Add(new(){Width=GridLength.Auto});toolbar.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
         // The sidebar toggle lives in the toolbar, as in Finder or Notes, so it stays reachable when the sidebar folds.
-        var collapse=new Button{Style=(Style)FindResource("SettingsToolButton"),ToolTip="显示或隐藏边栏",Content=SidebarGlyph(),Margin=new Thickness(0,0,8,0)};collapse.Click+=(_,_)=>ToggleSidebar();AutomationProperties.SetAutomationId(collapse,"settings-sidebar-collapse");AutomationProperties.SetName(collapse,"显示或隐藏边栏");WindowChrome.SetIsHitTestVisibleInChrome(collapse,true);
-        var arrows=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,0)};_back=Arrow("返回",true,()=>_pages.Back());_forward=Arrow("前进",false,()=>_pages.Forward());arrows.Children.Add(collapse);arrows.Children.Add(_back);arrows.Children.Add(_forward);toolbar.Children.Add(arrows);
+        var collapse=new Button{Style=(Style)FindResource("SettingsToolButton"),ToolTip="显示或隐藏边栏",Content=SidebarGlyph()};collapse.Click+=(_,_)=>ToggleSidebar();AutomationProperties.SetAutomationId(collapse,"settings-sidebar-collapse");AutomationProperties.SetName(collapse,"显示或隐藏边栏");WindowChrome.SetIsHitTestVisibleInChrome(collapse,true);
+        _back=Arrow("返回",true,()=>_pages.Back());_forward=Arrow("前进",false,()=>_pages.Forward());
+        var arrows=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,14,0)};
+        arrows.Children.Add(GlassCapsule(collapse));arrows.Children.Add(GlassCapsule(_back,_forward).With(c=>c.Margin=new Thickness(8,0,0,0)));toolbar.Children.Add(arrows);
         Grid.SetColumn(_title,1);toolbar.Children.Add(_title);right.Children.Add(toolbar);
         Grid.SetRow(_pages,1);right.Children.Add(_pages);
-        // A hairline separates the scrolling page from the action bar (CompleteSettingsShell swaps only the bar).
-        var rule=new Border{Height=1,VerticalAlignment=VerticalAlignment.Top,IsHitTestVisible=false};rule.SetResourceReference(Border.BackgroundProperty,"SettingsLine");Grid.SetRow(rule,2);right.Children.Add(rule);
-        var actions=new Grid{Margin=new Thickness(24,10,24,14)};actions.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});actions.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+        // Pages fade under the toolbar and above the action bar instead of being cut (CompleteSettingsShell swaps only the bar).
+        InstallScrollEdges(_pages);
+        var actions=new Grid{Margin=new Thickness(24,6,24,14)};actions.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});actions.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         var note=new TextBlock{Text="更改先保存在草稿中",FontSize=12,VerticalAlignment=VerticalAlignment.Center};note.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");actions.Children.Add(note);var buttons=new StackPanel{Orientation=Orientation.Horizontal};
         buttons.Children.Add(Button("取消",Close,"settings-shell-cancel"));var reviewButton=Button("检查并保存…",()=>{var copy=_draft.Copy();copy.Normalize();int section=_pages.CurrentSection;Close();_review(copy,section);},"settings-shell-review");reviewButton.Style=(Style)FindResource("SettingsPrimaryButton");buttons.Children.Add(reviewButton);Grid.SetColumn(buttons,1);actions.Children.Add(buttons);Grid.SetRow(actions,2);right.Children.Add(actions);
         _pages.Navigated+=()=>{_syncNavigation=true;if(((ListBoxItem)_navigation.Items[NavigationIndex(_pages.CurrentSection)]).Visibility!=Visibility.Visible)_search.Clear();_navigation.SelectedIndex=NavigationIndex(_pages.CurrentSection);_syncNavigation=false;_title.Text=_pages.CurrentTitle;_back.IsEnabled=_pages.CanGoBack;_forward.IsEnabled=_pages.CanGoForward;foreach(var refresh in _availability)refresh();UpdateSelection(true);};
-        _navigation.SelectionChanged+=(_,_)=>{if(_navigationReady&&!_syncNavigation&&_navigation.SelectedIndex>=0)_pages.Navigate(NavigationKeys[_navigation.SelectedIndex]);};
+        _navigation.SelectionChanged+=(_,_)=>{RefreshNavigationGlyphs();if(_navigationReady&&!_syncNavigation&&_navigation.SelectedIndex>=0)_pages.Navigate(NavigationKeys[_navigation.SelectedIndex]);};
         _search.TextChanged+=(_,_)=>{placeholder.Visibility=_search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;FilterNavigation();};
         _navigationFrame.SizeChanged+=(_,_)=>UpdateSelection(false);_navigation.AddHandler(ScrollViewer.ScrollChangedEvent,new ScrollChangedEventHandler((_,_)=>UpdateSelection(false)));
         Loaded+=(_,_)=>UpdateSelection(false);PreviewKeyDown+=HandleNavigationKeys;
@@ -134,15 +143,29 @@ internal partial class SettingsShellWindow:Window
     {
         try{using var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");return key?.GetValue("EnableTransparency") is not int value||value!=0;}catch{return true;}
     }
-    // DWM: dark title colours follow the palette, Windows 11 rounds the corners, and the sidebar gets Mica.
+    // DWM: dark frame colours follow the palette and Windows 11 rounds the corners. The window draws its own
+    // material (WallpaperBackdrop), so no system backdrop is requested; the canvas only shows before first paint.
     private void ApplyBackdrop()
     {
         var handle=new WindowInteropHelper(this).Handle;if(handle==0)return;
         int dark=Design.Dark?1:0;NativeMethods.DwmSetWindowAttribute(handle,20,ref dark,4);
-        if(OperatingSystem.IsWindowsVersionAtLeast(10,0,22000)){int round=2;NativeMethods.DwmSetWindowAttribute(handle,33,ref round,4);}
-        if(!MicaBackdrop){Background=DesignSystem.Brush(Design.Canvas);return;}
-        if(HwndSource.FromHwnd(handle) is {} source)source.CompositionTarget.BackgroundColor=Colors.Transparent;
-        int mica=2;NativeMethods.DwmSetWindowAttribute(handle,38,ref mica,4);Background=Brushes.Transparent;
+        // The window is per-pixel transparent and draws its own outline, so DWM must not round or shadow it.
+        Background=Brushes.Transparent;
+    }
+    private readonly List<System.Windows.Media.Effects.DropShadowEffect> _capsuleShadows=new();
+    // Toolbar items sit in capsules of glass, as in macOS 26: a frosted face, the window's rim of light, a soft
+    // shadow; two items share one capsule with a hairline between them.
+    private Border GlassCapsule(params Button[] buttons)
+    {
+        var row=new StackPanel{Orientation=Orientation.Horizontal};
+        for(int i=0;i<buttons.Length;i++){
+            if(i>0){var divider=new Border{Width=1,Height=14,Margin=new Thickness(1,0,1,0),VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false};divider.SetResourceReference(Border.BackgroundProperty,"SettingsLine");row.Children.Add(divider);}
+            row.Children.Add(buttons[i]);
+        }
+        var capsule=new Border{CornerRadius=new CornerRadius(16),Height=32,Padding=new Thickness(2),BorderThickness=new Thickness(1),Child=row,VerticalAlignment=VerticalAlignment.Center};
+        capsule.SetResourceReference(Border.BackgroundProperty,"SettingsGlassControl");capsule.SetResourceReference(Border.BorderBrushProperty,"SettingsGlassRim");
+        var shadow=new System.Windows.Media.Effects.DropShadowEffect{BlurRadius=14,ShadowDepth=3,Direction=270,Color=Colors.Black,Opacity=Design.Dark?.32:.09};_capsuleShadows.Add(shadow);capsule.Effect=shadow;
+        return capsule;
     }
     private Button Light(string name,string label,string id,Action action)
     {
@@ -189,7 +212,7 @@ internal partial class SettingsShellWindow:Window
     private void UpdateSelection(bool animate)
     {
         if(!IsLoaded||_navigation.SelectedItem is not ListBoxItem item||item.Visibility!=Visibility.Visible||item.ActualHeight<1){_selection.Visibility=Visibility.Hidden;return;}
-        var point=item.TranslatePoint(new Point(),_navigationFrame);_selection.Visibility=Visibility.Visible;_selection.Margin=new Thickness(10,0,0,0);_selection.Width=Math.Max(0,_navigationFrame.ActualWidth-20);
+        var point=item.TranslatePoint(new Point(),_navigationFrame);_selection.Visibility=Visibility.Visible;_selection.Margin=new Thickness(8,0,0,0);_selection.Width=Math.Max(0,_navigationFrame.ActualWidth-16);
         SettingsSwitchMotion.Move((TranslateTransform)_selection.RenderTransform,TranslateTransform.YProperty,point.Y,animate&&SystemParameters.ClientAreaAnimation&&!SystemParameters.HighContrast ? .2 : 0);
     }
     private void HandleNavigationKeys(object sender,KeyEventArgs args)
