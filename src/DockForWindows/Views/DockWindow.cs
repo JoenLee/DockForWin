@@ -494,6 +494,16 @@ public sealed partial class DockWindow : Window
         PreviewSettings(draft); _settings.Show(); _settings.Activate();
     }
     public void RefreshSettingsAppearance() => _settings?.RefreshInterfaceAppearance();
+    // Called by Program after an unhandled UI fault it decided to survive. Closes the transient surfaces
+    // whose state may be inconsistent; the Dock itself, its data and any open settings draft are kept.
+    internal void RecoverFromUiFault()
+    {
+        var panel = _controlCenter; _controlCenter = null;
+        try { panel?.CloseAfterFault(); } catch (Exception error) { _model.LogDiagnostic("关闭出错的控制中心失败", error); }
+        try { CloseWindowPreviews(); if (_openDockMenu is { IsOpen: true } menu) menu.IsOpen = false; } catch (Exception error) { _model.LogDiagnostic("关闭程序坞弹出层失败", error); }
+        _strip.ResetHover();
+        ControlCenterStateChanged?.Invoke(false);
+    }
     public void Reveal() { Show(); SetHidden(false); _hideDelay.Stop(); if (ViewSettings.AutoHide) _hideDelay.Start(); }
     public void ShowError(string message)
     {
