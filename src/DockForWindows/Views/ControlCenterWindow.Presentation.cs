@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -21,7 +21,7 @@ public sealed partial class ControlCenterWindow
         var next=draft.ControlCenter.Copy();next.Normalize();bool geometryChanged=System.Text.Json.JsonSerializer.Serialize(_options.Geometry)!=System.Text.Json.JsonSerializer.Serialize(next.Geometry);bool layoutChanged=!_options.Modules.Select(m=>m.Module).SequenceEqual(next.Modules.Select(m=>m.Module))||_options.ActivePageId!=next.ActivePageId||_options.Pages.Count!=next.Pages.Count||_options.Modules.Any(m=>next.Modules.Single(n=>n.Module==m.Module) is {} n&&(m.Visible!=n.Visible||m.EffectiveShape!=n.EffectiveShape||m.PageId!=n.PageId||m.Group!=n.Group||m.DisplayName!=n.DisplayName||m.Glyph!=n.Glyph));_settings.ApplyPreferences(draft);_material.ApplyPreferences(next.Material(draft));_options.Geometry=next.Geometry;
         foreach(var item in _options.Modules){var value=next.Modules.Single(m=>m.Module==item.Module);item.Visible=value.Visible;item.SetShape(value.EffectiveShape);item.PageId=value.PageId;item.Group=value.Group;item.DisplayName=value.DisplayName;item.Glyph=value.Glyph;}
         _options.Modules=next.Modules.Select(n=>_options.Modules.Single(m=>m.Module==n.Module)).ToList();_options.Pages=next.Pages;_options.ActivePageId=next.ActivePageId;_options.ColorMode=next.ColorMode;_options.MaterialMode=next.MaterialMode;ApplyMaterialMode();RefreshPagePicker();_detailLight=null;foreach(var card in _modules)card.Light=null;
-        foreach(var surface in _surfaces){surface.GlassIntensity=_material.GlassIntensity;surface.GlassDistortion=_material.GlassDistortion;surface.GlassFrost=_material.GlassFrost;surface.GlassOpacity=_material.GlassOpacity;surface.GlassTint=_material.GlassTint;surface.GlassHighlight=_material.GlassHighlight;surface.GlassHighlightWidth=_material.GlassHighlightWidth;surface.GlassGrain=_material.GlassGrain;surface.InvalidateVisual();}
+        foreach(var surface in _surfaces){surface.GlassIntensity=_material.GlassIntensity;surface.GlassDistortion=_material.GlassDistortion;surface.GlassFrost=_material.GlassFrost;surface.GlassOpacity=_material.GlassOpacity;surface.GlassTint=_material.GlassTint;surface.GlassTintColor=GlassTint.Resolve(_material);surface.GlassHighlight=_material.GlassHighlight;surface.GlassHighlightWidth=_material.GlassHighlightWidth;surface.GlassGrain=_material.GlassGrain;surface.InvalidateVisual();}
         if(!geometryChanged&&!layoutChanged)return;
         _fit.ScaleX=_fit.ScaleY=next.Geometry.PanelScale;_detailBody.LayoutTransform=new ScaleTransform(next.Geometry.ComponentScale,next.Geometry.ComponentScale);
         _stage.Width=(_options.Geometry.PanelWidth-36)*_options.Geometry.ComponentScale;Width=(_stage.Width+SideGutter*2)*_fit.ScaleX;

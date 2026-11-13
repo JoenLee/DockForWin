@@ -5,62 +5,110 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
+using DockForWindows.Models;
 
 namespace DockForWindows.Views;
 
 internal partial class SettingsShellWindow
 {
     private readonly System.Collections.Generic.List<Action> _overviewRefresh=new();
+    private static BitmapImage? _heroWallpaper;
     private void RegisterOverviewPages()
     {
-        _pages.Register("dashboard",8,"概览 Dashboard",false,BuildDashboard);
+        _pages.Register("dashboard",8,"概览",false,BuildDashboard);
         _pages.Register("widgets",9,"桌面小组件",false,()=>new WidgetGalleryPage(_draft.Widgets));
         _pages.Register("performance",10,"性能与渲染",false,BuildPerformance);
         _pages.Register("general",11,"通用设置",false,()=>{
-            var (page,body)=Page("通用设置","管理应用行为、窗口外观和系统集成");var group=Group(body,"应用偏好");
+            var (page,body)=Page("通用设置","应用行为、窗口外观与系统集成",11);var group=Group(body,"应用偏好");
             OverviewLink(group,"应用与文件","固定项目、运行与最近使用","apps");OverviewLink(group,"位置与隐藏","显示器、停靠和自动隐藏","placement");
-            OverviewLink(group,"系统与启动","登录后自动启动","system");OverviewLink(group,"窗口外观","系统、浅色或深色界面","interface");return page;
+            OverviewLink(group,"系统与启动","登录后自动启动","system");OverviewLink(group,"窗口外观","跟随系统、浅色或深色","interface");return page;
         });
-        _pages.Register("about",12,"关于应用",false,()=>{
-            var (page,body)=Page("关于 DockForWin","Windows 原生桌面应用");var group=Group(body,"应用信息");
-            group.Children.Add(Muted("版本 "+typeof(SettingsShellWindow).Assembly.GetName().Version?.ToString(3)+"\nC# · WPF · .NET 10\n设置在保存前保留为草稿。",new Thickness(0,16,0,16)));return page;
-        });
+        _pages.Register("about",12,"关于",false,BuildAbout);
         _pages.Navigated+=()=>{foreach(var refresh in _overviewRefresh)refresh();};
     }
+    private static string ThemeName(DockTheme theme)=>theme switch{DockTheme.Glass=>"液态玻璃",DockTheme.Light=>"浅色",DockTheme.Dark=>"深色",DockTheme.Custom=>"自定义",_=>"跟随系统"};
     private FrameworkElement BuildDashboard()
     {
-        var (page,body)=Page("你的桌面","让常用信息与顺手的操作，各得其所。");
-        var welcome=new StackPanel();welcome.Children.Add(new TextBlock{Text="少一点打扰，多一点从容。",FontSize=21,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap});
-        welcome.Children.Add(Muted("Dock、控制中心与小组件，在这里统一管理。",new Thickness(0,8,0,15)));
-        var browse=Button("探索小组件  ›",()=>_pages.Navigate("widgets"),"dashboard-browse-widgets");browse.HorizontalAlignment=HorizontalAlignment.Left;browse.Margin=new Thickness(0);browse.Background=Palette.Brush("#176F68");browse.Foreground=Brushes.White;browse.BorderThickness=new Thickness(0);welcome.Children.Add(browse);
-        var hero=new Border{CornerRadius=new CornerRadius(20),Padding=new Thickness(25,24,25,24),Margin=new Thickness(0,0,0,24),Child=welcome};hero.SetResourceReference(Border.BackgroundProperty,"SettingsHero");body.Children.Add(hero);
-        var cards=new Grid();cards.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});cards.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
+        var (page,body)=Page("概览","程序坞、控制中心与小组件的当前状态",8);
+        body.Children.Add(DashboardHero());
+        var cards=new Grid{Margin=new Thickness(0,0,0,14)};cards.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});cards.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
         for(int i=0;i<3;i++)cards.RowDefinitions.Add(new(){Height=GridLength.Auto});
-        void Card(int index,string title,Func<string> value,string description,string route){
-            var stack=new StackPanel();stack.Children.Add(Muted(title,new Thickness(0,0,0,10)));
-            var number=new TextBlock{FontSize=20,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap};stack.Children.Add(number);
-            stack.Children.Add(Muted(description,new Thickness(0,8,0,12)));
-            var link=Button("查看设置  ›",()=>_pages.Navigate(route),"dashboard-"+index);link.HorizontalAlignment=HorizontalAlignment.Left;link.Margin=new Thickness(0);link.BorderThickness=new Thickness(0);link.Padding=new Thickness(0,4,0,4);link.SetResourceReference(Control.ForegroundProperty,"SettingsAccent");stack.Children.Add(link);
-            var surface=new Border{Style=(Style)FindResource("SettingsSurface"),Padding=new Thickness(18),Margin=new Thickness(index%2==0?0:7,0,index%2==0?7:0,14),Child=stack};Grid.SetColumn(surface,index%2);Grid.SetRow(surface,index/2);cards.Children.Add(surface);
+        void Card(int index,int tileColor,string glyph,string title,Func<string> value,string route){
+            var layout=new Grid();layout.ColumnDefinitions.Add(new(){Width=GridLength.Auto});layout.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});layout.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+            var tile=DesignSystem.IconTile(tileColor,glyph,32);tile.Margin=new Thickness(0,0,12,0);tile.VerticalAlignment=VerticalAlignment.Center;layout.Children.Add(tile);
+            var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center};text.Children.Add(Muted(title,new Thickness(0)));
+            var number=new TextBlock{FontFamily=DesignSystem.DisplayFont,FontSize=16.5,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,1,0,0),TextTrimming=TextTrimming.CharacterEllipsis};text.Children.Add(number);Grid.SetColumn(text,1);layout.Children.Add(text);
+            var chevron=new System.Windows.Shapes.Path{Data=Geometry.Parse("M1,1 L5.5,5.5 L1,10"),StrokeThickness=1.7,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round,Width=7,Height=11,VerticalAlignment=VerticalAlignment.Center};chevron.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty,"SettingsTertiary");Grid.SetColumn(chevron,2);layout.Children.Add(chevron);
+            var card=new Button{Content=layout,Template=CardTemplate(),HorizontalContentAlignment=HorizontalAlignment.Stretch,Margin=new Thickness(index%2==0?0:6,0,index%2==0?6:0,12)};AutomationProperties.SetAutomationId(card,"dashboard-"+index);AutomationProperties.SetName(card,title);card.Click+=(_,_)=>_pages.Navigate(route);
+            Grid.SetColumn(card,index%2);Grid.SetRow(card,index/2);cards.Children.Add(card);
             void Refresh()=>number.Text=value();_overviewRefresh.Add(Refresh);Refresh();
         }
-        Card(0,"控制中心",()=>_draft.UseGlassControlCenter?"已启用":"未启用","入口配置状态 · 保存后应用","control-center");
-        Card(1,"当前材质",()=>_draft.ControlCenter.MaterialMode==Models.ControlCenterMaterialMode.ClassicBlur?"Classic Blur":"Liquid Glass","控制中心视觉模式","control-center");
-        Card(2,"桌面小组件",()=>"6 类组件","天气、日历、时钟与个人信息 · 独立桌面实例","widgets");
-        Card(3,"进程内存",()=>{using var process=Process.GetCurrentProcess();return $"{process.WorkingSet64/1048576d:0} MB";},"Working Set · 进入页面时的真实快照","performance");
-        Card(4,"外观",()=>_draft.Theme==Models.DockTheme.Glass?"液态玻璃":"自定义桌面外观","底板、图标、倒影与窗口配色","appearance");
-        Card(5,"动画",()=>_draft.Animations?"已开启":"已关闭","沿用现有波浪、弹跳与交互反馈","motion");body.Children.Add(cards);
-        var shortcuts=Group(body,"常用操作");OverviewLink(shortcuts,"管理应用与文件","添加入口、运行与最近使用","apps");OverviewLink(shortcuts,"窗口与系统偏好","外观、位置及开机启动","general");
+        Card(0,1,"Options","控制中心",()=>_draft.UseGlassControlCenter?"已启用":"未启用","control-center");
+        Card(1,3,"Palette","控制中心材质",()=>_draft.ControlCenter.MaterialMode==ControlCenterMaterialMode.ClassicBlur?"经典磨砂":"液态玻璃","control-center");
+        Card(2,2,"Calendar","桌面小组件",()=>"6 类组件","widgets");
+        Card(3,6,"Settings","开机自启",()=>_draft.StartWithWindows?"已开启":"未开启","system");
+        Card(4,0,"Desktop","程序坞外观",()=>ThemeName(_draft.Theme),"appearance");
+        Card(5,4,"Sparkles","动画",()=>_draft.Animations?"已开启":"已关闭","motion");body.Children.Add(cards);
+        var shortcuts=Group(body,"常用操作");OverviewLink(shortcuts,"管理应用与文件","添加应用、文件夹与最近使用","apps");OverviewLink(shortcuts,"窗口与系统偏好","外观、位置与开机启动","general");
         return page;
+    }
+    // A window onto the desktop: the preview wallpaper in a continuous-corner frame, a title on a soft veil,
+    // and (in the full settings window) the user's own dock floating on it in its current material.
+    private FrameworkElement DashboardHero()
+    {
+        if(_heroWallpaper is null){var image=new BitmapImage();image.BeginInit();image.UriSource=new Uri("pack://application:,,,/DockForWindows;component/Assets/PreviewWallpaper.png");image.DecodePixelWidth=1400;image.CacheOption=BitmapCacheOption.OnLoad;image.EndInit();image.Freeze();_heroWallpaper=image;}
+        var scene=new Grid{Height=212,ClipToBounds=true};AutomationProperties.SetAutomationId(scene,"dashboard-hero");
+        scene.Background=new ImageBrush(_heroWallpaper){Stretch=Stretch.UniformToFill,AlignmentY=AlignmentY.Top};
+        var veil=new LinearGradientBrush(new GradientStopCollection{new(Color.FromArgb(120,10,12,20),0),new(Color.FromArgb(0,10,12,20),.62)},0);veil.Freeze();scene.Children.Add(new Border{Background=veil,IsHitTestVisible=false});
+        var text=new StackPanel{Margin=new Thickness(26,22,26,0),VerticalAlignment=VerticalAlignment.Top,HorizontalAlignment=HorizontalAlignment.Left,IsHitTestVisible=false,Effect=new DropShadowEffect{BlurRadius=10,ShadowDepth=0,Opacity=.28}};
+        text.Children.Add(new TextBlock{Text="你的桌面",FontFamily=DesignSystem.DisplayFont,FontSize=24,FontWeight=FontWeights.SemiBold,Foreground=Brushes.White});
+        var status=new TextBlock{FontSize=13,Margin=new Thickness(0,4,0,0),Foreground=DesignSystem.Brush(Color.FromArgb(225,255,255,255))};text.Children.Add(status);scene.Children.Add(text);
+        void Refresh()=>status.Text=$"{ThemeName(_draft.Theme)} · 控制中心{(_draft.UseGlassControlCenter?"已启用":"未启用")}";_overviewRefresh.Add(Refresh);Refresh();
+        DecorateDashboardHero(scene);
+        const double radius=30;
+        var frame=new SquircleBorder{CornerRadius=new CornerRadius(radius),Child=scene};
+        var shadow=new System.Windows.Shapes.Path{Fill=Brushes.Black,Opacity=.2,IsHitTestVisible=false,Effect=new DropShadowEffect{BlurRadius=26,ShadowDepth=8,Direction=270,Opacity=.6}};
+        frame.SizeChanged+=(_,_)=>shadow.Data=SquircleBorder.Outline(frame.RenderSize,radius);
+        var host=new Grid{Margin=new Thickness(0,0,0,24)};host.Children.Add(shadow);host.Children.Add(frame);return host;
+    }
+    // The full settings window adds the live dock sample; the bare shell keeps just the wallpaper.
+    protected virtual void DecorateDashboardHero(Grid scene){}
+    // Status card: a raised tile that lifts a little further under the pointer.
+    private static ControlTemplate CardTemplate()
+    {
+        var root=new FrameworkElementFactory(typeof(Grid));
+        var surface=new FrameworkElementFactory(typeof(Border)){Name="Surface"};surface.SetValue(Border.CornerRadiusProperty,new CornerRadius(14));surface.SetResourceReference(Border.BackgroundProperty,"SettingsCard");surface.SetResourceReference(Border.BorderBrushProperty,"SettingsGroupEdge");surface.SetValue(Border.BorderThicknessProperty,new Thickness(1));root.AppendChild(surface);
+        var state=new FrameworkElementFactory(typeof(Border)){Name="State"};state.SetValue(Border.CornerRadiusProperty,new CornerRadius(14));state.SetValue(Border.BackgroundProperty,Brushes.Transparent);state.SetValue(UIElement.IsHitTestVisibleProperty,false);root.AppendChild(state);
+        var presenter=new FrameworkElementFactory(typeof(ContentPresenter));presenter.SetValue(FrameworkElement.MarginProperty,new Thickness(16,14,14,14));root.AppendChild(presenter);
+        var template=new ControlTemplate(typeof(Button)){VisualTree=root};
+        var over=new Trigger{Property=UIElement.IsMouseOverProperty,Value=true};over.Setters.Add(new Setter(Border.BackgroundProperty,new DynamicResourceExtension("SettingsHover"),"State"));over.Setters.Add(new Setter(UIElement.EffectProperty,new DropShadowEffect{BlurRadius=14,ShadowDepth=3,Direction=270,Opacity=.10},"Surface"));template.Triggers.Add(over);
+        var pressed=new Trigger{Property=System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty,Value=true};pressed.Setters.Add(new Setter(Border.BackgroundProperty,new DynamicResourceExtension("SettingsPressed"),"State"));template.Triggers.Add(pressed);
+        return template;
     }
     private FrameworkElement BuildPerformance()
     {
-        var (page,body)=Page("性能与渲染","只显示已经接入的真实数据；快照不会持续轮询。");var group=Group(body,"当前进程");
-        var memory=Muted("",new Thickness(0,16,0,16));group.Children.Add(memory);
-        void Refresh(){using var process=Process.GetCurrentProcess();memory.Text=$"Working Set  {process.WorkingSet64/1048576d:0.0} MB\nPrivate Bytes  {process.PrivateMemorySize64/1048576d:0.0} MB\n采样时间  {DateTime.Now:HH:mm:ss}";}
-        _overviewRefresh.Add(Refresh);Refresh();var refresh=Button("刷新快照",Refresh,"performance-refresh");refresh.Margin=new Thickness(0,0,0,16);group.Children.Add(refresh);
-        var rendering=Group(body,"渲染监测");rendering.Children.Add(Muted("CPU / GPU 占用：尚未接入\n实际呈现 FPS / P95 / P99：尚未接入\n背景更新延迟：尚未接入\nGPU 显存与系统 Committed Memory：尚未接入",new Thickness(0,16,0,16)));
+        var (page,body)=Page("性能与渲染","只显示已经接入的真实数据，快照不会持续轮询",10);var group=Group(body,"当前进程");
+        var working=new TextBlock{FontSize=13.5};var privateBytes=new TextBlock{FontSize=13.5};var sampled=new TextBlock{FontSize=13.5};
+        foreach(var value in new[]{working,privateBytes,sampled})value.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");
+        AddRow(group,LabeledRow("工作集内存",working));AddRow(group,LabeledRow("私有内存",privateBytes));AddRow(group,LabeledRow("采样时间",sampled));
+        void Refresh(){using var process=Process.GetCurrentProcess();working.Text=$"{process.WorkingSet64/1048576d:0.0} MB";privateBytes.Text=$"{process.PrivateMemorySize64/1048576d:0.0} MB";sampled.Text=DateTime.Now.ToString("HH:mm:ss");}
+        _overviewRefresh.Add(Refresh);Refresh();var refresh=Button("刷新快照",Refresh,"performance-refresh");refresh.HorizontalAlignment=HorizontalAlignment.Left;refresh.Margin=new Thickness(0,-12,0,26);body.Children.Add(refresh);
+        var rendering=Group(body,"渲染监测");
+        foreach(var item in new[]{"CPU / GPU 占用","实际呈现帧率","背景更新延迟","显存与提交内存"}){var pending=new TextBlock{Text="尚未接入",FontSize=13.5};pending.SetResourceReference(TextBlock.ForegroundProperty,"SettingsTertiary");AddRow(rendering,LabeledRow(item,pending));}
         OverviewLink(rendering,"材质与画质参数","调整现有设置，不改变渲染管线","appearance");return page;
+    }
+    private FrameworkElement BuildAbout()
+    {
+        var body=PageBody();var page=new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=false};AutomationProperties.SetName(page,"关于");
+        var identity=new StackPanel{HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,26,0,30)};
+        identity.Children.Add(new Image{Source=IosStyles.AppIcon(),Width=88,Height=88,Effect=new DropShadowEffect{BlurRadius=18,ShadowDepth=5,Direction=270,Opacity=.22}});
+        identity.Children.Add(new TextBlock{Text="DockForWin",FontFamily=DesignSystem.DisplayFont,FontSize=24,FontWeight=FontWeights.SemiBold,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,16,0,2)});
+        identity.Children.Add(Muted("版本 "+typeof(SettingsShellWindow).Assembly.GetName().Version?.ToString(3)+" · 开发预览",new Thickness(0)).With(t=>t.HorizontalAlignment=HorizontalAlignment.Center));body.Children.Add(identity);
+        var group=Group(body,"应用信息");
+        foreach(var (label,value) in new[]{("技术栈","C# · WPF · .NET 10"),("设置","保存前保留为草稿"),("字体","Segoe UI Variable · 未来荧黑")}){var text=new TextBlock{Text=value,FontSize=13.5};text.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");AddRow(group,LabeledRow(label,text));}
+        return page;
     }
     protected void OverviewLink(Panel group,string title,string subtitle,string route)=>Link(group,title,subtitle,"overview-"+route,()=>_pages.Navigate(route));
     private static Geometry NavigationGeometry(Drawing drawing)
@@ -69,14 +117,17 @@ internal partial class SettingsShellWindow
         void Add(Drawing source){if(source is DrawingGroup group)foreach(var child in group.Children)Add(child);else if(source is GeometryDrawing shape&&shape.Brush is SolidColorBrush brush&&brush.Color.A>0)geometry.Children.Add(shape.Geometry);}
         Add(drawing);geometry.Freeze();return geometry;
     }
+    // Folded, the sidebar keeps the window controls and the category tiles.
     private void ToggleSidebar()
     {
-        _collapsed=!_collapsed;_sidebarColumn.Width=new GridLength(_collapsed?68:240);
+        _collapsed=!_collapsed;_sidebarColumn.Width=new GridLength(_collapsed?76:240);
         foreach(ListBoxItem item in _navigation.Items){var row=(Grid)item.Content;row.Children[1].Visibility=_collapsed?Visibility.Collapsed:Visibility.Visible;}
-        foreach(var child in _sidebar.Children.OfType<Border>())if(Grid.GetRow(child)==1)child.Visibility=_collapsed?Visibility.Collapsed:Visibility.Visible;
-        var header=(Grid)_sidebar.Children[0];header.Children[0].Visibility=_collapsed?Visibility.Collapsed:Visibility.Visible;
-        var toggle=(Button)header.Children[1];toggle.Content=_collapsed?"›":"‹";
-        foreach(var brand in _sidebar.Children.OfType<StackPanel>())brand.Visibility=_collapsed?Visibility.Collapsed:Visibility.Visible;
+        _searchFrame.Visibility=_collapsed?Visibility.Hidden:Visibility.Visible;_sidebarFooter.Visibility=_collapsed?Visibility.Collapsed:Visibility.Visible;
         UpdateSelection(false);
     }
+}
+
+internal static class ElementExtensions
+{
+    public static T With<T>(this T element,Action<T> configure) where T:DependencyObject{configure(element);return element;}
 }

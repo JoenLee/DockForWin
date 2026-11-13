@@ -20,7 +20,9 @@ internal sealed partial class ControlCenterIcon : FrameworkElement
         ["Bell"]="notifications",["NightLight"]="eye",["Airplane"]="airplane",["MobileHotspot"]="radio",["Focus"]="moon",["Projection"]="desktop",["Brightness"]="sunny",["Volume"]="volume-high",
         ["Muted"]="volume-mute",["Battery"]="battery-half",["DarkMode"]="contrast",["PowerSaver"]="flash",
         ["Media"]="musical-notes",["Settings"]="settings",["Chevron"]="caret-forward",["Close"]="close",
-        ["Play"]="play",["Pause"]="pause",["Previous"]="play-skip-back",["Next"]="play-skip-forward",["Headphones"]="headset"
+        ["Play"]="play",["Pause"]="pause",["Previous"]="play-skip-back",["Next"]="play-skip-forward",["Headphones"]="headset",
+        // Settings sidebar and page headers.
+        ["Options"]="options",["Grid"]="grid",["Palette"]="color-palette",["Sparkles"]="sparkles",["Desktop"]="desktop",["Folder"]="folder",["Calendar"]="calendar"
     };
     private static readonly Dictionary<string,Geometry> Cache=new();
     private string _glyph;

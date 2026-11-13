@@ -46,6 +46,12 @@ public sealed class DockSettings
     public double GlassOpacity { get; set; } = 1;
     public double GlassFrost { get; set; } = .1;
     public double GlassGrain { get; set; } = .45;
+    // One switch and one slider for everyone: liquid (clear, refracting) or frosted glass, and how far toward
+    // 磨砂 (0) or 水光 (1) the material sits. GlassMaterial.Apply turns them into the detailed values above.
+    public bool LiquidGlass { get; set; } = true;
+    public double GlassQuality { get; set; } = .55;
+    // Tint preset for every glass surface: "" (none) or #RRGGBB.
+    public string GlassTintColor { get; set; } = "";
     public double IconSize { get; set; } = 48;
     public double Spacing { get; set; } = 8;
     public double Magnification { get; set; } = 1.45;
@@ -97,6 +103,8 @@ public sealed class DockSettings
         GlassOpacity = double.IsFinite(GlassOpacity) ? Math.Clamp(GlassOpacity, 0, 1) : 1;
         GlassFrost = double.IsFinite(GlassFrost) ? Math.Clamp(GlassFrost, 0, 1) : .1;
         GlassGrain = double.IsFinite(GlassGrain) ? Math.Clamp(GlassGrain, 0, 1) : .45;
+        GlassQuality = double.IsFinite(GlassQuality) ? Math.Clamp(GlassQuality, 0, 1) : .55;
+        GlassTintColor = System.Text.RegularExpressions.Regex.IsMatch(GlassTintColor ?? "", "^#[0-9A-Fa-f]{6}$") ? GlassTintColor! : "";
         BounceHeight = double.IsFinite(BounceHeight) ? Math.Clamp(BounceHeight, 8, 64) : 24;
         BounceDuration = double.IsFinite(BounceDuration) ? Math.Clamp(BounceDuration, 350, 1800) : 760;
         ReflectionOpacity = double.IsFinite(ReflectionOpacity) ? Math.Clamp(ReflectionOpacity, 0, 1) : .28;
@@ -148,6 +156,7 @@ public sealed class DockSettings
         GlassTint = source.GlassTint;
         GlassOpacity = source.GlassOpacity; GlassFrost = source.GlassFrost;
         GlassGrain = source.GlassGrain;
+        LiquidGlass = source.LiquidGlass; GlassQuality = source.GlassQuality; GlassTintColor = source.GlassTintColor;
         IconSize = source.IconSize; Spacing = source.Spacing; Magnification = source.Magnification;
         HoverLift = source.HoverLift; EdgeDistance = source.EdgeDistance;
         AutoHide = source.AutoHide; HideOnDesktop = source.HideOnDesktop; StartWithWindows = source.StartWithWindows;

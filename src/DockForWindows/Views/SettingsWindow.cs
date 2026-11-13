@@ -46,13 +46,10 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         if(_draft.Theme is DockTheme.System or DockTheme.Light or DockTheme.Dark){var resolved=new Palette(_draft);var baseColor=((SolidColorBrush)resolved.Surface).Color;var indicator=((SolidColorBrush)resolved.Indicator).Color;_draft.Appearance.BackgroundColor=$"#{baseColor.R:X2}{baseColor.G:X2}{baseColor.B:X2}";_draft.Appearance.IndicatorColor=$"#{indicator.R:X2}{indicator.G:X2}{indicator.B:X2}";}
         if(draft is null)try{_draft.StartWithWindows=StartupRegistration.ReadCommand() is not null;}catch{ }
         ApplySettingsPalette(palette);Icon=IosStyles.AppIcon();
-        Title="程序坞设置 · DockForWindows";FontFamily=new FontFamily("Noto Sans SC, Microsoft YaHei UI, Segoe UI");Foreground=palette.Text;UseLayoutRounding=true;SnapsToDevicePixels=true;
-        Width=Math.Min(1040,SystemParameters.WorkArea.Width-36);Height=Math.Min(780,SystemParameters.WorkArea.Height-36);
+        Title="程序坞设置 · DockForWindows";FontFamily=DesignSystem.TextFont;UseLayoutRounding=true;SnapsToDevicePixels=true;
+        Width=Math.Min(1040,SystemParameters.WorkArea.Width-36);Height=Math.Min(760,SystemParameters.WorkArea.Height-36);
         MinWidth=Math.Min(760,Width);MinHeight=540;WindowStartupLocation=WindowStartupLocation.CenterScreen;
-        Background=palette.WindowBackground;
-        SourceInitialized+=(_,_)=>{
-            int dark=palette.Dark?1:0;NativeMethods.DwmSetWindowAttribute(new System.Windows.Interop.WindowInteropHelper(this).Handle,20,ref dark,4);
-        };
+        // Background, dark title colours and the Mica sidebar are handled by SettingsShellWindow.ApplyBackdrop.
         var pages=new List<ScrollViewer>();
         StackPanel Page(){var body=new StackPanel{Margin=new Thickness(0,0,0,12)};pages.Add(new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});return body;}
         var appearance=Page();var icons=Page();var motion=Page();var apps=Page();var behavior=Page();var system=Page();var interfacePage=Page();var controlPage=Page();
@@ -84,7 +81,7 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         Range(finish,"阴影柔和度","shadow-blur",0,40,_draft.Appearance.ShadowBlur,"0' px'",v=>_draft.Appearance.ShadowBlur=v,1,false);
         Require(_ranges["shadow-opacity"],()=>_draft.Appearance.ShadowEnabled);Require(_ranges["shadow-blur"],()=>_draft.Appearance.ShadowEnabled);
         ColorField(finish,"运行点自定义颜色","indicator-color",_draft.Appearance.IndicatorColor,()=>!Glass);
-        var reset=SettingsButton("恢复默认主题",(_,_)=>{_draft.Theme=DockTheme.System;_draft.Appearance=new();_draft.GlassIntensity=.55;_draft.GlassOpacity=1;_draft.GlassFrost=.1;RefreshAppearanceControls();QueuePreview();});AutomationProperties.SetAutomationId(reset,"reset-theme");appearance.Children.Add(reset);
+        var reset=SettingsButton("恢复默认主题",(_,_)=>{_draft.Theme=DockTheme.System;_draft.Appearance=new();_draft.GlassIntensity=.55;_draft.GlassOpacity=1;_draft.GlassFrost=.1;RefreshAppearanceControls();QueuePreview();});AutomationProperties.SetAutomationId(reset,"reset-theme");reset.HorizontalAlignment=HorizontalAlignment.Left;reset.Margin=new Thickness(0,0,0,8);appearance.Children.Add(reset);
 
         var sizing=Section(icons,"统一图标","不规则图标会放入固定三次超椭圆外框，白底或黑底跟随系统。纯白图形转为黑色并使用白底，回收站保持原样。");
         Range(sizing,"图标尺寸","icon-size",32,72,_draft.IconSize,"0' px'",v=>_draft.IconSize=v,1,false);Range(sizing,"图标间距","icon-spacing",2,18,_draft.Spacing,"0' px'",v=>_draft.Spacing=v,1,false);
@@ -97,7 +94,7 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         Range(animation,"波浪放大倍率","magnification",1,1.8,_draft.Magnification,"0.00' 倍'",v=>_draft.Magnification=v,.05,false);Range(animation,"波浪上浮高度","hover-lift",0,64,_draft.HoverLift,"0' px'",v=>_draft.HoverLift=v,1,false);Range(animation,"弹跳高度","bounce-height",8,64,_draft.BounceHeight,"0' px'",v=>_draft.BounceHeight=v,1,false);Range(animation,"弹跳时长","bounce-duration",350,1800,_draft.BounceDuration,"0' ms'",v=>_draft.BounceDuration=v,50,false);
         foreach(var id in new[]{"magnification","hover-lift","bounce-height","bounce-duration"})Require(_ranges[id],()=>_draft.Animations&&!_ui.ReducedMotion);
         var library=Section(apps,"固定项目","应用、文档和文件夹可以从任意位置拖入。固定和取消固定立即保存，不需要在桌面保留快捷方式。");
-        library.Children.Add(SettingsButton("添加应用或文件…",(_,_)=>_dock.AddApplication()));var addFolder=SettingsButton("添加文件夹…",(_,_)=>_dock.AddFolder());addFolder.Margin=new Thickness(0,10,0,0);library.Children.Add(addFolder);
+        var adders=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,12)};var addApp=SettingsButton("添加应用或文件…",(_,_)=>_dock.AddApplication());addApp.Margin=new Thickness(0,0,8,0);adders.Children.Add(addApp);var addFolder=SettingsButton("添加文件夹…",(_,_)=>_dock.AddFolder());addFolder.Margin=new Thickness(0);adders.Children.Add(addFolder);library.Children.Add(adders);
         var recent=Section(apps,"运行与最近使用","固定应用之后显示其他运行或最近使用的项目，以分隔线分开。回收站始终保留在末端。");
         Toggle(recent,"显示其他运行应用","running-apps",_draft.ShowRunningApps,v=>_draft.ShowRunningApps=v);Toggle(recent,"显示最近应用","recent-apps",_draft.ShowRecentApps,v=>_draft.ShowRecentApps=v);Range(recent,"最近应用数量","recent-limit",0,8,_draft.RecentLimit,"0",v=>_draft.RecentLimit=(int)v,1,false);Require(_ranges["recent-limit"],()=>_draft.ShowRecentApps);
         var placement=Section(behavior,"停靠位置","底部、左侧与右侧使用相同的图标居中规则。空间不足时整体缩小，增减应用后重新居中。");
@@ -107,14 +104,14 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         Range(placement,"距离屏幕边缘","edge-distance",0,160,_draft.EdgeDistance,"0' px'",v=>_draft.EdgeDistance=v,1,false);
         var hiding=Section(behavior,"显示与退下","桌面默认固定显示。普通窗口自动隐藏、桌面自动隐藏分别设置；最大化或全屏的退下行为单独保留。");
         Toggle(hiding,"普通窗口下自动隐藏","auto-hide",_draft.AutoHide,v=>_draft.AutoHide=v);Toggle(hiding,"桌面上也自动隐藏","desktop-auto-hide",_draft.HideOnDesktop,v=>_draft.HideOnDesktop=v);Toggle(hiding,"最大化或全屏时退下","fullscreen-hide",_draft.HideWhenFullscreen,v=>_draft.HideWhenFullscreen=v);
-        var interfaceCard=Section(interfacePage,"窗口外观","窗口采用中性色与克制的青绿强调，可跟随系统或选择浅色、深色。程序坞底板材质仍独立设置。");
+        var interfaceCard=Section(interfacePage,"窗口外观","设置窗口可以跟随系统，也可以固定为浅色或深色。程序坞底板的材质在“外观与主题”里单独设置。");
         var interfaceTheme=Choice(interfaceCard,"界面外观","interface-theme",new[]{"跟随系统","浅色","深色"},(int)_draft.InterfaceTheme);interfaceTheme.SelectionChanged+=(_,_)=>{if(!_ready||interfaceTheme.SelectedIndex<0)return;_draft.InterfaceTheme=(InterfaceTheme)interfaceTheme.SelectedIndex;Dispatcher.BeginInvoke(()=>_dock.ReopenSettings(_draft,CurrentSettingsSection));};
         var startup=Section(system,"登录后自动启动","保存设置后生效。启用后在当前账户登录时启动，沿用你的固定项目与布局；取消本次设置不会修改开机启动项。");
         Toggle(startup,"开机自启","start-with-windows",_draft.StartWithWindows,v=>_draft.StartWithWindows=v);
         BuildControlCenterSettings(controlPage);
 
-        var previewColumn=new StackPanel{Margin=new Thickness(0,27,18,18)};
-        previewColumn.Children.Add(new TextBlock{Text="预览",FontSize=17,FontWeight=FontWeights.SemiBold,Margin=new Thickness(4,0,0,15)});
+        var previewColumn=new StackPanel{Margin=new Thickness(0,8,18,18),MaxWidth=760};
+        previewColumn.Children.Add(new TextBlock{Text="预览",FontFamily=DesignSystem.DisplayFont,FontSize=DesignSystem.Title,FontWeight=FontWeights.SemiBold,Margin=new Thickness(2,0,0,16)});
         _wallpaper=new BitmapImage(new Uri("pack://application:,,,/DockForWindows;component/Assets/PreviewWallpaper.png"));_wallpaper.Freeze();
         _scene.Background=new ImageBrush(_wallpaper){Stretch=Stretch.UniformToFill};AutomationProperties.SetAutomationId(_scene,"wallpaper-preview");
         _sampleDock.HorizontalAlignment=HorizontalAlignment.Center;_sampleDock.VerticalAlignment=VerticalAlignment.Bottom;_scene.Children.Add(_sampleDock);
@@ -127,14 +124,15 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         AutomationProperties.SetAutomationId(previewFrame,"rounded-preview-frame");AutomationProperties.SetAutomationId(previewShadow,"preview-floating-shadow");
         previewFrame.SizeChanged+=(_,_)=>{var mask=SquircleBorder.Outline(previewFrame.RenderSize,22);previewFrame.Clip=mask;previewShadow.Data=mask;};
         previewHost.Children.Add(previewShadow);previewHost.Children.Add(previewFrame);previewColumn.Children.Add(previewHost);
-        _previewLabel.Foreground=palette.Secondary;_previewLabel.FontSize=12;_previewLabel.TextWrapping=TextWrapping.Wrap;_previewLabel.Margin=new Thickness(5,12,5,14);previewColumn.Children.Add(_previewLabel);
+        _previewLabel.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");_previewLabel.FontSize=12.5;_previewLabel.TextWrapping=TextWrapping.Wrap;_previewLabel.Margin=new Thickness(4,14,4,16);previewColumn.Children.Add(_previewLabel);
         _live=Toggle(previewColumn,"桌面实时预览","live-preview",true,_=>{});
         _controlLive=Toggle(previewColumn,"控制中心实时预览","control-live-preview",false,_=>{});
         Help(previewColumn,"开启后边调边看控制中心，保存后提交；关闭设置窗口会结束预览。",new Thickness(6,8,6,0));
         Help(previewColumn,"开启时同步预览桌面 Dock；关闭后仅查看右侧示例。保存才提交主题设置，取消会恢复。",new Thickness(6,10,6,0));
-        var footer=new Grid{Margin=new Thickness(0,15,0,0)};footer.RowDefinitions.Add(new(){Height=GridLength.Auto});footer.RowDefinitions.Add(new(){Height=GridLength.Auto});
-        _validation.Foreground=Palette.Brush("#D66D61");_validation.FontSize=11;_validation.TextWrapping=TextWrapping.Wrap;footer.Children.Add(_validation);
-        var actions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0)};Grid.SetRow(actions,1);footer.Children.Add(actions);
+        // Action bar: status on the left, Cancel / Preview / Save on the right, separated from the page by a hairline.
+        var footer=new Grid{Margin=new Thickness(0,15,0,0)};footer.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});footer.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+        _validation.Foreground=DesignSystem.Brush(Design.Red);_validation.FontSize=12;_validation.TextWrapping=TextWrapping.Wrap;_validation.VerticalAlignment=VerticalAlignment.Center;_validation.Margin=new Thickness(0,0,16,0);footer.Children.Add(_validation);
+        var actions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(actions,1);footer.Children.Add(actions);
         var cancel=SettingsButton("取消",(_,_)=>_dock.ReopenSettings(_dock.Model.Settings,CurrentSettingsSection));AutomationProperties.SetAutomationId(cancel,"cancel-settings");actions.Children.Add(cancel);
         var previewButton=SettingsButton("预览",(_,_)=>OpenSettingsPreview());AutomationProperties.SetAutomationId(previewButton,"open-settings-preview");actions.Children.Add(previewButton);
         _save=SettingsButton("保存设置",(_,_)=>SaveSettings(),true);AutomationProperties.SetAutomationId(_save,"save-settings");actions.Children.Add(_save);
@@ -145,52 +143,50 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         Loaded+=(_,_)=>RefreshSample();_scene.Loaded+=(_,_)=>{if(_sampleDirty)RefreshSample();};_scene.IsVisibleChanged+=(_,_)=>{if(_scene.IsVisible&&_sampleDirty)RefreshSample();};
     }
     private void SaveSettings(){FlushPreview();if(!ValidateColors())return;_draft.Widgets.MergeLive(_widgetBaseline,_dock.Model.Settings.Widgets);_draft.Normalize();if(_dock.CommitSettings(_draft)){_widgetBaseline=_draft.Widgets.Copy();_validation.Text="设置已保存";}}
+    // Inset group: title above, porcelain/graphite surface, footnote below.
     private StackPanel Section(Panel parent,string title,string help)
     {
-        var outer=new StackPanel{Margin=new Thickness(0,0,0,20)};var content=new StackPanel();
-        outer.Children.Add(new TextBlock{Text=title,FontSize=12,FontWeight=FontWeights.SemiBold,Foreground=_ui.Secondary,Margin=new Thickness(10,0,0,7)});
-        outer.Children.Add(new Border{Style=(Style)FindResource("SettingsSurface"),Padding=new Thickness(16,5,16,5),Child=content});
-        if(!string.IsNullOrWhiteSpace(help))Help(outer,help,new Thickness(10,7,8,0));parent.Children.Add(outer);_settingsSections.Add(new(parent,outer,title,help));return content;
+        var outer=new StackPanel{Margin=new Thickness(0,0,0,26)};var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};
+        outer.Children.Add(GroupTitle(title));outer.Children.Add(GroupSurface(content));
+        if(!string.IsNullOrWhiteSpace(help))Help(outer,help,new Thickness(4,8,8,0));parent.Children.Add(outer);_settingsSections.Add(new(parent,outer,title,help));return content;
     }
     private void AddSettingsRow(Panel parent,UIElement row)
-    {if(parent.Children.Count>0)parent.Children.Add(new Border{Height=.7,Background=(Brush)FindResource("SettingsLine")});parent.Children.Add(row);}
-    private void Help(Panel panel,string text,Thickness margin)=>panel.Children.Add(new TextBlock{Text=text,FontSize=11,LineHeight=18,Foreground=_ui.Secondary,TextWrapping=TextWrapping.Wrap,Margin=margin});
+    {if(parent.Children.Count>0)parent.Children.Add(RowSeparator());parent.Children.Add(row);}
+    private void Help(Panel panel,string text,Thickness margin){var note=Muted(text,margin);note.FontSize=12;note.LineHeight=18;panel.Children.Add(note);}
     private void Require(UIElement control,Func<bool> predicate){_availability[control]=predicate;}
     private void RefreshAvailability(){foreach(var entry in _availability){entry.Key.IsEnabled=entry.Value();if(entry.Key is Control)entry.Key.ClearValue(UIElement.OpacityProperty);else entry.Key.Opacity=entry.Key.IsEnabled?1:.5;}}
-    private TextBlock Label(string text)=>new(){Text=text,FontSize=12,Foreground=_ui.Secondary,Margin=new Thickness(0,14,0,7),TextWrapping=TextWrapping.Wrap};
     private ComboBox Choice(Panel panel,string title,string id,string[] options,int selected)
     {
-        var row=new Grid{Margin=new Thickness(0,8,0,8)};row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=new GridLength(1.6,GridUnitType.Star)});
-        row.Children.Add(new TextBlock{Text=title,FontSize=13,VerticalAlignment=VerticalAlignment.Center,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,14,0)});
-        var combo=new ComboBox{ItemsSource=options,SelectedIndex=Math.Max(0,selected),FontSize=12,VerticalAlignment=VerticalAlignment.Center};AutomationProperties.SetAutomationId(combo,id);AutomationProperties.SetName(combo,title);Grid.SetColumn(combo,1);row.Children.Add(combo);
+        var combo=new ComboBox{ItemsSource=options,SelectedIndex=Math.Max(0,selected),MinWidth=180,HorizontalAlignment=HorizontalAlignment.Right};AutomationProperties.SetAutomationId(combo,id);AutomationProperties.SetName(combo,title);
+        var host=new Grid();host.Children.Add(combo);
         if(id is "theme-mode" or "dock-edge" or "interface-theme"){
-            combo.Visibility=Visibility.Collapsed;var display=id=="theme-mode"?new[]{"系统","浅色","深色","自定义","玻璃"}:id=="dock-edge"?new[]{"底部","左侧","右侧"}:options;var segment=new SettingsSegmentedControl{ItemsSource=display,FontSize=12};AutomationProperties.SetAutomationId(segment,id+"-segment");AutomationProperties.SetName(segment,title);
-            segment.SetBinding(Selector.SelectedIndexProperty,new System.Windows.Data.Binding("SelectedIndex"){Source=combo,Mode=System.Windows.Data.BindingMode.TwoWay});Grid.SetColumn(segment,1);row.Children.Add(segment);
+            // Few, short choices read better as a segmented control; the combo stays as the bound source.
+            combo.Visibility=Visibility.Collapsed;var display=id=="theme-mode"?new[]{"系统","浅色","深色","自定义","玻璃"}:id=="dock-edge"?new[]{"底部","左侧","右侧"}:new[]{"跟随系统","浅色","深色"};var segment=Segmented(display,combo.SelectedIndex);AutomationProperties.SetAutomationId(segment,id+"-segment");AutomationProperties.SetName(segment,title);
+            segment.SetBinding(Selector.SelectedIndexProperty,new System.Windows.Data.Binding("SelectedIndex"){Source=combo,Mode=System.Windows.Data.BindingMode.TwoWay});host.Children.Add(segment);
         }
-        AddSettingsRow(panel,row);return combo;
+        AddSettingsRow(panel,LabeledRow(title,host));return combo;
     }
     private Slider Range(Panel panel,string title,string id,double min,double max,double value,string format,Action<double> setter,double step=1,bool custom=true)
     {
-        var row=new Grid{Margin=new Thickness(0,7,0,7)};row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=new GridLength(1.3,GridUnitType.Star)});row.Children.Add(new TextBlock{Text=title,FontSize=13,TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,14,0)});
-        var field=new Grid();field.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});field.ColumnDefinitions.Add(new(){Width=new GridLength(65)});
-        var slider=new Slider{Minimum=min,Maximum=max,Value=value,TickFrequency=step,IsSnapToTickEnabled=true};AutomationProperties.SetAutomationId(slider,id);AutomationProperties.SetName(slider,title);
-        var caption=new TextBlock{FontSize=12,Foreground=_ui.Secondary,TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(7,0,0,0)};void Update()=>caption.Text=slider.Value.ToString(format);
-        slider.ValueChanged+=(_,_)=>{Update();if(!_ready||_updating)return;_glassOnlyPreview=false;setter(slider.Value);if(custom)MarkCustom();QueuePreview();};Update();field.Children.Add(slider);Grid.SetColumn(caption,1);field.Children.Add(caption);Grid.SetColumn(field,1);row.Children.Add(field);AddSettingsRow(panel,row);_ranges[id]=slider;return slider;
+        var (field,slider,caption)=SliderField(min,max,value);slider.TickFrequency=step;slider.IsSnapToTickEnabled=true;AutomationProperties.SetAutomationId(slider,id);AutomationProperties.SetName(slider,title);
+        void Update()=>caption.Text=slider.Value.ToString(format);
+        slider.ValueChanged+=(_,_)=>{Update();if(!_ready||_updating)return;_glassOnlyPreview=false;setter(slider.Value);if(custom)MarkCustom();QueuePreview();};Update();AddSettingsRow(panel,LabeledRow(title,field));_ranges[id]=slider;return slider;
     }
     private CheckBox Toggle(Panel panel,string title,string id,bool value,Action<bool> setter)
-    {var c=new CheckBox{Content=title,IsChecked=value,FontSize=12,Foreground=_ui.Text,Margin=new Thickness(0)};AutomationProperties.SetAutomationId(c,id);AutomationProperties.SetName(c,title);void Changed(){if(!_ready||_updating)return;setter(c.IsChecked==true);QueuePreview();}c.Checked+=(_,_)=>Changed();c.Unchecked+=(_,_)=>Changed();AddSettingsRow(panel,c);return c;}
+    {var c=new CheckBox{Content=title,IsChecked=value,Margin=new Thickness(0)};AutomationProperties.SetAutomationId(c,id);AutomationProperties.SetName(c,title);void Changed(){if(!_ready||_updating)return;setter(c.IsChecked==true);QueuePreview();}c.Checked+=(_,_)=>Changed();c.Unchecked+=(_,_)=>Changed();AddSettingsRow(panel,c);return c;}
+    // Colour row: a swatch button that opens the picker, and the hex value beside it.
     private void ColorField(Panel panel,string title,string id,string value,Func<bool> available)
     {
-        panel.Children.Add(Label(title));var row=new Grid();row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
-        var edit=new TextBox{Text=value,FontSize=12,Padding=new Thickness(10,8,10,8),MaxLength=7,Background=Brushes.Transparent,Foreground=_ui.Text};AutomationProperties.SetAutomationId(edit,id);AutomationProperties.SetName(edit,title);
-        var swatch=new SquircleBorder{Width=18,Height=18,CornerRadius=new CornerRadius(4),Background=Palette.Brush(value),Margin=new Thickness(0,0,7,0)};
-        var choose=SettingsButton("选色",(_,_)=>{using var dialog=new Forms.ColorDialog{FullOpen=true,Color=System.Drawing.ColorTranslator.FromHtml(ThemeAppearance.TryColor(edit.Text,out var hex)?hex:value)};if(dialog.ShowDialog()==Forms.DialogResult.OK)edit.Text=$"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";});
-        var chip=new StackPanel{Orientation=Orientation.Horizontal};chip.Children.Add(swatch);chip.Children.Add(new TextBlock{Text="选色",VerticalAlignment=VerticalAlignment.Center});choose.Content=chip;choose.Margin=new Thickness(6,0,0,0);AutomationProperties.SetAutomationId(choose,"pick-"+id);
+        var edit=new TextBox{Text=value,FontSize=13,Width=96,MaxLength=7,FontFamily=new FontFamily("Cascadia Mono, Consolas, Segoe UI")};AutomationProperties.SetAutomationId(edit,id);AutomationProperties.SetName(edit,title);
+        var swatch=new SquircleBorder{Width=18,Height=18,CornerRadius=new CornerRadius(7),Background=Palette.Brush(value),BorderThickness=new Thickness(1)};swatch.SetResourceReference(Border.BorderBrushProperty,"SettingsControlStroke");
+        var choose=SettingsButton("",(_,_)=>{using var dialog=new Forms.ColorDialog{FullOpen=true,Color=System.Drawing.ColorTranslator.FromHtml(ThemeAppearance.TryColor(edit.Text,out var hex)?hex:value)};if(dialog.ShowDialog()==Forms.DialogResult.OK)edit.Text=$"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";});
+        var chip=new StackPanel{Orientation=Orientation.Horizontal};chip.Children.Add(swatch);chip.Children.Add(new TextBlock{Text="选色",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(7,0,0,0)});choose.Content=chip;choose.Padding=new Thickness(9,4,12,4);choose.Margin=new Thickness(8,0,0,0);AutomationProperties.SetAutomationId(choose,"pick-"+id);
         _colors[id]=edit;_swatches[id]=swatch;edit.TextChanged+=(_,_)=>{if(!_ready||_updating)return;if(ThemeAppearance.TryColor(edit.Text,out var hex)){if(id=="background-color")_draft.Appearance.BackgroundColor=hex;else if(id=="border-color")_draft.Appearance.BorderColor=hex;else _draft.Appearance.IndicatorColor=hex;swatch.Background=Palette.Brush(hex);if(id is "background-color" or "indicator-color")MarkCustom(id=="background-color");}ValidateColors();QueuePreview();};
-        row.Children.Add(edit);Grid.SetColumn(choose,1);row.Children.Add(choose);panel.Children.Add(row);Require(row,available);
+        var field=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right};field.Children.Add(edit);field.Children.Add(choose);
+        var row=LabeledRow(title,field);AddSettingsRow(panel,row);Require(row,available);
     }
     private void MarkCustom(bool preserveColor=false){if(!Glass&&!Custom&&!preserveColor){var color=((SolidColorBrush)new Palette(_draft).Surface).Color;_draft.Appearance.BackgroundColor=$"#{color.R:X2}{color.G:X2}{color.B:X2}";_updating=true;_colors["background-color"].Text=_draft.Appearance.BackgroundColor;_swatches["background-color"].Background=Palette.Brush(_draft.Appearance.BackgroundColor);_updating=false;}if(!Glass)_draft.Theme=DockTheme.Custom;_updating=true;_theme.SelectedIndex=(int)_draft.Theme;_preset.SelectedIndex=0;_updating=false;}
-    private bool ValidateColors(){bool valid=_colors.Values.All(c=>ThemeAppearance.TryColor(c.Text,out _));foreach(var edit in _colors.Values)edit.BorderBrush=ThemeAppearance.TryColor(edit.Text,out _)?Brushes.Transparent:Palette.Brush("#D66D61");_validation.Text=valid?"":"颜色格式应为 #RRGGBB。";_save.IsEnabled=valid;return valid;}
+    private bool ValidateColors(){bool valid=_colors.Values.All(c=>ThemeAppearance.TryColor(c.Text,out _));foreach(var edit in _colors.Values){if(ThemeAppearance.TryColor(edit.Text,out _))edit.SetResourceReference(Control.BorderBrushProperty,"SettingsControlStroke");else edit.BorderBrush=DesignSystem.Brush(Design.Red);}_validation.Text=valid?"":"颜色格式应为 #RRGGBB。";_save.IsEnabled=valid;return valid;}
     private void RefreshAppearanceControls()
     {
         _updating=true;_theme.SelectedIndex=(int)_draft.Theme;

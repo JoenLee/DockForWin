@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -360,7 +360,7 @@ public sealed partial class DockWindow : Window
         _surface.UseGlass = ViewSettings.Theme == DockTheme.Glass && !SystemParameters.HighContrast;
         _surface.GlassDistortion = ViewSettings.GlassDistortion;
         _surface.GlassHighlight = ViewSettings.GlassHighlight; _surface.GlassHighlightWidth = ViewSettings.GlassHighlightWidth; _surface.GlassSideDarkness = ViewSettings.GlassSideDarkness;
-        _surface.GlassTint = ViewSettings.GlassTint;
+        _surface.GlassTint = ViewSettings.GlassTint; _surface.GlassTintColor = GlassTint.Resolve(ViewSettings);
         _surface.GlassOpacity = ViewSettings.GlassOpacity; _surface.GlassFrost = ViewSettings.GlassFrost;
         _surface.GlassGrain = ViewSettings.GlassGrain;
         _surface.InvalidateVisual();
