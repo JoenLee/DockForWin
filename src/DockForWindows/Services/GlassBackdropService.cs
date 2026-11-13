@@ -45,6 +45,10 @@ public sealed class GlassBackdropService : IDisposable
     public bool RetainWindowSamples {get;set;}
     private sealed record SavedSample(Bitmap Image,Rectangle Bounds,NativeRect Window,long Time,WindowFrameCapture.FrameStamp? Stamp){public long LastUsed=Time,LastConfirmed=Time;}
     private readonly Dictionary<nint,SavedSample> _savedSamples=new();
+    // Last raw (Dock) frame, the pixels it was made from and what it showed, for exact reuse while idle.
+    private BitmapSource? _rawFrame;private byte[]? _rawPixels;private string? _rawFrameKey;
+    private Dictionary<nint,WindowFrameCapture.FrameStamp>? _rawFrameStamps;
+    public long ReusedFrames { get; private set; }
 
     public BitmapSource? Render(nint dock, Rectangle bounds, double radius, double amount, double dpi, bool raw = false)
         => RenderCore(dock,bounds,radius,amount,dpi,raw,false,out _);
@@ -67,39 +71,33 @@ public sealed class GlassBackdropService : IDisposable
             // Pad the source so light can bend pixels from outside the glass edge inward.
             int pad = (int)Math.Ceiling(24 * dpi);
             var sample = Rectangle.Inflate(bounds, pad, pad);
+            nint desktop = GetShellWindow();
+            var layers = Layers(dock, desktop, sample);
+            // Compose in z-order. Protected/unsupported windows fall back to the lower layer.
+            LastSourceWindows = string.Join(", ", layers.ConvertAll(layer => layer.Window.ToString() + ":" + layer.Bounds));
+            // Dock frames: when the sampled rectangle, the z-ordered layers and every layer's compositor
+            // frame are unchanged, the previous composite is still exact. Skip the GPU copies, the CPU
+            // composite and the WPF upload; the next tick still checks every layer, so a change shows at once.
+            bool rawFrame = raw && !pixelsOnly;
+            string? key = rawFrame ? RawFrameKey(sample, desktop, layers) : null;
+            var stamps = rawFrame ? PeekStamps(desktop, layers, sample) : null;
+            if (rawFrame && _rawFrame is not null && stamps is not null && key == _rawFrameKey && SameStamps(stamps, _rawFrameStamps))
+            {
+                ReusedFrames++; _capture?.Trim();
+                return _rawFrame;
+            }
             if (_composite is null || _composite.Width != sample.Width || _composite.Height != sample.Height)
             { _composite?.Dispose(); _composite = new Bitmap(sample.Width, sample.Height, PixelFormat.Format32bppArgb); _pixelBuffer = new byte[sample.Width * sample.Height * 4]; }
             var composite = _composite;
             using (var graphics = Graphics.FromImage(composite))
             {
                 graphics.Clear(System.Drawing.Color.FromArgb(38, 44, 52));
-                nint desktop = GetShellWindow();
                 if (_desktop is null || _desktopBounds != sample || DateTime.UtcNow - _desktopTime > TimeSpan.FromMilliseconds(12))
                 {
                     var next = ReadWindow(desktop, sample, out var desktopBounds);
                     if (next is not null) { _desktop?.Dispose(); _desktop = next; _desktopBounds = desktopBounds; _desktopTime = DateTime.UtcNow; }
                 }
                 if (_desktop is not null) Composite(graphics, _desktop, _desktopBounds, sample);
-                var layers = new List<(nint Window, Rectangle Bounds)>();
-                bool below = false;
-                EnumWindows((window, _) =>
-                {
-                    if (window == dock) { below = true; return true; }
-                    if (!below || window == desktop || !IsWindowVisible(window) || IsIconic(window)) return true;
-                    var className = new StringBuilder(128); GetClassName(window, className, className.Capacity);
-                    if (className.ToString() is "WorkerW" or "Progman" or "CEF-OSC-WIDGET") return true;
-                    // Driver/game HUDs often expose invisible full-screen windows. They are
-                    // not a backdrop layer and some never return from WM_PRINT.
-                    long extendedStyle = (long)NativeMethods.GetWindowLongPtr(window, -20);
-                    if ((extendedStyle & (0x20L | 0x08000000L)) != 0) return true;
-                    if (DwmGetWindowAttribute(window, 14, out int cloaked, 4) == 0 && cloaked != 0) return true;
-                    if (!GetWindowRect(window, out var r)) return true;
-                    var rectangle = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
-                    if (rectangle.Width > 0 && rectangle.Height > 0 && rectangle.IntersectsWith(sample)) layers.Add((window, rectangle));
-                    return true;
-                }, 0);
-                // Compose in z-order. Protected/unsupported windows fall back to the lower layer.
-                LastSourceWindows = string.Join(", ", layers.ConvertAll(layer => layer.Window.ToString() + ":" + layer.Bounds));
                 for (int i = layers.Count - 1; i >= 0; i--)
                 {
                     if (_disposed) return null;
@@ -108,8 +106,8 @@ public sealed class GlassBackdropService : IDisposable
                 }
             }
             _capture?.Trim();
-            foreach(var key in new List<nint>(_savedSamples.Keys))if(Environment.TickCount64-_savedSamples[key].LastUsed>1800||!NativeMethods.IsWindow(key)){_savedSamples[key].Image.Dispose();_savedSamples.Remove(key);}
-            LastSourceWindows += $" gpuCopies={_capture?.Copies ?? 0} gpuError={_capture?.LastError}";
+            foreach(var window in new List<nint>(_savedSamples.Keys))if(Environment.TickCount64-_savedSamples[window].LastUsed>1800||!NativeMethods.IsWindow(window)){_savedSamples[window].Image.Dispose();_savedSamples.Remove(window);}
+            LastSourceWindows += $" gpuCopies={_capture?.Copies ?? 0} gpuError={_capture?.LastError} reused={ReusedFrames}";
             var data = composite.LockBits(new Rectangle(0, 0, composite.Width, composite.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             var pixels = _pixelBuffer!;
             try { for (int y = 0; y < composite.Height; y++) Marshal.Copy(data.Scan0 + y * data.Stride, pixels, y * composite.Width * 4, composite.Width * 4); }
@@ -132,9 +130,67 @@ public sealed class GlassBackdropService : IDisposable
             }
             if(pixelsOnly){result=new PixelFrame(pixels,composite.Width,composite.Height);return null;}
             if (!raw) return GlassRefraction.Render(pixels, composite.Width, composite.Height, pad, bounds.Width, bounds.Height, radius, amount, dpi);
-            var frame = BitmapSource.Create(composite.Width, composite.Height, 96, 96, PixelFormats.Bgra32, null, pixels, composite.Width * 4); frame.Freeze(); return frame;
+            int length = composite.Width * composite.Height * 4;
+            if (_rawFrame is not null && _rawPixels is not null && _rawPixels.Length == length && pixels.AsSpan(0, length).SequenceEqual(_rawPixels))
+            {
+                // A layer changed outside the sampled region, or could not be stamped, but these pixels did not.
+                _rawFrameKey = key; _rawFrameStamps = stamps; ReusedFrames++;
+                return _rawFrame;
+            }
+            var frame = BitmapSource.Create(composite.Width, composite.Height, 96, 96, PixelFormats.Bgra32, null, pixels, composite.Width * 4); frame.Freeze();
+            if (_rawPixels is null || _rawPixels.Length != length) _rawPixels = new byte[length];
+            Buffer.BlockCopy(pixels, 0, _rawPixels, 0, length);
+            _rawFrame = frame; _rawFrameKey = key; _rawFrameStamps = stamps;
+            return frame;
         }
         finally { if (initialized >= 0) RoUninitialize(); SetThreadDpiAwarenessContext(oldDpi); }
+    }
+    private static List<(nint Window, Rectangle Bounds)> Layers(nint dock, nint desktop, Rectangle sample)
+    {
+        var layers = new List<(nint Window, Rectangle Bounds)>();
+        bool below = false;
+        EnumWindows((window, _) =>
+        {
+            if (window == dock) { below = true; return true; }
+            if (!below || window == desktop || !IsWindowVisible(window) || IsIconic(window)) return true;
+            var className = new StringBuilder(128); GetClassName(window, className, className.Capacity);
+            if (className.ToString() is "WorkerW" or "Progman" or "CEF-OSC-WIDGET") return true;
+            // Driver/game HUDs often expose invisible full-screen windows. They are
+            // not a backdrop layer and some never return from WM_PRINT.
+            long extendedStyle = (long)NativeMethods.GetWindowLongPtr(window, -20);
+            if ((extendedStyle & (0x20L | 0x08000000L)) != 0) return true;
+            if (DwmGetWindowAttribute(window, 14, out int cloaked, 4) == 0 && cloaked != 0) return true;
+            if (!GetWindowRect(window, out var r)) return true;
+            var rectangle = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+            if (rectangle.Width > 0 && rectangle.Height > 0 && rectangle.IntersectsWith(sample)) layers.Add((window, rectangle));
+            return true;
+        }, 0);
+        return layers;
+    }
+    private static string RawFrameKey(Rectangle sample, nint desktop, List<(nint Window, Rectangle Bounds)> layers)
+    {
+        var key = new StringBuilder(64 + layers.Count * 48);
+        key.Append(sample).Append('|').Append(System.Windows.Forms.SystemInformation.VirtualScreen).Append('|').Append(desktop);
+        foreach (var layer in layers) key.Append('|').Append(layer.Window).Append(':').Append(layer.Bounds);
+        return key.ToString();
+    }
+    // Null when any layer has no live compositor frame to compare (PrintWindow fallback, first frame, failure).
+    private Dictionary<nint, WindowFrameCapture.FrameStamp>? PeekStamps(nint desktop, List<(nint Window, Rectangle Bounds)> layers, Rectangle sample)
+    {
+        if (_capture is null || !_capture.TryPeekStamp(desktop, sample, out var desktopStamp)) return null;
+        var stamps = new Dictionary<nint, WindowFrameCapture.FrameStamp>(layers.Count + 1) { [desktop] = desktopStamp };
+        foreach (var layer in layers)
+        {
+            if (!_capture.TryPeekStamp(layer.Window, sample, out var stamp)) return null;
+            stamps[layer.Window] = stamp;
+        }
+        return stamps;
+    }
+    private static bool SameStamps(Dictionary<nint, WindowFrameCapture.FrameStamp> current, Dictionary<nint, WindowFrameCapture.FrameStamp>? previous)
+    {
+        if (previous is null || previous.Count != current.Count) return false;
+        foreach (var pair in current) if (!previous.TryGetValue(pair.Key, out var stamp) || stamp != pair.Value) return false;
+        return true;
     }
     private Bitmap? ReadWindow(nint window, Rectangle sample, out Rectangle captured)
     {
@@ -222,7 +278,7 @@ public sealed class GlassBackdropService : IDisposable
         return bitmap;
     }
     // Called on the same worker after the last in-flight sample.
-    public void Dispose() { _disposed = true;foreach(var saved in _savedSamples.Values)saved.Image.Dispose();_savedSamples.Clear(); _desktop?.Dispose(); _desktop = null; _composite?.Dispose(); _composite = null; _pixelBuffer = null; _capture?.Dispose(); _capture = null; }
+    public void Dispose() { _disposed = true;foreach(var saved in _savedSamples.Values)saved.Image.Dispose();_savedSamples.Clear(); _desktop?.Dispose(); _desktop = null; _composite?.Dispose(); _composite = null; _pixelBuffer = null; _rawFrame = null; _rawPixels = null; _rawFrameStamps = null; _capture?.Dispose(); _capture = null; }
 }
 
 public static class GlassRefraction

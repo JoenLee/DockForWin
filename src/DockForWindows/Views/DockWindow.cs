@@ -40,6 +40,9 @@ public sealed partial class DockWindow : Window
     private double _fitScale = 1;
     private long _glassFrameCount;
     private double _glassCaptureMs;
+    private double _glassChangedAt;
+    private static readonly TimeSpan GlassFrameInterval = TimeSpan.FromMilliseconds(16), GlassIdleInterval = TimeSpan.FromMilliseconds(250);
+    private const double GlassSettleSeconds = 1.5;
     private Palette _palette;
     private DockSettings? _previewSettings;
     private DockSettings ViewSettings => _previewSettings ?? _model.Settings;
@@ -156,8 +159,11 @@ public sealed partial class DockWindow : Window
         {
             if (_surface.Backdrop is not null) { _surface.Backdrop = null; _surface.InvalidateVisual(); }
             foreach (var tile in _strip.Children.OfType<DockTile>()) tile.RestoreIndicatorColor();RestoreSeparatorColor();
+            // Nothing to sample until the theme is Glass again; check for that a few times a second instead of every frame.
+            if (_glassTimer.Interval != GlassIdleInterval) _glassTimer.Interval = GlassIdleInterval;
             return;
         }
+        if (_glassTimer.Interval != GlassFrameInterval) _glassTimer.Interval = GlassFrameInterval;
         if (_glassBusy || _hidden || _closing || !IsVisible || _surface.ActualWidth <= 0 || _surface.ActualHeight <= 0) return;
         var handle = new WindowInteropHelper(this).Handle;
         if (!NativeMethods.GetWindowRect(handle, out var nativeBounds)) return;
@@ -175,9 +181,18 @@ public sealed partial class DockWindow : Window
             {
                 int pad = (int)Math.Ceiling(24 * dpi);
                 var captureBounds = System.Drawing.Rectangle.Inflate(rectangle, pad, pad);
-                _surface.BackdropScreenBounds = new Rect(captureBounds.X, captureBounds.Y, captureBounds.Width, captureBounds.Height);
-                _surface.Backdrop = frame; _surface.InvalidateVisual(); _glassFrameCount++;
+                var screenBounds = new Rect(captureBounds.X, captureBounds.Y, captureBounds.Width, captureBounds.Height);
                 double now = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+                // GlassBackdropService returns the same frame object while nothing under the Dock changed.
+                // Keep refreshing for a moment so the adaptive tint (0.4 s time constant) fully settles, then stop
+                // re-arranging and re-rendering an identical image; a new frame resumes updates immediately.
+                bool same = ReferenceEquals(frame, _surface.Backdrop) && screenBounds == _surface.BackdropScreenBounds;
+                if (!same) _glassChangedAt = now;
+                if (!same || now - _glassChangedAt < GlassSettleSeconds)
+                {
+                    _surface.BackdropScreenBounds = screenBounds;
+                    _surface.Backdrop = frame; _surface.InvalidateVisual(); _glassFrameCount++;
+                }
                 double tint = _surface.Fill is SolidColorBrush currentFill && currentFill.Color.A > 0 ? _surface.EffectiveGlassTint * ViewSettings.GlassOpacity : 0;
                 foreach (var tile in _strip.Children.OfType<DockTile>())
                     tile.UpdateIndicatorBackdrop(frame, _surface.BackdropScreenBounds, tint, now, ViewSettings.Animations && !_palette.ReducedMotion);
