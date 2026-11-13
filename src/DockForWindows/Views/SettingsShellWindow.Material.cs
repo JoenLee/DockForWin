@@ -8,100 +8,20 @@ using System.Windows.Shapes;
 
 namespace DockForWindows.Views;
 
-// The settings window is one slab of glass: its frame looks through to the desktop, and the sidebar and content
-// float on it as two inset panes. Liquid glass on: frame and sidebar are clear, refracting water-light glass,
-// the content pane milky for legibility. Off: all three are quiet frosted milk glass. "质感" moves the clear
-// panes between the two. The material follows the draft settings live, so the window previews its own choice.
+// The settings window is flat: one opaque card, quiet solid rows, no glass of its own. The Dock it configures keeps
+// its liquid glass; this window only shows it in the preview.
 internal partial class SettingsShellWindow
 {
-    // Transparency effects on (Windows setting), no high contrast, not a remote session: the glass is drawn.
-    protected bool GlassBackdrop { get; } = !SystemParameters.HighContrast && !SystemParameters.IsRemoteSession && TransparencyEnabled();
-    internal const double ShadowMargin = 30, FrameRadius = 24, PaneRadius = 18, FrameInset = 14;
-    private readonly GlassPane _frame = new() { CornerRadius = FrameRadius, Refraction = .38, Bevel = 1.15 };
-    private readonly GlassPane _sidebarGlass = new() { CornerRadius = PaneRadius, Refraction = .55 };
-    private readonly GlassPane _contentGlass = new() { CornerRadius = PaneRadius, Refraction = .5 };
-    private readonly Border _windowShadow = Caster(FrameRadius), _sidebarShadow = Caster(PaneRadius), _contentShadow = Caster(PaneRadius);
-    private readonly DropShadowEffect _windowShadowEffect = new() { BlurRadius = 64, ShadowDepth = 20, Direction = 270, Color = Colors.Black, RenderingBias = RenderingBias.Quality };
-    private readonly DropShadowEffect _paneShadowEffect = new() { BlurRadius = 40, ShadowDepth = 12, Direction = 270, Color = Colors.Black, RenderingBias = RenderingBias.Quality };
-    private readonly DropShadowEffect _contentShadowEffect = new() { BlurRadius = 40, ShadowDepth = 12, Direction = 270, Color = Colors.Black, RenderingBias = RenderingBias.Quality };
-    private Border _windowBody = null!;
-
-    // An opaque shape that only casts: its own area is clipped away so it never shows through the glass.
-    private static Border Caster(double radius)
-    {
-        var caster = new Border { Background = Brushes.Black, CornerRadius = new CornerRadius(radius), IsHitTestVisible = false };
-        caster.SizeChanged += (_, args) =>
-        {
-            var size = args.NewSize; var inner = new RectangleGeometry(new Rect(size), radius, radius);
-            var ring = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(new Rect(-120, -120, size.Width + 240, size.Height + 240)), inner); ring.Freeze(); caster.Clip = ring;
-        };
-        return caster;
-    }
-    // Window layers inside the two-column grid: shadow and frame span both columns, the panes sit in their columns.
-    private void InstallWindowMaterial(Grid root)
-    {
-        _windowShadow.Effect = _windowShadowEffect; _sidebarShadow.Effect = _paneShadowEffect; _contentShadow.Effect = _contentShadowEffect;
-        foreach (var layer in new FrameworkElement[] { _windowShadow, _frame }) { Grid.SetColumnSpan(layer, 2); root.Children.Insert(0, layer); }
-        root.Children.Remove(_windowShadow); root.Children.Insert(0, _windowShadow);
-        StateChanged += (_, _) => ApplyWindowShape();
-    }
-    // Maximized, the window fills the work area: no shadow margin, no outer radius.
-    private void ApplyWindowShape()
-    {
-        bool max = WindowState == WindowState.Maximized;
-        _windowBody.Padding = new Thickness(max ? 0 : ShadowMargin);
-        _frame.CornerRadius = max ? 0 : FrameRadius; _windowShadow.Visibility = max ? Visibility.Collapsed : Visibility.Visible;
-    }
-    private Grid SidebarGlass(Grid content) => Floating(_sidebarShadow, _sidebarGlass, content, new Thickness(FrameInset, FrameInset, 6, FrameInset));
-    private Grid ContentGlass(Grid content) => Floating(_contentShadow, _contentGlass, content, new Thickness(6, FrameInset, FrameInset, FrameInset));
-    private static Grid Floating(Border shadow, GlassPane glass, UIElement content, Thickness margin)
-    {
-        var pane = new Grid { Margin = margin };
-        pane.Children.Add(shadow); pane.Children.Add(glass); pane.Children.Add(content);
-        return pane;
-    }
-    // Pages fade under the toolbar and above the bottom edge (the macOS 26 scroll edge): the content itself goes
-    // transparent there, so the pane's glass shows through exactly.
-    private void InstallScrollEdges(FrameworkElement pages)
-    {
-        void Update()
-        {
-            double h = Math.Max(1, pages.ActualHeight);
-            var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-            mask.GradientStops.Add(new(Colors.Transparent, 0)); mask.GradientStops.Add(new(Colors.Black, Math.Min(.45, 16 / h)));
-            mask.GradientStops.Add(new(Colors.Black, Math.Max(.55, 1 - 20 / h))); mask.GradientStops.Add(new(Colors.Transparent, 1)); mask.Freeze();
-            pages.OpacityMask = mask;
-        }
-        pages.SizeChanged += (_, _) => Update();
-    }
     private void ApplyGlassPalette(DesignPalette p)
     {
-        bool glass = GlassBackdrop, liquid = glass && SharedDraft.LiquidGlass, dark = p.Dark;
-        double quality = Math.Clamp(SharedDraft.GlassQuality, 0, 1);
-        foreach (var pane in new[] { _frame, _sidebarGlass, _contentGlass }) { pane.Dark = dark; pane.Visibility = Visibility.Visible; }
-        // Clarity: liquid glass follows 质感 (a floor keeps it glassy); frosted glass stays milk glass.
-        _frame.Clarity = liquid ? .25 + .75 * quality : 0; _sidebarGlass.Clarity = liquid ? .3 + .7 * quality : 0; _contentGlass.Clarity = 0;
-        _frame.Veil = !glass ? p.Canvas : dark ? (liquid ? Color.FromArgb(92, 12, 13, 18) : Color.FromArgb(107, 28, 28, 32)) : (liquid ? Color.FromArgb(26, 255, 255, 255) : Color.FromArgb(107, 244, 241, 237));
-        _sidebarGlass.Veil = !glass ? p.Sidebar : dark ? (liquid ? Color.FromArgb(110, 20, 22, 28) : Color.FromArgb(92, 48, 48, 54)) : (liquid ? Color.FromArgb(36, 255, 255, 255) : Color.FromArgb(87, 252, 250, 248));
-        _contentGlass.Veil = !glass ? p.Canvas : dark ? Color.FromArgb(184, 30, 31, 35) : Color.FromArgb(214, 250, 251, 253);
-        // Text sits on the sidebar and content panes: keep their luminance on the right side of the ink.
-        _sidebarGlass.TargetLuminance = dark ? .22 : .7; _contentGlass.TargetLuminance = dark ? .2 : .86; _frame.TargetLuminance = -1;
-        _windowShadowEffect.Opacity = dark ? .5 : .2; _paneShadowEffect.Opacity = _contentShadowEffect.Opacity = dark ? .3 : .08;
-        // Controls floating on the panes share the glass rim.
-        var rim = new LinearGradientBrush(new GradientStopCollection { new(p.GlassRimLight, 0), new(p.GlassRimShade, .42), new(p.GlassRimShade, .7), new(DesignSystem.WithAlpha(p.GlassRimLight, p.GlassRimLight.A / 255d * .55), 1) }, new Point(0, 0), new Point(1, 1)); rim.Freeze();
-        Resources["SettingsGlassRim"] = rim;
-        var control = new LinearGradientBrush(new GradientStopCollection { new(p.Control, 0), new(p.ControlBottom, 1) }, 90); control.Freeze();
-        Resources["SettingsGlassControl"] = control;
-        Resources["SettingsGlassShadowOpacity"] = dark ? .32 : .09;
-        // Sidebar row icons sit in small glass chips when the glass is liquid.
-        Resources["SettingsNavChip"] = DesignSystem.Brush(liquid ? (dark ? Color.FromArgb(36, 255, 255, 255) : Color.FromArgb(97, 255, 255, 255)) : Colors.Transparent);
-        Resources["SettingsNavChipRim"] = DesignSystem.Brush(liquid ? (dark ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(200, 255, 255, 255)) : Colors.Transparent);
-        // The selected row: a bright white glass pill on liquid glass, a quiet darker breath of the pane otherwise.
-        Resources["SettingsSelection"] = DesignSystem.Brush(liquid ? (dark ? Color.FromArgb(56, 255, 255, 255) : Color.FromArgb(184, 255, 255, 255)) : (dark ? Color.FromArgb(28, 255, 255, 255) : Color.FromArgb(17, 0, 0, 0)));
-        _selection.BorderThickness = new Thickness(liquid ? 1 : 0);
-        _selection.BorderBrush = new LinearGradientBrush(Color.FromArgb(dark ? (byte)60 : (byte)255, 255, 255, 255), Color.FromArgb(dark ? (byte)10 : (byte)120, 255, 255, 255), 90);
-        _selection.Effect = liquid ? new DropShadowEffect { BlurRadius = 14, ShadowDepth = 3, Direction = 270, Opacity = dark ? .3 : .12, Color = Color.FromRgb(20, 60, 120) } : null;
-        if (!glass) foreach (var pane in new[] { _frame, _sidebarGlass, _contentGlass }) pane.Clarity = 0;
+        bool dark = p.Dark;
+        // Flat controls: one solid face, a hairline, no sheen.
+        Resources["SettingsGlassRim"] = DesignSystem.Brush(dark ? DesignSystem.Hex("#1FFFFFFF") : DesignSystem.Hex("#14000000"));
+        Resources["SettingsGlassControl"] = DesignSystem.Brush(dark ? DesignSystem.Hex("#3A3A3E") : DesignSystem.Hex("#FFFFFF"));
+        Resources["SettingsGlassShadowOpacity"] = 0d;
+        Resources["SettingsNavChip"] = Brushes.Transparent; Resources["SettingsNavChipRim"] = Brushes.Transparent;
+        Resources["SettingsSelection"] = DesignSystem.Brush(dark ? DesignSystem.Hex("#1CFFFFFF") : DesignSystem.Hex("#0F000000"));
+        _selection.BorderThickness = new Thickness(0); _selection.Effect = null;
         RefreshNavigationGlyphs();
     }
 

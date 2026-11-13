@@ -8,9 +8,13 @@ namespace DockForWindows.Views;
 public class SquircleBorder : Border
 {
     private Size _clipSize;
-    private double _clipRadius=-1;
+    private double _clipRadius=-1,_clipExponent=-1;
     private Geometry? _outline;
-    public static Geometry Outline(Size size, double radius)
+    // Corner curve |x|^n+|y|^n=1. 3 suits icon outlines; the flat settings surfaces use 2.5, a gentler corner
+    // whose curvature still runs smoothly into the straight edges.
+    public double Exponent { get; set; } = 3;
+    public static Geometry Outline(Size size, double radius) => Outline(size, radius, 3);
+    public static Geometry Outline(Size size, double radius, double exponent)
     {
         var g = new StreamGeometry(); double w = Math.Max(0, size.Width), h = Math.Max(0, size.Height);
         double r = Math.Clamp(radius, 0, Math.Min(w, h) / 2);
@@ -24,18 +28,18 @@ public class SquircleBorder : Border
             void Corner(Func<double,double,Point> point)
             {
                 const int segments = 32;
-                // Fixed cubic superellipse. Symmetric halves avoid endpoint singularities.
-                double m = Math.Pow(.5, 1d/3);
-                for (int i=1;i<=segments;i++) { double x=m*i/segments; c.LineTo(point(x,1-Math.Pow(1-x*x*x,1d/3)),true,false); }
-                for (int i=segments-1;i>=0;i--) { double x=m*i/segments; c.LineTo(point(Math.Pow(1-x*x*x,1d/3),1-x),true,false); }
+                // Superellipse quarter. Symmetric halves avoid endpoint singularities.
+                double n = Math.Max(1.5, exponent), m = Math.Pow(.5, 1d/n);
+                for (int i=1;i<=segments;i++) { double x=m*i/segments; c.LineTo(point(x,1-Math.Pow(1-Math.Pow(x,n),1d/n)),true,false); }
+                for (int i=segments-1;i>=0;i--) { double x=m*i/segments; c.LineTo(point(Math.Pow(1-Math.Pow(x,n),1d/n),1-x),true,false); }
             }
         }
         g.Freeze(); return g;
     }
     protected override void OnRender(DrawingContext dc)
     {
-        if(_outline is null || _clipSize!=RenderSize || _clipRadius!=CornerRadius.TopLeft)
-        { _clipSize=RenderSize;_clipRadius=CornerRadius.TopLeft;_outline=Outline(RenderSize,_clipRadius);Clip=_outline; }
+        if(_outline is null || _clipSize!=RenderSize || _clipRadius!=CornerRadius.TopLeft || _clipExponent!=Exponent)
+        { _clipSize=RenderSize;_clipRadius=CornerRadius.TopLeft;_clipExponent=Exponent;_outline=Outline(RenderSize,_clipRadius,Exponent);Clip=_outline; }
         var geometry = _outline;
         dc.DrawGeometry(Background, BorderBrush is not null && BorderThickness.Left > 0 ? new Pen(BorderBrush,BorderThickness.Left) : null, geometry);
     }

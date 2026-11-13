@@ -37,7 +37,7 @@ internal sealed partial class SettingsWindow
         Toggle(center,"点击任务栏的网络、音量图标时打开","glass-control-center",_draft.UseGlassControlCenter,v=>_draft.UseGlassControlCenter=v);
         Toggle(center,"隐藏任务栏应用图标，保留开始与托盘","hide-taskbar-apps",_draft.HideTaskbarApplications,v=>_draft.HideTaskbarApplications=v);
 
-        var layout=Section(page,"模块与排列","打开开关添加模块，关闭则移除。普通控件有圆形、胶囊、正方形和矩形；播放器有 4×1、2×2、4×2 和 4×7 四档。也可以在控制中心点“编辑控制”直接拖动排列、拖右下角切换尺寸。");
+        var layout=Section(page,"模块与排列","打开开关添加模块，关闭则移除。普通控件有圆形、胶囊、正方形和矩形；播放器有 4×1、2×2、4×2 和 4×7 四档。也可以在控制中心点“编辑控制”直接拖动排列、拖右下角切换尺寸。\nWi-Fi 和蓝牙开关直接控制设备，个人 Wi-Fi 可以直接输入密码连接；企业网络认证、受限的蓝牙连接和专注模式使用 Windows 原生面板，不能可靠控制时会说明原因。亮度只在显示器提供控制接口时可用，媒体需要播放器支持系统媒体会话。");
         foreach(var pageOption in options.Pages){var entryPage=pageOption;var name=new TextBox{Text=entryPage.Name,MaxLength=40,Width=220};AutomationProperties.SetName(name,"页面名称");name.LostKeyboardFocus+=(_,_)=>{entryPage.Name=name.Text;options.Normalize();QueuePreview();};AddSettingsRow(layout,LabeledRow(options.Pages.Count>1?"页面 · "+entryPage.Name:"页面名称",name));}
         var pageButtons=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,10,0,10)};
         var addPage=SettingsButton("添加页面",(_,_)=>{if(options.Pages.Count>=12)return;options.Pages.Add(new(){Id="page-"+Guid.NewGuid().ToString("N"),Name="新页面 "+(options.Pages.Count+1)});_dock.ReopenSettings(_draft,7);});addPage.Margin=new Thickness(0,0,8,0);pageButtons.Children.Add(addPage);
@@ -73,27 +73,26 @@ internal sealed partial class SettingsWindow
         Rebuild();
 
         var geometry=options.Geometry;
-        var proportions=Section(page,"大小与圆角","整体缩放同时调整面板、图标、文字和间距；组件缩放按比例调整四种组件规格。内容超过屏幕时自动缩小显示。");
+        var proportions=Section(page,"大小与圆角","面板缩放、组件缩放与各类圆角。内容超过屏幕时自动缩小显示。");
         Range(proportions,"整体面板缩放","cc-panel-scale",65,150,geometry.PanelScale*100,"0'%'",v=>geometry.PanelScale=v/100,1,false);
-        Range(proportions,"组件等比例缩放","cc-component-scale",75,150,geometry.ComponentScale*100,"0'%'",v=>geometry.ComponentScale=v/100,1,false);
+        Range(proportions,"组件缩放","cc-component-scale",75,150,geometry.ComponentScale*100,"0'%'",v=>geometry.ComponentScale=v/100,1,false);
         Range(proportions,"组件间距","cc-gap",6,24,geometry.Gap,"0' px'",v=>geometry.Gap=v,1,false);
-        Range(proportions,"胶囊圆滑程度","cc-capsule-radius",0,100,geometry.CapsuleRoundness,"0.0'%'",v=>geometry.CapsuleRoundness=v,.1,false);
+        Range(proportions,"胶囊圆滑程度","cc-capsule-radius",0,100,geometry.CapsuleRoundness,"0'%'",v=>geometry.CapsuleRoundness=v,.1,false);
         Range(proportions,"正方形圆角","cc-square-radius",0,100,geometry.SquareRoundness,"0'%'",v=>geometry.SquareRoundness=v,1,false);
         Range(proportions,"矩形圆角","cc-rectangle-radius",0,100,geometry.RectangleRoundness,"0'%'",v=>geometry.RectangleRoundness=v,1,false);
-        Range(proportions,"二级界面圆角","cc-detail-radius",0,35,geometry.DetailRoundness,"0'%'",v=>geometry.DetailRoundness=v,1,false);
-        Range(proportions,"音乐播放器圆角","cc-media-radius",0,100,geometry.MediaRoundness,"0.0'%'",v=>geometry.MediaRoundness=v,.1,false);
-        var material=Section(page,"玻璃材质","默认完整继承程序坞的折射、扭曲、磨砂、透明度、衬色和高光。开启单独设置后只改控制中心，不影响程序坞。");
+        Range(proportions,"详情页圆角","cc-detail-radius",0,35,geometry.DetailRoundness,"0'%'",v=>geometry.DetailRoundness=v,1,false);
+        Range(proportions,"音乐播放器圆角","cc-media-radius",0,100,geometry.MediaRoundness,"0'%'",v=>geometry.MediaRoundness=v,.1,false);
+        var material=Section(page,"液态玻璃参数","默认跟随程序坞，也可以为控制中心单独设置；只在液态玻璃材质下使用。");
         Toggle(material,"单独设置控制中心材质","control-material-override",options.OverrideMaterial,v=>options.OverrideMaterial=v);
         void RangeOverride(string label,string id,double min,double max,double value,Action<double> setter,string format,double step=1)
         {Range(material,label,id,min,max,value,format,setter,step,false);Require(_ranges[id],()=>options.OverrideMaterial&&options.MaterialMode==ControlCenterMaterialMode.LiquidGlass);}
         RangeOverride("折射强度","cc-intensity",0,100,options.Intensity*100,v=>options.Intensity=v/100,"0'%'");
         RangeOverride("边缘扭曲度","cc-distortion",0,100,options.Distortion*100,v=>options.Distortion=v/100,"0'%'");
-        RangeOverride("高斯磨砂","cc-frost",0,100,options.Frost*100,v=>options.Frost=v/100,"0.0'%'",.1);
+        RangeOverride("高斯磨砂","cc-frost",0,100,options.Frost*100,v=>options.Frost=v/100,"0'%'",.1);
         RangeOverride("玻璃透明度","cc-opacity",0,100,(1-options.Opacity)*100,v=>options.Opacity=1-v/100,"0'%'");
-        RangeOverride("淡黑衬色上限","cc-tint",0,25,options.Tint*100,v=>options.Tint=v/100,"0.0'%'",.1);
+        RangeOverride("暗色衬底上限","cc-tint",0,25,options.Tint*100,v=>options.Tint=v/100,"0.0'%'",.1);
         RangeOverride("上下高光","cc-highlight",0,100,options.Highlight*100,v=>options.Highlight=v/100,"0'%'");
         RangeOverride("高光过渡范围","cc-highlight-width",.5,8,options.HighlightWidth,v=>options.HighlightWidth=v,"0.0' px'",.1);
-        Help(page,"Wi-Fi 和蓝牙开关直接控制设备，个人 Wi-Fi 可以直接输入密码连接；企业网络认证、受限的蓝牙连接和专注模式使用 Windows 原生面板，不能可靠控制时会说明原因。亮度只在显示器提供控制接口时可用，媒体需要播放器支持系统媒体会话。",new Thickness(4,0,4,12));
     }
     // Compact reorder control: one bordered capsule holding up and down chevrons.
     private Border Stepper(Action up,Action down)

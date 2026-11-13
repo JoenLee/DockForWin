@@ -41,12 +41,10 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         _options = options; options.Normalize(); _weatherService = weatherService ?? new();
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; Focusable = false;
         AutomationProperties.SetAutomationId(this, "widget-gallery");
-        var body = new StackPanel { Margin = new Thickness(28, 23, 28, 28) }; Content = body;
-        var heading = new Grid(); heading.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        heading.Children.Add(new TextBlock { Text = "小组件库", FontSize = 27, FontWeight = FontWeights.SemiBold });
-        var badge = new Border { Background = WidgetBrushes.Get("#E3F2EE"), CornerRadius = new CornerRadius(9), Padding = new Thickness(10, 4, 10, 4), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = "桌面灵感", FontSize = 10, Foreground = WidgetBrushes.Get("#246C65") } }; Grid.SetColumn(badge, 1); heading.Children.Add(badge); body.Children.Add(heading);
-        body.Children.Add(Note("六个类别 · 多种模板与尺寸。选择外观和数据源，添加独立桌面实例。", new Thickness(0, 7, 0, 19)));
+        // The page is a ScrollViewer of its own type, so it asks for the settings window's overlay scroll style by name.
+        SetResourceReference(StyleProperty, typeof(ScrollViewer));
+        // The 小组件 tab names the page: it opens straight on the search and the categories.
+        var body = new StackPanel { Margin = new Thickness(28, 18, 28, 28) }; Content = body;
         var appearance = new WrapPanel { Margin = new Thickness(0, 0, 0, 20), Orientation = Orientation.Horizontal };
         var materials = new SettingsSegmentedControl { ItemsSource = new[] { "浅色", "深色", "玻璃" }, SelectedIndex = (int)options.Material, Width = 224, Margin = new Thickness(0, 0, 12, 8) };
         AutomationProperties.SetName(materials, "小组件材质"); AutomationProperties.SetAutomationId(materials, "widget-material"); appearance.Children.Add(materials);
@@ -59,7 +57,7 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         AutomationProperties.SetName(CalendarCarousel, "日历小组件，左右方向键切换，Home 和 End 跳到边界");
         WeatherCarousel.SelectionChanged += index => options.WeatherSelection = index;
         CalendarCarousel.SelectionChanged += async index => { options.CalendarSelection = index; if(WeatherNeeded()&&_options.Latitude.HasValue&&_weatherRequest==null&&_nextWeather<=DateTimeOffset.Now)await RefreshWeatherAsync(); };
-        var (weatherSurface, weatherBody) = Section("天气", "Weather", "Brightness"); _weatherSection = weatherSurface; body.Children.Add(weatherSurface);
+        var (weatherSurface, weatherBody) = Section("天气", "weather"); _weatherSection = weatherSurface; body.Children.Add(weatherSurface);
         _searchCity = ActionButton("查找城市", async () => await SearchCitiesAsync(), "widget-city-search");
         _refreshWeather = ActionButton("刷新天气", async () => await RefreshWeatherAsync(), "widget-weather-refresh");
         var searchRow = new Grid(); searchRow.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); searchRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -83,7 +81,7 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         source.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "SettingsAccent"); source.TextDecorations = null;
         source.RequestNavigate += (_, e) => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); } catch (Exception ex) { _weatherStatus.Text = "打开数据来源失败：" + ex.Message; } e.Handled = true; };
         attribution.Inlines.Add(source); weatherBody.Children.Add(attribution);
-        var (calendarSurface, calendarBody) = Section("日历", "Calendar", null); _calendarSection = calendarSurface; body.Children.Add(calendarSurface);
+        var (calendarSurface, calendarBody) = Section("日历", "calendar"); _calendarSection = calendarSurface; body.Children.Add(calendarSurface);
         var monthActions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
         monthActions.Children.Add(ActionButton("‹", () => MoveMonth(-1), "widget-month-previous"));
         monthActions.Children.Add(ActionButton("回到今天", () => SelectDate(DateTime.Today), "widget-month-today"));
@@ -102,8 +100,10 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         curves.SelectionChanged += (_, _) => { options.Exponent = curves.SelectedIndex == 1 ? 3 : 2.5; ApplyAppearance(); };
         ApplyAppearance(); RenderWeather(); RenderCalendar(); RenderEvents();RefreshExtras(null);
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = UntilNextMinute() }; _timer.Tick += OnTick;
-        Loaded += async (_, _) => { _lifetime?.Cancel(); _lifetime?.Dispose(); _lifetime = new(); StartRuntime(); _timer.Interval=UntilNextMinute(); _timer.Start(); RefreshCalendarIfNeeded(); if (_options.Latitude.HasValue && _nextWeather <= DateTimeOffset.Now && WeatherNeeded()) await RefreshWeatherAsync(); };
+        Loaded += async (_, _) => { _lifetime?.Cancel(); _lifetime?.Dispose(); _lifetime = new(); if (!IsVisible) return; StartRuntime(); _timer.Interval=UntilNextMinute(); _timer.Start(); RefreshCalendarIfNeeded(); if (_options.Latitude.HasValue && _nextWeather <= DateTimeOffset.Now && WeatherNeeded()) await RefreshWeatherAsync(); };
         Unloaded += (_, _) => { StopRuntime(); _timer.Stop(); _lifetime?.Cancel(); _lifetime?.Dispose(); _lifetime = null; _searchRequest?.Cancel(); _weatherRequest?.Cancel(); };
+        // The settings window keeps pages it has shown; while another tab is up this one stops listening and ticking.
+        IsVisibleChanged += (_, _) => { if (!IsLoaded) return; if (IsVisible) { if (_runtime == null) StartRuntime(); _timer.Interval = UntilNextMinute(); _timer.Start(); RefreshCalendarIfNeeded(); } else { StopRuntime(); _timer.Stop(); } };
         ScrollChanged += async (_, _) => { RefreshCalendarIfNeeded(); if (IsLoaded && _lifetime != null && _weatherRequest == null && _nextWeather <= DateTimeOffset.Now && WeatherNeeded() && _options.Latitude.HasValue) await RefreshWeatherAsync(); };
     }
     private static TextBlock Note(string text, Thickness? margin = null)
@@ -115,21 +115,32 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
     {
         var button = new Button { Content = title, Margin = new Thickness(4, 0, 4, 0) }; button.Click += (_, _) => action(); AutomationProperties.SetAutomationId(button, id); return button;
     }
-    private static (Border Surface, StackPanel Body) Section(string title, string subtitle, string? glyph)
+    // Category line glyphs (20 DIP box, 1.6 stroke), one per kind, in the settings accent.
+    private static readonly Dictionary<string, string> CategoryGlyphs = new()
+    {
+        ["weather"] = "M10,6.2 A3.8,3.8 0 1 1 9.99,6.2 Z M10,1.5 V3.3 M10,16.7 V18.5 M1.5,10 H3.3 M16.7,10 H18.5 M4,4 L5.3,5.3 M14.7,14.7 L16,16 M4,16 L5.3,14.7 M14.7,5.3 L16,4",
+        ["calendar"] = "M4,4 H16 A2,2 0 0 1 18,6 V16 A2,2 0 0 1 16,18 H4 A2,2 0 0 1 2,16 V6 A2,2 0 0 1 4,4 Z M2,8.5 H18 M6.5,2 V5.5 M13.5,2 V5.5",
+        ["clock"] = "M10,1.8 A8.2,8.2 0 1 1 9.99,1.8 Z M10,5.5 V10 L13,12",
+        ["reminders"] = "M2.5,4.8 L4,6.3 L6.5,3.6 M9.5,5 H17.5 M2.5,10.3 L4,11.8 L6.5,9.1 M9.5,10.5 H17.5 M3,16 H5.5 M9.5,16 H17.5",
+        ["notes"] = "M5,2 H12 L16.5,6.5 V16.5 A1.5,1.5 0 0 1 15,18 H5 A1.5,1.5 0 0 1 3.5,16.5 V3.5 A1.5,1.5 0 0 1 5,2 Z M12,2 V6.5 H16.5 M6.8,10.5 H13.2 M6.8,13.8 H11",
+        ["music"] = "M7.5,15.2 V4.2 L17,2 V13 M7.5,15.2 A2.4,2.4 0 1 1 5.1,12.8 A2.4,2.4 0 0 1 7.5,15.2 Z M17,13 A2.4,2.4 0 1 1 14.6,10.6 A2.4,2.4 0 0 1 17,13 Z",
+    };
+    private static (Border Surface, StackPanel Body) Section(string title, string category)
     {
         var body = new StackPanel(); var heading = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-        FrameworkElement icon;
-        if (glyph == null) { icon = WidgetIcons.Create("calendar", 22); icon.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "SettingsAccent"); }
-        else { var control = new ControlCenterIcon(glyph) { Width = 22, Height = 22 }; control.SetResourceReference(ControlCenterIcon.BrushProperty, "SettingsAccent"); icon = control; }
-        icon.Margin = new Thickness(0, 0, 11, 0); heading.Children.Add(icon); heading.Children.Add(new TextBlock { Text = title, FontSize = 18, FontWeight = FontWeights.SemiBold });
-        heading.Children.Add(Note(subtitle, new Thickness(9, 6, 0, 0))); body.Children.Add(heading);
-        var surface = new Border { Child = body, Padding = new Thickness(20, 20, 20, 19), Margin = new Thickness(0, 0, 0, 22) };
+        var icon = new System.Windows.Shapes.Path { Data = Geometry.Parse(CategoryGlyphs.TryGetValue(category, out var glyph) ? glyph : CategoryGlyphs["weather"]), StrokeThickness = 1.6, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
+            Width = 20, Height = 20, Stretch = Stretch.None, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        icon.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "SettingsAccent");
+        heading.Children.Add(icon); heading.Children.Add(new TextBlock { Text = title, FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }); body.Children.Add(heading);
+        var surface = new Border { Child = body, Padding = new Thickness(20, 18, 20, 19), Margin = new Thickness(0, 0, 0, 28) };
         surface.SetResourceReference(FrameworkElement.StyleProperty, "SettingsSurface"); return (surface, body);
     }
     private void AddPlacementButton(Panel body, string category)
     {
-        var button = new Button { Content = "+ 添加到桌面", IsEnabled = true, ToolTip = "使用当前模板、尺寸、配色与数据源创建独立实例", Margin = new Thickness(0, 10, 0, 0),
+        // The one thing this section is for, so it is the primary button.
+        var button = new Button { Content = "添加到桌面", IsEnabled = true, ToolTip = "使用当前模板、尺寸、配色与数据源创建独立实例", Margin = new Thickness(0, 12, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(18, 7, 18, 7) };
+        button.SetResourceReference(StyleProperty, "SettingsPrimaryButton");
         AutomationProperties.SetAutomationId(button, "widget-add-" + category); body.Children.Add(button);
         var status=Note("",new Thickness(0,5,0,0));body.Children.Add(status);
         button.Click+=async(_,_)=>{var carousel=Carousel(category);var host=carousel.Hosts[carousel.SelectedIndex];var instance=WidgetRegistry.CreateInstance(host.Definition.Id,_options.Material,_options);instance.Size=host.Definition.Size;instance.Source=Source(host.Definition).Copy();

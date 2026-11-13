@@ -35,8 +35,21 @@ internal partial class SettingsShellWindow
         Resources["SettingsControlShadowOpacity"] = p.Dark ? .45 : .12; Resources["SettingsFloatingShadowOpacity"] = p.Dark ? .55 : .16;
         Set("SettingsPrimaryTint", DesignSystem.WithAlpha(p.Accent, p.Dark ? .2 : .14)); Set("SettingsPrimaryRim", DesignSystem.WithAlpha(p.Accent, p.Dark ? .34 : .28));
         Set("SettingsAccentInk", p.Dark ? DesignSystem.Hex("#7CB8FF") : DesignSystem.Hex("#0A6AD6"));
+        // Flat: an opaque off-white (graphite) card, rows a step darker (lighter), no edges, no sheen.
+        Set("SettingsCanvas", p.Dark ? DesignSystem.Hex("#1C1C1E") : DesignSystem.Hex("#F7F7F8"));
+        Set("SettingsCard", p.Dark ? DesignSystem.Hex("#2A2A2D") : DesignSystem.Hex("#EDEEF1"));
+        Set("SettingsLine", p.Dark ? DesignSystem.Hex("#17FFFFFF") : DesignSystem.Hex("#12000000"));
+        // Flat cards still need an edge to read against the canvas: a 1 px line, a touch lighter along the top in dark.
+        Gradient("SettingsGroupEdge", p.Dark ? DesignSystem.Hex("#14FFFFFF") : DesignSystem.Hex("#0D000000"), p.Dark ? DesignSystem.Hex("#0AFFFFFF") : DesignSystem.Hex("#0D000000"), .3);
+        var canvas = p.Dark ? DesignSystem.Hex("#1C1C1E") : DesignSystem.Hex("#F7F7F8");
+        Gradient("SettingsCanvasFade", canvas, DesignSystem.WithAlpha(canvas, 0));
+        Set("SettingsScrollThumb", p.Dark ? DesignSystem.Hex("#47FFFFFF") : DesignSystem.Hex("#40000000"));
+        Set("SettingsTertiary", p.Dark ? DesignSystem.Hex("#7C7C82") : p.TertiaryLabel);
+        if (p.Dark) { Set("SettingsTrack", DesignSystem.Hex("#29FFFFFF")); Set("SettingsSwitchOff", DesignSystem.Hex("#38FFFFFF")); Set("SettingsHover", DesignSystem.Hex("#14FFFFFF")); Set("SettingsPressed", DesignSystem.Hex("#24FFFFFF")); }
+        Set("SettingsControlFill", p.Dark ? DesignSystem.Hex("#3A3A3E") : DesignSystem.Hex("#FFFFFF"));
+        Resources["SettingsControlSheen"] = Brushes.Transparent;
+        Resources["SettingsControlShadowOpacity"] = p.Dark ? .3 : .07;
         ApplyGlassPalette(p);
-        foreach (var shadow in _capsuleShadows) shadow.Opacity = p.Dark ? .32 : .09;
         if (SystemParameters.HighContrast)
         {
             foreach (var key in new[] { "SettingsInk", "SettingsMuted", "SettingsTertiary", "SettingsSidebarInk", "SettingsSidebarSelectionInk" }) Resources[key] = SystemColors.WindowTextBrush;

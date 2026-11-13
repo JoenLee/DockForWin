@@ -50,7 +50,7 @@ internal partial class SettingsShellWindow
     private FrameworkElement BuildMaterial()
     {
         var (page,body)=Page("材质与边缘","调节程序坞的轮廓与玻璃材质");
-        var outline=Group(body,"轮廓");Range(outline,"圆润程度","shell-corner-radius",0,100,_draft.Appearance.CornerRadius,"0.0'%'",v=>_draft.Appearance.CornerRadius=v);
+        var outline=Group(body,"轮廓");Range(outline,"圆润程度","shell-corner-radius",0,100,_draft.Appearance.CornerRadius,"0'%'",v=>_draft.Appearance.CornerRadius=v);
         var glass=Group(body,"液态玻璃");Range(glass,"折射强度","shell-glass-intensity",0,100,_draft.GlassIntensity*100,"0'%'",v=>_draft.GlassIntensity=v/100);Range(glass,"高斯磨砂","shell-glass-frost",0,100,_draft.GlassFrost*100,"0'%'",v=>_draft.GlassFrost=v/100);Range(glass,"边缘扭曲度","shell-glass-distortion",0,100,_draft.GlassDistortion*100,"0'%'",v=>_draft.GlassDistortion=v/100);
         _availability.Add(()=>glass.IsEnabled=_draft.Theme==DockTheme.Glass);
         var shadow=Group(body,"阴影");Switch(shadow,"显示悬浮阴影","shell-shadow",_draft.Appearance.ShadowEnabled,v=>_draft.Appearance.ShadowEnabled=v);Range(shadow,"阴影强度","shell-shadow-opacity",0,65,_draft.Appearance.ShadowOpacity*100,"0'%'",v=>_draft.Appearance.ShadowOpacity=v/100);More(body);return page;
@@ -76,17 +76,18 @@ internal partial class SettingsShellWindow
         var body=PageBody();if(section>=0)body.Children.Add(PageHeader(section,title,description));
         var page=new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=false};AutomationProperties.SetName(page,title);return (page,body);
     }
-    protected static StackPanel PageBody()=>new(){Margin=new Thickness(DesignSystem.PageInset,4,DesignSystem.PageInset,28),MaxWidth=760};
+    // Every page starts on the same line as the tabs and the back button; overlay scroll bars keep it from shifting.
+    protected static StackPanel PageBody()=>new(){Margin=new Thickness(DesignSystem.PageInset,4,DesignSystem.PageInset,28)};
     protected static FrameworkElement PageHeader(int section,string title,string description)
     {
-        var header=new Grid{Margin=new Thickness(2,0,0,26)};header.ColumnDefinitions.Add(new(){Width=GridLength.Auto});header.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
-        var tile=SectionTile(section,40);tile.VerticalAlignment=VerticalAlignment.Center;tile.Margin=new Thickness(0,0,14,0);header.Children.Add(tile);
+        // Flat header: just the title and a quiet line of purpose, no icon tile.
+        var header=new Grid{Margin=new Thickness(0,12,0,string.IsNullOrWhiteSpace(description)?16:20)};header.ColumnDefinitions.Add(new(){Width=GridLength.Auto});header.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
         var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center};text.Children.Add(new TextBlock{Text=title,FontFamily=DesignSystem.DisplayFont,FontSize=DesignSystem.Title,FontWeight=FontWeights.SemiBold});
         if(!string.IsNullOrWhiteSpace(description))text.Children.Add(Muted(description,new Thickness(0,3,0,0)));Grid.SetColumn(text,1);header.Children.Add(text);return header;
     }
-    protected static TextBlock Muted(string text,Thickness margin){var label=new TextBlock{Text=text,FontSize=12.5,TextWrapping=TextWrapping.Wrap,LineHeight=19,Margin=margin};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");return label;}
+    protected static TextBlock Muted(string text,Thickness margin){var label=new TextBlock{Text=text,FontSize=12.5,TextWrapping=TextWrapping.Wrap,LineHeight=19,Margin=margin,MaxWidth=640,HorizontalAlignment=HorizontalAlignment.Left};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");return label;}
     // SemiBold resolves to Glow Sans' Medium face for Chinese and Segoe's Semibold for Latin.
-    protected static TextBlock GroupTitle(string title){var label=new TextBlock{Text=title,FontSize=13,FontWeight=FontWeights.SemiBold,Margin=new Thickness(4,0,0,8)};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsInk");return label;}
+    protected static TextBlock GroupTitle(string title){var label=new TextBlock{Text=title,FontSize=13,FontWeight=FontWeights.SemiBold,Margin=new Thickness(DesignSystem.RowInset,0,0,8)};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsInk");return label;}
     protected static Border GroupSurface(UIElement content){var surface=new Border{Child=content};surface.SetResourceReference(FrameworkElement.StyleProperty,"SettingsSurface");return surface;}
     private static StackPanel Group(Panel body,string title)
     {
@@ -114,7 +115,7 @@ internal partial class SettingsShellWindow
     {
         var field=new Grid{Width=300};field.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});field.ColumnDefinitions.Add(new(){Width=new GridLength(60)});
         var slider=new Slider{Minimum=minimum,Maximum=maximum,Value=value,VerticalAlignment=VerticalAlignment.Center};
-        var number=new TextBlock{TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center,FontSize=12.5,Margin=new Thickness(10,0,0,0)};number.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");
+        var number=new TextBlock{TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center,FontSize=12.5,Margin=new Thickness(10,0,0,0)};System.Windows.Documents.Typography.SetNumeralAlignment(number,FontNumeralAlignment.Tabular);number.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");
         field.Children.Add(slider);Grid.SetColumn(number,1);field.Children.Add(number);return (field,slider,number);
     }
     private void Segment(Panel group,string title,string id,string[] options,int value,Action<int> write)

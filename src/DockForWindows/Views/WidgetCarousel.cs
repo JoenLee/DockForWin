@@ -16,6 +16,14 @@ internal sealed class WidgetCarousel : Grid
 {
     private sealed record Card(WidgetHost Host, ScaleTransform Scale, TranslateTransform Shift);
     private readonly Grid _viewport = new() { Height = 296, ClipToBounds = true, Background = Brushes.Transparent };
+    // Neighbouring templates dissolve toward the edges instead of being cut off mid-card. The mask is in absolute
+    // units: the cards overflow the viewport, so a relative mask would stretch over their whole extent instead.
+    private void FadeEdges()
+    {
+        double width = _viewport.ActualWidth; if (width <= 0) return; double fade = Math.Min(96, width * .12) / width;
+        var brush = new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(0, 0, 0, 0), 0), new(Colors.Black, fade), new(Colors.Black, 1 - fade), new(Color.FromArgb(0, 0, 0, 0), 1) }, new Point(0, 0), new Point(width, 0)) { MappingMode = BrushMappingMode.Absolute };
+        brush.Freeze(); _viewport.OpacityMask = brush;
+    }
     private readonly List<Card> _cards = new();
     private readonly List<(Border Active, ScaleTransform Scale, Button Button)> _dots = new();
     private readonly TextBlock _caption = new() { FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 9) };
@@ -49,7 +57,7 @@ internal sealed class WidgetCarousel : Grid
         RowDefinitions.Add(new() { Height = new GridLength(296) });
         RowDefinitions.Add(new() { Height = new GridLength(27) });
         RowDefinitions.Add(new() { Height = new GridLength(26) });
-        Children.Add(_viewport);
+        Children.Add(_viewport); _viewport.SizeChanged += (_, _) => FadeEdges();
         for (int i = 0; i < definitions.Count; i++) {
             var host = new WidgetHost(definitions[i], exponent) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 RenderTransformOrigin = new Point(.5, .5) };
