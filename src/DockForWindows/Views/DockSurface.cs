@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,6 +16,10 @@ public sealed class DockSurface : FrameworkElement
     private readonly Grid _backdropHost = new() { ClipToBounds = true, IsHitTestVisible = false };
     private readonly BlurEffect _frost = new() { Radius = 0, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
     private readonly SurfaceOverlay _overlay;
+    private readonly TintLayer _tintLayer;
+    // Colour cast laid through the glass ("色调"): transparent means none. Drawn between the refracted backdrop
+    // and the light, at low alpha, so it reads as tinted glass rather than paint.
+    public Color GlassTintColor { get; set; } = Colors.Transparent;
     private readonly BackdropViewport _frostClip=new();private bool _constrainFrost;
     public bool ConstrainFrostToOutline
     {
@@ -54,19 +58,30 @@ public sealed class DockSurface : FrameworkElement
     public double GlassTint { get; set; } = .06;
     public DockSurface()
     {
-        _overlay = new SurfaceOverlay(this);
+        _overlay = new SurfaceOverlay(this); _tintLayer = new TintLayer(this);
         _backdropHost.Children.Add(_backdropImage);
         if ((RenderCapability.Tier >> 16) >= 2)
         {
             _refraction = new LiquidGlassEffect(); _backdropImage.Effect = _refraction;
             _lighting = new LiquidGlassEffect { LightingOnly = 1 };
         }
-        AddVisualChild(_backdropHost); AddVisualChild(_overlay);
+        AddVisualChild(_backdropHost); AddVisualChild(_tintLayer); AddVisualChild(_overlay);
     }
-    protected override int VisualChildrenCount => 2;
-    protected override Visual GetVisualChild(int index) => index switch { 0 => ConstrainFrostToOutline?_frostClip:_backdropHost, 1 => _overlay, _ => throw new ArgumentOutOfRangeException(nameof(index)) };
+    protected override int VisualChildrenCount => 3;
+    protected override Visual GetVisualChild(int index) => index switch { 0 => ConstrainFrostToOutline?_frostClip:_backdropHost, 1 => _tintLayer, 2 => _overlay, _ => throw new ArgumentOutOfRangeException(nameof(index)) };
     protected override Size MeasureOverride(Size available) { _overlay.Measure(available); return new Size(); }
-    protected override Size ArrangeOverride(Size finalSize) { if(ConstrainFrostToOutline){_frostClip.Measure(finalSize);_frostClip.Arrange(new Rect(finalSize));}_overlay.Arrange(new Rect(finalSize)); ConfigureBackdrop(finalSize); return finalSize; }
+    protected override Size ArrangeOverride(Size finalSize) { if(ConstrainFrostToOutline){_frostClip.Measure(finalSize);_frostClip.Arrange(new Rect(finalSize));}_tintLayer.Arrange(new Rect(finalSize)); _overlay.Arrange(new Rect(finalSize)); ConfigureBackdrop(finalSize); return finalSize; }
+    private sealed class TintLayer : FrameworkElement
+    {
+        private readonly DockSurface _owner;
+        public TintLayer(DockSurface owner) { _owner = owner; IsHitTestVisible = false; }
+        protected override void OnRender(DrawingContext drawing)
+        {
+            var color = _owner.GlassTintColor;
+            if (_owner._geometry is null || !_owner.UseGlass || _owner.ClassicMaterial || color.A == 0) return;
+            var brush = new SolidColorBrush(color); brush.Freeze(); drawing.DrawGeometry(brush, null, _owner._geometry);
+        }
+    }
     private sealed class SurfaceOverlay : FrameworkElement
     {
         private readonly DockSurface _owner;
@@ -232,7 +247,7 @@ public sealed class DockSurface : FrameworkElement
         // Clip the material children, not the outer surface: its ambient shadow
         // must be able to extend beyond the rounded outline.
         _overlay.Clip = _geometry;_frostClip.Clip=ConstrainFrostToOutline?_geometry:null;
-        ConfigureBackdrop(RenderSize); _overlay.InvalidateVisual();
+        ConfigureBackdrop(RenderSize); _overlay.InvalidateVisual(); _tintLayer.InvalidateVisual();
     }
     private void DrawOverlay(DrawingContext drawing)
     {

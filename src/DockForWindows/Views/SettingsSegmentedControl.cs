@@ -16,9 +16,10 @@ public sealed class SettingsSegmentedControl:ListBox
     private void UpdateIndicator(bool animate)
     {
         if(_indicator is null)return;
-        if(Items.Count==0||ActualWidth<=6){_indicator.Visibility=Visibility.Hidden;return;}
+        if(Items.Count==0||ActualWidth<=4){_indicator.Visibility=Visibility.Hidden;return;}
         if(_indicator.RenderTransform.IsFrozen)_indicator.RenderTransform=_indicator.RenderTransform.CloneCurrentValue();
-        double width=(ActualWidth-6)/Items.Count;_indicator.Width=width;_indicator.Visibility=SelectedIndex<0?Visibility.Hidden:Visibility.Visible;
+        // The trough has a 2 DIP inset on each side (see SettingsShellStyles.xaml).
+        double width=(ActualWidth-4)/Items.Count;_indicator.Width=width;_indicator.Visibility=SelectedIndex<0?Visibility.Hidden:Visibility.Visible;
         SettingsSwitchMotion.Move((TranslateTransform)_indicator.RenderTransform,TranslateTransform.XProperty,Math.Max(0,SelectedIndex)*width,animate&&IsLoaded&&SystemParameters.ClientAreaAnimation&&!SystemParameters.HighContrast ? .2 : 0);
     }
 }
