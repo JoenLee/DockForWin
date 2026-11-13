@@ -24,7 +24,13 @@ public static class Program
         using var exitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.Exit");
         using var controlSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.ControlCenter");
         bool exitRequested = Array.Exists(args, a => a == "--shutdown");
-        if (!first) { if (exitRequested) exitSignal.Set(); else if (Array.Exists(args,a=>a=="--control-center"))controlSignal.Set(); else if (Array.Exists(args, a => a == "--settings")) settingsSignal.Set(); else signal.Set(); return 0; }
+        if (!first)
+        {
+            // This launch came from the user, so it may hand its foreground right to the running instance;
+            // otherwise Windows keeps the requested settings/control-center window behind the active app.
+            AllowSetForegroundWindow(-1);
+            if (exitRequested) exitSignal.Set(); else if (Array.Exists(args,a=>a=="--control-center"))controlSignal.Set(); else if (Array.Exists(args, a => a == "--settings")) settingsSignal.Set(); else signal.Set(); return 0;
+        }
         if (exitRequested) { mutex.ReleaseMutex(); return 0; }
         int profileIndex=Array.IndexOf(args,"--data-directory");
         string? explicitProfile=profileIndex>=0 && profileIndex+1<args.Length ? args[profileIndex+1] : null;
@@ -42,15 +48,23 @@ public static class Program
             app.MainWindow = window;
             using var widgets=new WidgetDesktopService(model);
             tracker.WindowsChanged += model.UpdateWindows;
+            using var trayIcon = CreateTrayIcon();
+            using var tray = new Forms.NotifyIcon { Text = "DockForWindows · 程序坞", Icon = trayIcon, Visible = true };
+            var faults = new UiFaultPolicy();
             app.DispatcherUnhandledException += (_, e) =>
             {
                 store.Log("UI 异常", e.Exception);
-                MessageBox.Show("程序遇到错误，日志：" + Path.Combine(store.DataDirectory, "dock.log") + "\n" + e.Exception.Message, "DockForWindows", MessageBoxButton.OK, MessageBoxImage.Error);
-                // Terminate rather than continuing with possibly inconsistent UI state.
-                e.Handled = true; app.Shutdown(1);
+                e.Handled = true;
+                string log = Path.Combine(store.DataDirectory, "dock.log");
+                if (faults.ShouldRecover(e.Exception, Environment.TickCount64))
+                {
+                    // Close only the transient surfaces whose state may be inconsistent; keep the Dock running.
+                    try { window.RecoverFromUiFault(); tray.ShowBalloonTip(4000, "DockForWindows", "界面出现错误，已关闭出错的面板，程序坞继续运行。详情见日志。", Forms.ToolTipIcon.Warning); return; }
+                    catch (Exception recovery) { store.Log("界面恢复失败", recovery); }
+                }
+                MessageBox.Show("程序遇到错误，日志：" + log + "\n" + e.Exception.Message, "DockForWindows", MessageBoxButton.OK, MessageBoxImage.Error);
+                app.Shutdown(1);
             };
-            using var trayIcon = CreateTrayIcon();
-            using var tray = new Forms.NotifyIcon { Text = "DockForWindows · 程序坞", Icon = trayIcon, Visible = true };
             using var controlTaskbar=new ControlCenterTaskbarEntry(window.ToggleControlCenter);window.ControlCenterStateChanged+=controlTaskbar.SetOpen;controlTaskbar.Show();
             var menu = new Forms.ContextMenuStrip();
             menu.Items.Add("显示程序坞", null, (_, _) => window.Reveal());
@@ -100,6 +114,8 @@ public static class Program
     }
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool DestroyIcon(nint icon);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(int processId);
     private static Icon CreateTrayIcon()
     {
         using var bitmap = new Bitmap(32, 32);

@@ -85,6 +85,26 @@ public sealed class WindowFrameCapture : IDisposable
         finally { if (item != 0) Marshal.Release(item); if (wrapper is not null) Marshal.FinalReleaseComObject(wrapper); if (factory != 0) Marshal.Release(factory); WindowsDeleteString(text); }
     }
     internal readonly record struct FrameStamp(TimeSpan Time, Rectangle Window, Rectangle Region);
+    // Identifies the compositor frame Read would copy for this region, without copying it. False when the
+    // window has no live capture yet (Read then falls back), so callers must treat it as "changed".
+    internal bool TryPeekStamp(nint window, Rectangle sample, out FrameStamp stamp)
+    {
+        stamp = default;
+        long now = Environment.TickCount64;
+        if ((_failed.TryGetValue(window, out long retry) && now < retry) || !_windows.TryGetValue(window, out var capture)) return false;
+        if (DwmGetWindowAttribute(window, 9, out var r, Marshal.SizeOf<NativeMethods.WindowRect>()) != 0 && !NativeMethods.GetWindowRect(window, out r)) return false;
+        lock (capture.Gate)
+        {
+            var frame = capture.Latest;
+            if (frame is null || frame.SystemRelativeTime <= TimeSpan.Zero) return false;
+            var windowBounds = new Rectangle(r.Left, r.Top, frame.ContentSize.Width, frame.ContentSize.Height);
+            var captured = Rectangle.Intersect(windowBounds, sample);
+            if (captured.Width <= 0 || captured.Height <= 0) return false;
+            capture.LastUsed = now; // still in use: keep Trim from closing the session while frames are reused
+            stamp = new FrameStamp(frame.SystemRelativeTime, windowBounds, captured);
+            return true;
+        }
+    }
     public Bitmap? Read(nint window, Rectangle sample, out Rectangle captured)
         => Read(window, sample, out captured, null, out _, out _);
     internal Bitmap? Read(nint window, Rectangle sample, out Rectangle captured, FrameStamp? previous, out FrameStamp? stamp, out bool unchanged)

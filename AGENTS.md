@@ -2,7 +2,8 @@
 
 ## 工程位置与依据
 
-- 实际源码根目录为 `D:\DockForWindows`；`C:\Users\HENG\Documents\ChatGPT\DockForWindows` 是当前会话入口及文档副本。先确认源码和运行路径，再操作。
+- 源码根目录就是本仓库根目录。项目由两人在 GitHub（`JoenLee/DockForWin`）上协作开发，各自的克隆路径不同：原作者机器上是 `D:\DockForWindows`，`C:\Users\HENG\Documents\ChatGPT\DockForWindows` 只存在于原作者机器上（会话证据目录）。先确认当前机器的源码和运行路径，再操作；不要在代码或脚本里写死某台机器的路径。
+- 改动走分支和 PR，提交前先拉取远端最新代码，避免覆盖对方的提交。
 - 先读 `PROJECT_HANDOFF.md`，再核对涉及的实际源码、调用方、配置和测试。源码优先于历史聊天、README 和旧验证报告；不要覆盖用户后续改动。
 - 本项目为 C# / WPF / .NET 10 原生桌面应用；浏览器设计器只生成布局配置。优先复用现有类和 partial 文件，采用解决问题的最小完整改动。
 

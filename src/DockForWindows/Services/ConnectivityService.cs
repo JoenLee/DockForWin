@@ -47,6 +47,8 @@ public sealed class ConnectivityService : IControlCenterConnectivity
         return devices.Select(d=>new BluetoothPeer(d.Id,d.Name,d.Properties.TryGetValue("System.Devices.Aep.IsConnected",out var value)&&value is true)).ToArray();
     }
     Task<IReadOnlyList<WifiNetwork>> IControlCenterConnectivity.ReadNetworks(bool scan)=>Task.Run(()=>Networks(scan));
+    public bool CanListNetworks=>WifiLocationConsent.AllowsNetworkList();
+    public const string LocationRequiredMessage="读取附近 Wi-Fi 需要 Windows 位置权限，可在系统隐私设置中允许。";
     async Task IControlCenterConnectivity.Connect(WifiNetwork network,string? password,CancellationToken cancellation)
     {
         await Task.Run(()=>{if(password is null)Connect(network);else ConnectNew(network,password);},cancellation);
@@ -120,7 +122,7 @@ public sealed class ConnectivityService : IControlCenterConnectivity
     [DllImport("wlanapi.dll",CharSet=CharSet.Unicode)]private static extern uint WlanConnect(nint handle,ref Guid id,ref Connection parameters,nint reserved);
     [DllImport("wlanapi.dll",CharSet=CharSet.Unicode)]private static extern uint WlanSetProfile(nint handle,ref Guid id,uint flags,string xml,string? security,[MarshalAs(UnmanagedType.Bool)]bool overwrite,nint reserved,out uint reason);
     [DllImport("wlanapi.dll")]private static extern void WlanFreeMemory(nint memory);
-    private static void Check(uint result){if(result!=0)throw new Win32Exception((int)result,result==5?"读取附近 Wi-Fi 需要 Windows 位置权限，可在系统隐私设置中允许。":new Win32Exception((int)result).Message);}
+    private static void Check(uint result){if(result!=0)throw new Win32Exception((int)result,result==5?LocationRequiredMessage:new Win32Exception((int)result).Message);}
     private static T Wlan<T>(Func<nint,T> action){Check(WlanOpenHandle(2,0,out _,out var handle));try{return action(handle);}finally{WlanCloseHandle(handle,0);}}
     private static List<Adapter> Adapters(nint handle)
     {

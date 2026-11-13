@@ -26,3 +26,7 @@ tests/desktop-artifacts/
 **/build/
 **/isolated-data/
 /docs/settings-shell-preview/preview-draft.json
+# Test and packaging run outputs
+/tests/*-results.txt
+/tests/pin-icon-audit.txt
+/packaging/*-results.txt

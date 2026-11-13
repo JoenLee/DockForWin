@@ -26,7 +26,9 @@ public sealed class MediaControlService : IDisposable
     private void TimelineChanged(GlobalSystemMediaTransportControlsSession sender,TimelinePropertiesChangedEventArgs args)=>Changed?.Invoke();
     public async Task<MediaState?> Read()
     {
-        var session=_session;if(session is null)return null;var properties=await session.TryGetMediaPropertiesAsync();var playback=session.GetPlaybackInfo();var controls=playback.Controls;
+        var session=_session;if(session is null)return null;var properties=await session.TryGetMediaPropertiesAsync();var playback=session.GetPlaybackInfo();
+        // A closing session or a minimal provider can return no properties/playback info at all.
+        if(properties is null||playback is null)return null;var controls=playback.Controls;
         string key=session.SourceAppUserModelId+properties.Title+properties.Artist;
         if(key!=_artKey)
         {
@@ -39,11 +41,13 @@ public sealed class MediaControlService : IDisposable
             }
         }
         var timeline=session.GetTimelineProperties();bool playing=playback.PlaybackStatus==GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-        double rate=playback.PlaybackRate??1;var duration=timeline.EndTime-timeline.StartTime;
+        double rate=playback.PlaybackRate??1;
+        // Some players publish no timeline: report an unknown duration (no seeking, no invented progress).
+        var duration=timeline is null?TimeSpan.Zero:timeline.EndTime-timeline.StartTime;
         if(duration<TimeSpan.Zero)duration=TimeSpan.Zero;
-        double elapsed=playing&&timeline.LastUpdatedTime.Year>=2000?Math.Max(0,(DateTimeOffset.UtcNow-timeline.LastUpdatedTime).TotalSeconds):0;
-        var position=PositionAt(timeline.Position-timeline.StartTime,duration,playing,rate,elapsed);
-        return new(properties.Title,properties.Artist,playing,controls.IsPlayPauseToggleEnabled,controls.IsPreviousEnabled,controls.IsNextEnabled,_artwork,position,duration,controls.IsPlaybackPositionEnabled&&duration>TimeSpan.Zero,rate);
+        double elapsed=timeline is not null&&playing&&timeline.LastUpdatedTime.Year>=2000?Math.Max(0,(DateTimeOffset.UtcNow-timeline.LastUpdatedTime).TotalSeconds):0;
+        var position=timeline is null?TimeSpan.Zero:PositionAt(timeline.Position-timeline.StartTime,duration,playing,rate,elapsed);
+        return new(properties.Title,properties.Artist,playing,controls?.IsPlayPauseToggleEnabled==true,controls?.IsPreviousEnabled==true,controls?.IsNextEnabled==true,_artwork,position,duration,controls?.IsPlaybackPositionEnabled==true&&duration>TimeSpan.Zero,rate);
     }
     public static TimeSpan PositionAt(TimeSpan position,TimeSpan duration,bool playing,double rate,double elapsed)=>TimeSpan.FromSeconds(Math.Clamp(position.TotalSeconds+(playing?Math.Max(0,elapsed)*rate:0),0,Math.Max(0,duration.TotalSeconds)));
     public async Task Command(string command)
