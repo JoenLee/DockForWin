@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -68,43 +69,80 @@ internal partial class SettingsShellWindow
         var (page,body)=Page("面板尺寸与间距","调整控制中心的整体比例");var group=Group(body,"大小与间距");var geometry=_draft.ControlCenter.Geometry;
         Range(group,"整体面板缩放","shell-panel-scale",65,150,geometry.PanelScale*100,"0'%'",v=>geometry.PanelScale=v/100);Range(group,"组件等比例缩放","shell-component-scale",75,150,geometry.ComponentScale*100,"0'%'",v=>geometry.ComponentScale=v/100);Range(group,"组件间距","shell-component-gap",6,24,geometry.Gap,"0' DIP'",v=>geometry.Gap=v);More(body);return page;
     }
-    private static (ScrollViewer Page,StackPanel Body) Page(string title,string description)
+    // Page anatomy shared by every settings page: a centred column, a header with the category tile, then
+    // inset groups. The toolbar already names the page, so the header carries the tile and a one-line purpose.
+    private static (ScrollViewer Page,StackPanel Body) Page(string title,string description,int section=-1)
     {
-        var body=new StackPanel{Margin=new Thickness(28,23,28,24)};body.Children.Add(new TextBlock{Text=title,FontSize=24,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,7)});body.Children.Add(Muted(description,new Thickness(0,0,0,24)));
+        var body=PageBody();if(section>=0)body.Children.Add(PageHeader(section,title,description));
         var page=new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=false};AutomationProperties.SetName(page,title);return (page,body);
     }
-    private static TextBlock Muted(string text,Thickness margin){var label=new TextBlock{Text=text,FontSize=12,TextWrapping=TextWrapping.Wrap,LineHeight=19,Margin=margin};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");return label;}
+    protected static StackPanel PageBody()=>new(){Margin=new Thickness(DesignSystem.PageInset,4,DesignSystem.PageInset,28),MaxWidth=760};
+    protected static FrameworkElement PageHeader(int section,string title,string description)
+    {
+        var header=new Grid{Margin=new Thickness(2,0,0,26)};header.ColumnDefinitions.Add(new(){Width=GridLength.Auto});header.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
+        var tile=SectionTile(section,40);tile.VerticalAlignment=VerticalAlignment.Center;tile.Margin=new Thickness(0,0,14,0);header.Children.Add(tile);
+        var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center};text.Children.Add(new TextBlock{Text=title,FontFamily=DesignSystem.DisplayFont,FontSize=DesignSystem.Title,FontWeight=FontWeights.SemiBold});
+        if(!string.IsNullOrWhiteSpace(description))text.Children.Add(Muted(description,new Thickness(0,3,0,0)));Grid.SetColumn(text,1);header.Children.Add(text);return header;
+    }
+    protected static TextBlock Muted(string text,Thickness margin){var label=new TextBlock{Text=text,FontSize=12.5,TextWrapping=TextWrapping.Wrap,LineHeight=19,Margin=margin};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");return label;}
+    // SemiBold resolves to Glow Sans' Medium face for Chinese and Segoe's Semibold for Latin.
+    protected static TextBlock GroupTitle(string title){var label=new TextBlock{Text=title,FontSize=13,FontWeight=FontWeights.SemiBold,Margin=new Thickness(4,0,0,8)};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsInk");return label;}
+    protected static Border GroupSurface(UIElement content){var surface=new Border{Child=content};surface.SetResourceReference(FrameworkElement.StyleProperty,"SettingsSurface");return surface;}
     private static StackPanel Group(Panel body,string title)
     {
-        body.Children.Add(new TextBlock{Text=title,FontSize=12,FontWeight=FontWeights.SemiBold,Foreground=Palette.Brush("#77777E"),Margin=new Thickness(10,0,0,7)});
-        var content=new StackPanel{Margin=new Thickness(16,1,16,1)};var surface=new Border{Child=content,Margin=new Thickness(0,0,0,22)};surface.SetResourceReference(FrameworkElement.StyleProperty,"SettingsSurface");body.Children.Add(surface);return content;
+        body.Children.Add(GroupTitle(title));
+        var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(content);surface.Margin=new Thickness(0,0,0,26);body.Children.Add(surface);return content;
     }
-    private static void AddRow(Panel group,UIElement child)
-    {if(group.Children.Count>0)group.Children.Add(new Border{Height=.7,Background=Palette.Brush("#EAEAED")});group.Children.Add(child);}
+    protected static Border RowSeparator(){var line=new Border{Height=1,SnapsToDevicePixels=true};line.SetResourceReference(Border.BackgroundProperty,"SettingsLine");return line;}
+    protected static void AddRow(Panel group,UIElement child)
+    {if(group.Children.Count>0)group.Children.Add(RowSeparator());group.Children.Add(child);}
     private CheckBox Switch(Panel group,string title,string id,bool value,Action<bool> write)
     {
         var box=new CheckBox{Content=title,IsChecked=value};AutomationProperties.SetAutomationId(box,id);AutomationProperties.SetName(box,title);box.Checked+=(_,_)=>{write(true);RefreshPageAvailability();};box.Unchecked+=(_,_)=>{write(false);RefreshPageAvailability();};AddRow(group,box);return box;
     }
+    // A labelled row: text on the left, the control on the right, 46 DIP tall like a macOS list row.
+    protected static Grid LabeledRow(string title,UIElement control,double controlWidth=double.NaN)
+    {
+        var row=new Grid{MinHeight=DesignSystem.RowHeight};row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=double.IsNaN(controlWidth)?GridLength.Auto:new GridLength(controlWidth)});
+        row.Children.Add(new TextBlock{Text=title,FontSize=DesignSystem.Body,VerticalAlignment=VerticalAlignment.Center,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,10,16,10)});
+        if(control is FrameworkElement element)element.VerticalAlignment=VerticalAlignment.Center;Grid.SetColumn(control,1);row.Children.Add(control);return row;
+    }
+    // Segmented control sized by its labels so short choices never stretch across the row.
+    protected static SettingsSegmentedControl Segmented(string[] options,int selected)=>new(){ItemsSource=options,SelectedIndex=Math.Clamp(selected,0,Math.Max(0,options.Length-1)),FontSize=12.5,Width=Math.Max(150,options.Length*Math.Max(58,options.Max(o=>o.Length)*13+26)),HorizontalAlignment=HorizontalAlignment.Right};
+    // Slider with a right-aligned value readout, laid out as one control for LabeledRow.
+    protected static (Grid Field,Slider Slider,TextBlock Value) SliderField(double minimum,double maximum,double value)
+    {
+        var field=new Grid{Width=300};field.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});field.ColumnDefinitions.Add(new(){Width=new GridLength(60)});
+        var slider=new Slider{Minimum=minimum,Maximum=maximum,Value=value,VerticalAlignment=VerticalAlignment.Center};
+        var number=new TextBlock{TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center,FontSize=12.5,Margin=new Thickness(10,0,0,0)};number.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");
+        field.Children.Add(slider);Grid.SetColumn(number,1);field.Children.Add(number);return (field,slider,number);
+    }
     private void Segment(Panel group,string title,string id,string[] options,int value,Action<int> write)
     {
-        var row=new Grid{Margin=new Thickness(0,10,0,10)};row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=new GridLength(1.5,GridUnitType.Star)});row.Children.Add(new TextBlock{Text=title,VerticalAlignment=VerticalAlignment.Center,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,16,0)});
-        var control=new SettingsSegmentedControl{ItemsSource=options,SelectedIndex=Math.Clamp(value,0,options.Length-1),FontSize=12};AutomationProperties.SetAutomationId(control,id);AutomationProperties.SetName(control,title);control.SelectionChanged+=(_,_)=>{if(control.SelectedIndex>=0){write(control.SelectedIndex);RefreshPageAvailability();}};Grid.SetColumn(control,1);row.Children.Add(control);AddRow(group,row);
+        var control=Segmented(options,value);AutomationProperties.SetAutomationId(control,id);AutomationProperties.SetName(control,title);control.SelectionChanged+=(_,_)=>{if(control.SelectedIndex>=0){write(control.SelectedIndex);RefreshPageAvailability();}};AddRow(group,LabeledRow(title,control));
     }
     private static void Range(Panel group,string title,string id,double minimum,double maximum,double value,string format,Action<double> write)
     {
-        var row=new Grid{Margin=new Thickness(0,8,0,8)};row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=new GridLength(1.25,GridUnitType.Star)});row.Children.Add(new TextBlock{Text=title,VerticalAlignment=VerticalAlignment.Center,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,16,0)});
-        var field=new Grid();field.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});field.ColumnDefinitions.Add(new(){Width=new GridLength(64)});var slider=new Slider{Minimum=minimum,Maximum=maximum,Value=value,VerticalAlignment=VerticalAlignment.Center};AutomationProperties.SetAutomationId(slider,id);AutomationProperties.SetName(slider,title);
-        var number=new TextBlock{Text=value.ToString(format),TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center,FontSize=12,Foreground=Palette.Brush("#77777E"),Margin=new Thickness(10,0,0,0)};slider.ValueChanged+=(_,_)=>{number.Text=slider.Value.ToString(format);write(slider.Value);};field.Children.Add(slider);Grid.SetColumn(number,1);field.Children.Add(number);Grid.SetColumn(field,1);row.Children.Add(field);AddRow(group,row);
+        var (field,slider,number)=SliderField(minimum,maximum,value);AutomationProperties.SetAutomationId(slider,id);AutomationProperties.SetName(slider,title);
+        number.Text=value.ToString(format);slider.ValueChanged+=(_,_)=>{number.Text=slider.Value.ToString(format);write(slider.Value);};AddRow(group,LabeledRow(title,field));
     }
-    private static void Link(Panel group,string title,string subtitle,string id,Action action)
+    private static void Link(Panel group,string title,string subtitle,string id,Action action)=>AddRow(group,LinkRow(title,subtitle,id,action));
+    // Navigation row: title, optional one-line summary and a chevron; the whole row highlights on hover.
+    protected static Button LinkRow(string title,string subtitle,string id,Action action)
     {
-        var text=new StackPanel{Margin=new Thickness(0,3,0,3)};text.Children.Add(new TextBlock{Text=title,FontSize=13});text.Children.Add(Muted(subtitle,new Thickness(0,3,18,0)));
-        var content=new Grid();content.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});content.ColumnDefinitions.Add(new(){Width=GridLength.Auto});content.Children.Add(text);var arrow=new TextBlock{Text="›",FontSize=22,Foreground=Palette.Brush("#A0A0A6"),VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(arrow,1);content.Children.Add(arrow);
-        var button=Button("",action,id);button.Content=content;button.HorizontalContentAlignment=HorizontalAlignment.Stretch;button.Template=LinkTemplate();button.Padding=new Thickness(0,8,0,8);button.Margin=new Thickness();button.BorderThickness=new Thickness(0);AddRow(group,button);
+        var text=new StackPanel{Margin=new Thickness(0,11,0,11),VerticalAlignment=VerticalAlignment.Center};text.Children.Add(new TextBlock{Text=title,FontSize=DesignSystem.Body});if(!string.IsNullOrWhiteSpace(subtitle))text.Children.Add(Muted(subtitle,new Thickness(0,2,18,0)));
+        var content=new Grid{MinHeight=DesignSystem.RowHeight};content.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});content.ColumnDefinitions.Add(new(){Width=GridLength.Auto});content.Children.Add(text);
+        var chevron=new System.Windows.Shapes.Path{Data=Geometry.Parse("M1,1 L5.5,5.5 L1,10"),StrokeThickness=1.7,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round,Width=7,Height=11,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,2,0)};chevron.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty,"SettingsTertiary");Grid.SetColumn(chevron,1);content.Children.Add(chevron);
+        var button=new Button{Content=content,HorizontalContentAlignment=HorizontalAlignment.Stretch,Template=LinkTemplate(),Padding=new Thickness(0),Margin=new Thickness(-8,0,-8,0)};AutomationProperties.SetAutomationId(button,id);AutomationProperties.SetName(button,title);button.Click+=(_,_)=>action();return button;
     }
-    private static ControlTemplate LinkTemplate()
+    protected static ControlTemplate LinkTemplate()
     {
-        var border=new FrameworkElementFactory(typeof(Border));border.SetValue(Border.BackgroundProperty,Brushes.Transparent);var presenter=new FrameworkElementFactory(typeof(ContentPresenter));presenter.SetBinding(FrameworkElement.MarginProperty,new System.Windows.Data.Binding("Padding"){RelativeSource=System.Windows.Data.RelativeSource.TemplatedParent});border.AppendChild(presenter);return new ControlTemplate(typeof(Button)){VisualTree=border};
+        var hover=new FrameworkElementFactory(typeof(Border)){Name="Hover"};hover.SetValue(Border.BackgroundProperty,Brushes.Transparent);hover.SetValue(Border.CornerRadiusProperty,new CornerRadius(8));hover.SetValue(Border.PaddingProperty,new Thickness(8,0,8,0));
+        var presenter=new FrameworkElementFactory(typeof(ContentPresenter));presenter.SetBinding(FrameworkElement.MarginProperty,new System.Windows.Data.Binding("Padding"){RelativeSource=System.Windows.Data.RelativeSource.TemplatedParent});hover.AppendChild(presenter);
+        var template=new ControlTemplate(typeof(Button)){VisualTree=hover};
+        var over=new Trigger{Property=UIElement.IsMouseOverProperty,Value=true};over.Setters.Add(new Setter(Border.BackgroundProperty,new DynamicResourceExtension("SettingsHover"),"Hover"));template.Triggers.Add(over);
+        var pressed=new Trigger{Property=System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty,Value=true};pressed.Setters.Add(new Setter(Border.BackgroundProperty,new DynamicResourceExtension("SettingsPressed"),"Hover"));template.Triggers.Add(pressed);
+        return template;
     }
     private void More(Panel body){var link=Button("查看全部设置…",ReviewCurrent,"shell-all-settings-"+body.Children.Count);link.HorizontalAlignment=HorizontalAlignment.Left;link.Margin=new Thickness(0,0,0,8);body.Children.Add(link);}
     private void ReviewCurrent(){var copy=_draft.Copy();copy.Normalize();int section=_pages.CurrentSection;Close();_review(copy,section);}
