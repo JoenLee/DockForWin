@@ -144,9 +144,9 @@ internal static class Program
                 s.Appearance.ShadowEnabled=true;p=ThemeService.Resolve(s,false,true);Assert(p.ShadowEnabled&&p.ShadowOpacity==.43&&p.ShadowBlur==31,"普通主题阴影未生效");
             }
         });
-        Check("界面主题持久化且非法值恢复默认",()=>{
-            var s=new DockSettings{InterfaceStyle=InterfaceStyle.Warm};var store=new SettingsService(Path.Combine(root,"interface-styles"));store.Save(s);Assert(store.Load().InterfaceStyle==InterfaceStyle.Warm,"界面风格没有保存");
-            s.InterfaceStyle=(InterfaceStyle)999;s.Normalize();Assert(s.InterfaceStyle==InterfaceStyle.Mono,"非法界面风格未修正");var target=new DockSettings();target.ApplyPreferences(new DockSettings{InterfaceStyle=InterfaceStyle.Violet});Assert(target.InterfaceStyle==InterfaceStyle.Violet,"保存偏好漏了界面主题");
+        Check("旧界面风格保存和读取时统一迁移为黑白",()=>{
+            var s=new DockSettings{InterfaceStyle=InterfaceStyle.Warm};var store=new SettingsService(Path.Combine(root,"interface-styles"));store.Save(s);Assert(store.Load().InterfaceStyle==InterfaceStyle.Mono,"旧界面风格未迁移为黑白");
+            s.InterfaceStyle=(InterfaceStyle)999;s.Normalize();Assert(s.InterfaceStyle==InterfaceStyle.Mono,"非法界面风格未修正");
         });
         Check("所有主题只有完全无底板时才允许倒影",()=>{
             foreach(DockTheme theme in Enum.GetValues<DockTheme>()){
@@ -170,7 +170,11 @@ internal static class Program
         Check("启动注册可写入、读取和关闭且隔离于真实开机启动项",()=>{
             string key=@"Software\DockForWindows\Tests\"+Guid.NewGuid().ToString("N");
             try{StartupRegistration.WriteCommand("\"D:\\Fixture\\Dock.exe\"",key);Assert(StartupRegistration.ReadCommand(key)=="\"D:\\Fixture\\Dock.exe\"","启动注册未写入");StartupRegistration.WriteCommand(null,key);Assert(StartupRegistration.ReadCommand(key) is null,"关闭后注册仍存在");}
-            finally{Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(key,false);}
+            finally{
+                // Remove the fixture key and the parents it created when they are empty, leaving no trace.
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(key,false);
+                foreach(var parent in new[]{@"Software\DockForWindows\Tests",@"Software\DockForWindows"}){using var probe=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(parent);if(probe is not null&&probe.SubKeyCount==0&&probe.ValueCount==0){probe.Close();Microsoft.Win32.Registry.CurrentUser.DeleteSubKey(parent,false);}}
+            }
         });
         Check("GPT例外保留原有黑形白框与独立缓存",()=>{
             var source=RedesignChecks.Glyph(System.Windows.Media.Brushes.White);
@@ -650,6 +654,34 @@ internal static class Program
             Assert(MediaControlService.PositionAt(p,d,true,2,3)==TimeSpan.FromSeconds(16),"playback rate must propagate");
             Assert(MediaControlService.PositionAt(p,d,true,1,500)==d,"position clamps at end");
             Assert(MediaControlService.PositionAt(p,TimeSpan.Zero,true,1,10)==TimeSpan.Zero,"unknown duration must not invent progress");
+        });
+        Check("Wi-Fi 列表只在系统已允许位置访问时读取",()=>{
+            Assert(WifiLocationConsent.Evaluate("Allow","Allow","Allow",false),"全部允许时被拒绝");
+            Assert(WifiLocationConsent.Evaluate(null,null,null,false),"缺失的值不应视为拒绝");
+            Assert(!WifiLocationConsent.Evaluate("Deny","Allow","Allow",false),"定位服务关闭时仍会读取");
+            Assert(!WifiLocationConsent.Evaluate("Allow","deny ","Allow",false),"应用位置权限关闭时仍会读取");
+            Assert(!WifiLocationConsent.Evaluate("Allow","Allow","Deny",false),"桌面应用位置权限关闭时仍会读取");
+            Assert(!WifiLocationConsent.Evaluate("Allow","Allow","Allow",true),"组策略禁用定位时仍会读取");
+        });
+        Check("界面异常偶发时恢复，连续出错或致命错误时退出",()=>{
+            var policy=new UiFaultPolicy(3,60_000);var fault=new InvalidOperationException("fixture");
+            Assert(policy.ShouldRecover(fault,0)&&policy.ShouldRecover(fault,1_000),"偶发错误未恢复");
+            Assert(!policy.ShouldRecover(fault,2_000),"一分钟内第三次错误仍在恢复");
+            Assert(policy.ShouldRecover(fault,200_000),"时间窗口过后未重新允许恢复");
+            Assert(!new UiFaultPolicy().ShouldRecover(new OutOfMemoryException(),0),"内存不足仍尝试恢复");
+            Assert(UiFaultPolicy.IsFatal(new System.Reflection.TargetInvocationException(new AccessViolationException())),"包装后的致命错误未识别");
+        });
+        Check("两个音频服务并发读取不再互相冲突",()=>{
+            // Read-only: default endpoint volume and the endpoint list, concurrently, many times.
+            Exception? failure=null;bool noDevice=false;
+            void Loop(Action read){for(int i=0;i<40&&failure is null&&!noDevice;i++){try{read();}catch(System.Runtime.InteropServices.COMException ex)when((uint)ex.HResult==0x80070490){noDevice=true;}catch(Exception ex){failure=ex;}}}
+            Parallel.Invoke(()=>Loop(()=>SystemControlService.ReadAudio()),()=>Loop(()=>AudioDeviceService.Outputs()),()=>Loop(()=>SystemControlService.ReadMicrophone()));
+            if(failure is not null)throw new Exception("并发读取失败："+failure.GetType().Name+" "+failure.Message);
+        });
+        Check("低级鼠标钩子运行在独立线程并可干净退出",()=>{
+            int calls=0;var hook=new LowLevelMouseHook((_,_,_)=>{Interlocked.Increment(ref calls);return false;},"DockForWindows.TestHook");
+            Assert(hook.Active,"钩子未安装");hook.Dispose();Assert(!hook.Active,"释放后钩子仍在");
+            hook.Dispose();
         });
         Console.WriteLine($"RESULT {_passed} passed, {_failed} failed");
         Console.WriteLine("Artifacts: " + root);

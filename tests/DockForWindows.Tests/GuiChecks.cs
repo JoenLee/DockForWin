@@ -95,7 +95,7 @@ internal static class GuiChecks
                 draft.GlassFrost = 0; dock.PreviewGlass(draft); await Task.Delay(60);
                 Check(frostHost.Effect is null, "磨砂零端点为清透玻璃");
                 draft.GlassFrost = .5; dock.PreviewGlass(draft); await Task.Delay(60);
-                double middleRadius = ((System.Windows.Media.Effects.BlurEffect)frostHost.Effect).Radius;
+                double middleRadius = frostHost.Effect is System.Windows.Media.Effects.BlurEffect middleBlur ? middleBlur.Radius : 0;
                 draft.GlassFrost = 1; dock.PreviewGlass(draft); await Task.Delay(60);
                 Check(middleRadius > 0 && middleRadius < 24 && ((System.Windows.Media.Effects.BlurEffect)frostHost.Effect).Radius == 24 && lens.Shape == opticalShape && lens.Texture.Y == opticalCurve,
                     "磨砂连续覆盖完整范围且不修改折射与扭曲参数");

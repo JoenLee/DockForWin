@@ -24,4 +24,5 @@
   <ItemGroup><Resource Include="Assets\Fonts\VarelaRound-Regular.ttf" /><Resource Include="Assets\Fonts\VarelaRound-OFL.txt" /></ItemGroup>
   <ItemGroup><Content Include="Assets\Fonts\VarelaRound-OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup><PackageReference Include="System.Management" Version="10.0.0" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="DockForWindows.Tests" /></ItemGroup>
 </Project>
