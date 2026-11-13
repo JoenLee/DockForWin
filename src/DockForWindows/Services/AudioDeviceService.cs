@@ -7,7 +7,6 @@ namespace DockForWindows.Services;
 public sealed record AudioOutput(string Id,string Name,bool Default);
 public static class AudioDeviceService
 {
-    [ComImport,Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]private class Enumerator{}
     [ComImport,Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]private interface IDevices
     {void EnumAudioEndpoints(int flow,uint mask,out ICollection collection);void GetDefaultAudioEndpoint(int flow,int role,out IDevice device);}
     [ComImport,Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]private interface ICollection
@@ -30,9 +29,10 @@ public static class AudioDeviceService
     private static void Release(object? obj){if(obj is not null&&Marshal.IsComObject(obj))Marshal.FinalReleaseComObject(obj);}
     public static IReadOnlyList<AudioOutput> Outputs()=>Endpoints(0);
     public static IReadOnlyList<AudioOutput> Inputs()=>Endpoints(1);
-    private static IReadOnlyList<AudioOutput> Endpoints(int flow)
+    // The shared enumerator is serialised with SystemControlService; see CoreAudio.
+    private static IReadOnlyList<AudioOutput> Endpoints(int flow)=>CoreAudio.Use(enumerator=>
     {
-        object enumerator=new Enumerator();ICollection? collection=null;IDevice? current=null;
+        ICollection? collection=null;IDevice? current=null;
         try
         {
             var devices=(IDevices)enumerator;string selected="";try{devices.GetDefaultAudioEndpoint(flow,1,out current);current.GetId(out selected);}catch(COMException){}
@@ -43,10 +43,10 @@ public static class AudioDeviceService
                 try{collection.Item(i,out device);device.GetId(out string id);device.OpenPropertyStore(0,out properties);var key=new Key{Format=new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"),Id=14};properties.GetValue(ref key,out var value);string name;try{name=value.Type==31?Marshal.PtrToStringUni(value.Pointer)??id:id;}finally{PropVariantClear(ref value);}result.Add(new(id,name,id==selected));}
                 finally{Release(properties);Release(device);}
             }
-            return result;
+            return (IReadOnlyList<AudioOutput>)result;
         }
-        finally{Release(current);Release(collection);Release(enumerator);}
-    }
+        finally{Release(current);Release(collection);}
+    });
     public static void SetDefault(string id)
     {
         object? policy=null;try{policy=new Policy();for(int role=0;role<3;role++)((IPolicy)policy).SetDefaultEndpoint(id,role);}

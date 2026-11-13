@@ -11,7 +11,6 @@ public sealed record PowerState(int? Percent,bool PluggedIn);
 
 public static class SystemControlService
 {
-    [ComImport,Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]private class Enumerator { }
     [ComImport,Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]private interface IDevices
     {
         void EnumAudioEndpoints(int flow,uint mask,out nint devices);
@@ -28,12 +27,13 @@ public static class SystemControlService
         void GetChannelVolumeLevel(uint channel,out float level);void GetChannelVolumeLevelScalar(uint channel,out float level);
         void SetMute([MarshalAs(UnmanagedType.Bool)]bool muted,ref Guid context);void GetMute([MarshalAs(UnmanagedType.Bool)]out bool muted);
     }
-    private static T Audio<T>(Func<IVolume,T> action,int flow=0)
+    // The shared enumerator is serialised with AudioDeviceService; see CoreAudio.
+    private static T Audio<T>(Func<IVolume,T> action,int flow=0)=>CoreAudio.Use(enumerator=>
     {
-        object? enumerator=null,activated=null;IDevice? device=null;
-        try{enumerator=new Enumerator();((IDevices)enumerator).GetDefaultAudioEndpoint(flow,1,out device);var iid=typeof(IVolume).GUID;device.Activate(ref iid,23,0,out activated);return action((IVolume)activated);}
-        finally{Release(activated);Release(device);Release(enumerator);}
-    }
+        object? activated=null;IDevice? device=null;
+        try{((IDevices)enumerator).GetDefaultAudioEndpoint(flow,1,out device);var iid=typeof(IVolume).GUID;device.Activate(ref iid,23,0,out activated);return action((IVolume)activated);}
+        finally{Release(activated);Release(device);}
+    });
     public static AudioState ReadAudio()=>Audio(v=>{v.GetMasterVolumeLevelScalar(out float level);v.GetMute(out bool muted);return new AudioState(level*100,muted);});
     public static void SetVolume(double percent)=>Audio(v=>{var context=Guid.Empty;v.SetMasterVolumeLevelScalar((float)Math.Clamp(percent/100,0,1),ref context);return true;});
     public static void SetMute(bool muted)=>Audio(v=>{var context=Guid.Empty;v.SetMute(muted,ref context);return true;});
