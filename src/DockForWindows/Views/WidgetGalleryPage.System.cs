@@ -52,7 +52,7 @@ internal sealed partial class WidgetGalleryPage
             _extraCarousels[key]=carousel;AutomationProperties.SetAutomationId(carousel,key+"-carousel");carousel.SelectionChanged+=index=>_options.Selections[key]=index;
             var (surface,section)=Section(WidgetSizes.Category(kind),key);_extraSections[key]=surface;sections[key]=surface;body.Children.Add(surface);
             section.Children.Add(TemplateHeading(carousel));section.Children.Add(carousel);section.Children.Add(TemplateControls(carousel,key));AddPlacementButton(section,key);section.Children.Add(BuildColorEditor(carousel,key));
-            if(kind==WidgetKind.Reminders){section.Children.Add(ActionButton("＋ 添加提醒",()=>WidgetDataEditor.Task(_options,null,copy=>{_options.Tasks=copy.Tasks;RefreshExtras(kind);return true;}),"widget-task-add"));section.Children.Add(Note("组件预览不会改变任务；添加与编辑保留在设置草稿，保存后生效。"));
+            if(kind==WidgetKind.Reminders){section.Children.Add(ActionButton("＋ 添加提醒",()=>WidgetDataEditor.Task(_options,null,copy=>{_options.Tasks=copy.Tasks;RefreshExtras(kind);return true;}),"widget-task-add"));
                 var manage=new Expander{Header="管理待办",Margin=new Thickness(0,10,0,0)};section.Children.Add(manage);manage.Expanded+=(_,_)=>{var list=new StackPanel();foreach(var t in _options.Tasks.ToArray()){
                     var row=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,4,0,4)};var title=new TextBlock{Text=t.Title,Width=220,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center};row.Children.Add(title);
                     row.Children.Add(ActionButton("编辑",()=>WidgetDataEditor.Task(_options,t.Id,copy=>{_options.Tasks=copy.Tasks;RefreshExtras(kind);return true;}),"widget-task-edit-"+t.Id));row.Children.Add(ActionButton("删除",()=>{_options.Tasks.RemoveAll(x=>x.Id==t.Id);list.Children.Remove(row);RefreshExtras(kind);},"widget-task-delete-"+t.Id));list.Children.Add(row);}manage.Content=list;};}
@@ -61,11 +61,36 @@ internal sealed partial class WidgetGalleryPage
                     var row=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,4,0,4)};row.Children.Add(new TextBlock{Text=n.Title,Width=220,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center});
                     row.Children.Add(ActionButton("编辑",()=>WidgetDataEditor.Note(_options,n.Id,copy=>{_options.Notes=copy.Notes;RefreshExtras(kind);return true;}),"widget-note-edit-"+n.Id));row.Children.Add(ActionButton("删除",()=>{_options.Notes.RemoveAll(x=>x.Id==n.Id);list.Children.Remove(row);RefreshExtras(kind);},"widget-note-delete-"+n.Id));list.Children.Add(row);}manage.Content=list;};}
         }
-        foreach(var kind in Enum.GetValues<WidgetKind>()){string key=kind.ToString().ToLowerInvariant();navigator.Children.Add(ActionButton(WidgetSizes.Category(kind),()=>sections[key].BringIntoView(),"widget-category-"+key));}
-        search.TextChanged+=(_,_)=>{string query=search.Text.Trim();foreach(var kind in Enum.GetValues<WidgetKind>()){
-            string key=kind.ToString().ToLowerInvariant();var carousel=Carousel(key);var matches=carousel.Hosts.Select((h,i)=>(h,i)).Where(x=>query.Length==0||x.h.Definition.Title.Contains(query,StringComparison.OrdinalIgnoreCase)||WidgetSizes.Category(kind).Contains(query,StringComparison.OrdinalIgnoreCase)).ToArray();
-            sections[key].Visibility=matches.Length>0?Visibility.Visible:Visibility.Collapsed;if(query.Length>0&&matches.Length>0)carousel.Select(matches[0].i,false);}}
-        ;Loaded+=(_,_)=>Dispatcher.BeginInvoke(UpdateVisibleHosts);ScrollChanged+=(_,_)=>UpdateVisibleHosts();
+        // The category pills are a single choice, not bookmarks into a nine-screen page (audit P21-01): one category
+        // is shown at a time, so the gallery fits about one screen and only the visible previews are rendered.
+        var chips=new Dictionary<string,Button>(StringComparer.Ordinal);string chosen="weather";
+        void StyleChip(Button chip,bool on)
+        {
+            // Resource references, not lookups: the page is built before it joins the settings window's resources.
+            if(on)chip.SetResourceReference(BackgroundProperty,"SettingsRaised");else chip.Background=System.Windows.Media.Brushes.Transparent;chip.BorderThickness=new Thickness(on?.75:0);
+            if(on)chip.SetResourceReference(BorderBrushProperty,"SettingsRaisedEdge");chip.FontWeight=on?FontWeights.SemiBold:FontWeights.Normal;chip.SetResourceReference(ForegroundProperty,on?"SettingsInk":"SettingsMuted");
+        }
+        void ShowCategory(string key)
+        {
+            chosen=key;foreach(var pair in sections)pair.Value.Visibility=pair.Key==key?Visibility.Visible:Visibility.Collapsed;
+            foreach(var (k,chip) in chips)StyleChip(chip,k==key);ScrollToTop();Dispatcher.BeginInvoke(UpdateVisibleHosts,System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+        foreach(var kind in Enum.GetValues<WidgetKind>()){string key=kind.ToString().ToLowerInvariant();var chip=ActionButton(WidgetSizes.Category(kind),()=>{if(search.Text.Length>0)search.Clear();ShowCategory(key);},"widget-category-"+key);chip.Margin=new Thickness(0,0,4,7);chips[key]=chip;navigator.Children.Add(chip);}
+        // Nothing found: say so, and offer the way back (audit S06-01).
+        var empty=new StackPanel{HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,72,0,0),Visibility=Visibility.Collapsed};
+        var emptyGlass=new System.Windows.Shapes.Path{Data=System.Windows.Media.Geometry.Parse("M17,3 A14,14 0 1 1 16.99,3 Z M27,27 L37,37"),StrokeThickness=2,StrokeStartLineCap=System.Windows.Media.PenLineCap.Round,StrokeEndLineCap=System.Windows.Media.PenLineCap.Round,Width=40,Height=40,Stretch=System.Windows.Media.Stretch.None,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,0,0,14)};
+        emptyGlass.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty,"SettingsTertiary");empty.Children.Add(emptyGlass);
+        var emptyTitle=new TextBlock{FontSize=15,FontWeight=FontWeights.Medium,HorizontalAlignment=HorizontalAlignment.Center};empty.Children.Add(emptyTitle);
+        var emptyHint=new TextBlock{Text="试试：天气、日历、时钟、待办",FontSize=12,Margin=new Thickness(0,6,0,12),HorizontalAlignment=HorizontalAlignment.Center};emptyHint.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");empty.Children.Add(emptyHint);
+        var clear=ActionButton("清除搜索",()=>search.Clear(),"widget-search-clear");clear.HorizontalAlignment=HorizontalAlignment.Center;empty.Children.Add(clear);
+        AutomationProperties.SetAutomationId(empty,"widget-search-empty");body.Children.Insert(Math.Min(2,body.Children.Count),empty);
+        search.TextChanged+=(_,_)=>{string query=search.Text.Trim();empty.Visibility=Visibility.Collapsed;if(query.Length==0){ShowCategory(chosen);return;}
+            foreach(var chip in chips.Values)StyleChip(chip,false);
+            foreach(var kind in Enum.GetValues<WidgetKind>()){
+            string key=kind.ToString().ToLowerInvariant();var carousel=Carousel(key);var matches=carousel.Hosts.Select((h,i)=>(h,i)).Where(x=>x.h.Definition.Title.Contains(query,StringComparison.OrdinalIgnoreCase)||WidgetSizes.Category(kind).Contains(query,StringComparison.OrdinalIgnoreCase)).ToArray();
+            sections[key].Visibility=matches.Length>0?Visibility.Visible:Visibility.Collapsed;if(matches.Length>0)carousel.Select(matches[0].i,false);}
+            if(sections.Values.All(v=>v.Visibility!=Visibility.Visible)){emptyTitle.Text=$"没有找到“{query}”相关的组件";empty.Visibility=Visibility.Visible;}}
+        ;ShowCategory(chosen);Loaded+=(_,_)=>Dispatcher.BeginInvoke(UpdateVisibleHosts);ScrollChanged+=(_,_)=>UpdateVisibleHosts();
     }
     private void StartRuntime()
     {

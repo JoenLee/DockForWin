@@ -25,7 +25,7 @@ internal partial class SettingsShellWindow:Window
     private bool _navigationReady;private readonly string[] _extraSearchTerms=new string[8];
     private Grid _sidebar=null!;private ColumnDefinition _sidebarColumn=null!;private bool _collapsed;
     private FrameworkElement _shellContent=null!;private Grid _right=null!;
-    private Border _searchFrame=null!;private StackPanel _detailBar=null!;private FrameworkElement _sidebarFooter=null!;
+    private Border _searchFrame=null!;private StackPanel _detailBar=null!;private TextBlock _backLabel=null!;private FrameworkElement _sidebarFooter=null!;
     protected DockSettings SharedDraft=>_draft;
     protected ListBox SidebarNavigation=>_navigation;
     protected SettingsPageHost PageHost=>_pages;
@@ -60,7 +60,7 @@ internal partial class SettingsShellWindow:Window
         _draft=draft.Copy();_review=review;
         Title="设置 · DockForWin";Icon=IosStyles.AppIcon();FontFamily=DesignSystem.TextFont;FontSize=13.5;
         // A wide, flat card in the manner of a music player's mini window: preview on the left, choices on the right.
-        Width=Math.Min(880,SystemParameters.WorkArea.Width-48);Height=Math.Min(620,SystemParameters.WorkArea.Height-48);MinWidth=Math.Min(760,Width);MinHeight=Math.Min(520,Height);
+        Width=Math.Min(880,SystemParameters.WorkArea.Width-48);Height=Math.Min(680,SystemParameters.WorkArea.Height-48);MinWidth=Math.Min(760,Width);MinHeight=Math.Min(560,Height);
         WindowStartupLocation=WindowStartupLocation.CenterOwner;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.CanResize;UseLayoutRounding=true;SnapsToDevicePixels=true;
         Resources.MergedDictionaries.Add(new ResourceDictionary{Source=new Uri("/DockForWindows;component/Views/SettingsShellStyles.xaml",UriKind.Relative)});
         Resources.MergedDictionaries.Add(new ResourceDictionary{Source=new Uri("/DockForWindows;component/Assets/Ionicons/SettingsIonicons.xaml",UriKind.Relative)});
@@ -68,7 +68,7 @@ internal partial class SettingsShellWindow:Window
         // job, so dragging is exactly as smooth as any other window. The tab bar is the caption.
         WindowChrome.SetWindowChrome(this,new WindowChrome{CaptionHeight=TabBarHeight,ResizeBorderThickness=new Thickness(6),CornerRadius=new CornerRadius(0),GlassFrameThickness=new Thickness(0,0,0,1),UseAeroCaptionButtons=false});
         SetResourceReference(BackgroundProperty,"SettingsCanvas");
-        SourceInitialized+=(_,_)=>ApplyBackdrop();
+        SourceInitialized+=(_,_)=>ApplyBackdrop();KeyboardCue.Track(this);
 
         var root=_right=new Grid();AutomationProperties.SetAutomationId(root,"settings-shell-two-columns");
         root.RowDefinitions.Add(new(){Height=new GridLength(TabBarHeight)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});
@@ -78,13 +78,15 @@ internal partial class SettingsShellWindow:Window
         // Detail pages: a quiet way back above the page.
         _back=Arrow("返回",true,()=>_pages.Back());_forward=Arrow("前进",false,()=>_pages.Forward());_forward.Visibility=Visibility.Collapsed;
         var backRow=_detailBar=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(DesignSystem.PageInset-8,8,0,0),Visibility=Visibility.Collapsed};
-        var backLabel=new TextBlock{Text="返回",FontSize=13,Margin=new Thickness(6,0,0,0),VerticalAlignment=VerticalAlignment.Center};
+        var backLabel=_backLabel=new TextBlock{Text="返回",FontSize=13,Margin=new Thickness(6,0,0,0),VerticalAlignment=VerticalAlignment.Center};
         backLabel.SetBinding(TextBlock.ForegroundProperty,new System.Windows.Data.Binding("Foreground"){Source=_back});
         ((System.Windows.Shapes.Path)_back.Content).Margin=new Thickness(0);var backContent=new StackPanel{Orientation=Orientation.Horizontal};var arrowGlyph=(UIElement)_back.Content;_back.Content=null;backContent.Children.Add(arrowGlyph);backContent.Children.Add(backLabel);_back.Content=backContent;_back.Width=double.NaN;_back.Padding=new Thickness(8,0,10,0);
         backRow.Children.Add(_back);backRow.Children.Add(_forward);Grid.SetRow(backRow,1);root.Children.Add(backRow);
         Grid.SetRow(_pages,2);root.Children.Add(_pages);
         // Content that scrolls up dissolves into the canvas instead of being cut at the tab bar.
-        var fade=new Border{Height=14,VerticalAlignment=VerticalAlignment.Top,IsHitTestVisible=false};fade.SetResourceReference(Border.BackgroundProperty,"SettingsCanvasFade");Grid.SetRow(fade,2);root.Children.Add(fade);
+        var fade=new Border{Height=18,VerticalAlignment=VerticalAlignment.Top,IsHitTestVisible=false};fade.SetResourceReference(Border.BackgroundProperty,"SettingsCanvasFade");Grid.SetRow(fade,2);root.Children.Add(fade);
+        // …and at the bottom too, so a page that continues below the window edge fades out instead of being cut mid-row.
+        var bottomFade=new Border{Height=16,VerticalAlignment=VerticalAlignment.Bottom,IsHitTestVisible=false};bottomFade.SetResourceReference(Border.BackgroundProperty,"SettingsCanvasFadeUp");Grid.SetRow(bottomFade,2);root.Children.Add(bottomFade);
         _pages.AddHandler(ScrollViewer.ScrollChangedEvent,new ScrollChangedEventHandler((_,e)=>{if(e.OriginalSource is FrameworkElement source&&source.Parent==_pages&&e.VerticalChange!=0)UpdateTabLine(true);}));
 
         // The former sidebar stays as an invisible index of the categories: search and keyboard routes still use it.
@@ -103,7 +105,7 @@ internal partial class SettingsShellWindow:Window
         var actions=new Grid{Margin=new Thickness(24,6,24,14)};actions.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});actions.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         var note=new TextBlock{Text="更改先保存在草稿中",FontSize=12,VerticalAlignment=VerticalAlignment.Center};note.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");actions.Children.Add(note);var buttons=new StackPanel{Orientation=Orientation.Horizontal};
         buttons.Children.Add(Button("取消",Close,"settings-shell-cancel"));var reviewButton=Button("检查并保存…",()=>{var copy=_draft.Copy();copy.Normalize();int section=_pages.CurrentSection;Close();_review(copy,section);},"settings-shell-review");reviewButton.Style=(Style)FindResource("SettingsPrimaryButton");buttons.Children.Add(reviewButton);Grid.SetColumn(buttons,1);actions.Children.Add(buttons);Grid.SetRow(actions,3);root.Children.Add(actions);
-        _pages.Navigated+=()=>{_syncNavigation=true;_navigation.SelectedIndex=NavigationIndex(_pages.CurrentSection);_syncNavigation=false;_title.Text=_pages.CurrentTitle;_back.IsEnabled=_pages.CanGoBack;_forward.IsEnabled=_pages.CanGoForward;_detailBar.Visibility=_pages.IsDetail?Visibility.Visible:Visibility.Collapsed;foreach(var refresh in _availability)refresh();SelectTab(TabFor(_pages.CurrentSection),true);UpdateTabLine(false);};
+        _pages.Navigated+=()=>{_syncNavigation=true;_navigation.SelectedIndex=NavigationIndex(_pages.CurrentSection);_syncNavigation=false;_title.Text=_pages.CurrentTitle;_back.IsEnabled=_pages.CanGoBack;_forward.IsEnabled=_pages.CanGoForward;_detailBar.Visibility=_pages.IsDetail?Visibility.Visible:Visibility.Collapsed;_backLabel.Text=_pages.IsDetail?Tabs[TabFor(_pages.CurrentSection)].Title:"返回";foreach(var refresh in _availability)refresh();SelectTab(TabFor(_pages.CurrentSection),true);UpdateTabLine(false);};
         _navigation.SelectionChanged+=(_,_)=>{if(_navigationReady&&!_syncNavigation&&_navigation.SelectedIndex>=0)_pages.Navigate(NavigationKeys[_navigation.SelectedIndex]);};
         _search.TextChanged+=(_,_)=>FilterNavigation();
         Loaded+=(_,_)=>SelectTab(TabFor(_pages.CurrentSection),false);PreviewKeyDown+=HandleNavigationKeys;
@@ -130,6 +132,8 @@ internal partial class SettingsShellWindow:Window
         var handle=new WindowInteropHelper(this).Handle;if(handle==0)return;
         int dark=Design.Dark?1:0;NativeMethods.DwmSetWindowAttribute(handle,20,ref dark,4);
         int round=2;NativeMethods.DwmSetWindowAttribute(handle,33,ref round,4);
+        // The system's 1 px window border in the canvas' own edge colour, so there is no bright seam in dark.
+        int border=Design.Dark?0x00352E2A:0x00EEE7E2;NativeMethods.DwmSetWindowAttribute(handle,34,ref border,4);
     }
     private Button Arrow(string name,bool back,Action action)
     {

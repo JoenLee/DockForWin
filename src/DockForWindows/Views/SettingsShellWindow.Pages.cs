@@ -36,7 +36,7 @@ internal partial class SettingsShellWindow
                 var pins=Group(body,"固定项目");Link(pins,"管理应用与文件","添加应用、文件夹和固定项目","shell-app-library",ReviewCurrent);break;
             case 4:
                 var position=Group(body,"停靠位置");Segment(position,"屏幕边缘","shell-dock-edge",new[]{"底部","左侧","右侧"},(int)_draft.Edge,i=>_draft.Edge=(DockEdge)i);Range(position,"距离屏幕边缘","shell-edge-distance",0,160,_draft.EdgeDistance,"0' DIP'",v=>_draft.EdgeDistance=v);
-                var hide=Group(body,"自动隐藏");Switch(hide,"普通窗口下自动隐藏","shell-auto-hide",_draft.AutoHide,v=>_draft.AutoHide=v);Switch(hide,"桌面上也自动隐藏","shell-desktop-hide",_draft.HideOnDesktop,v=>_draft.HideOnDesktop=v);Switch(hide,"最大化或全屏时退下","shell-fullscreen-hide",_draft.HideWhenFullscreen,v=>_draft.HideWhenFullscreen=v);More(body);break;
+                var hide=Group(body,"自动隐藏");Switch(hide,"普通窗口下自动隐藏","shell-auto-hide",_draft.AutoHide,v=>_draft.AutoHide=v);Switch(hide,"桌面上也自动隐藏","shell-desktop-hide",_draft.HideOnDesktop,v=>_draft.HideOnDesktop=v);Switch(hide,"最大化或全屏时隐藏","shell-fullscreen-hide",_draft.HideWhenFullscreen,v=>_draft.HideWhenFullscreen=v);More(body);break;
             case 5:
                 var system=Group(body,"登录");Switch(system,"开机自启","shell-startup",_draft.StartWithWindows,v=>_draft.StartWithWindows=v);body.Children.Add(Muted("保存设置后，在当前账户登录时启动。",new Thickness(10,6,0,18)));More(body);break;
             case 6:
@@ -85,9 +85,10 @@ internal partial class SettingsShellWindow
         var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center};text.Children.Add(new TextBlock{Text=title,FontFamily=DesignSystem.DisplayFont,FontSize=DesignSystem.Title,FontWeight=FontWeights.SemiBold});
         if(!string.IsNullOrWhiteSpace(description))text.Children.Add(Muted(description,new Thickness(0,3,0,0)));Grid.SetColumn(text,1);header.Children.Add(text);return header;
     }
-    protected static TextBlock Muted(string text,Thickness margin){var label=new TextBlock{Text=text,FontSize=12.5,TextWrapping=TextWrapping.Wrap,LineHeight=19,Margin=margin,MaxWidth=640,HorizontalAlignment=HorizontalAlignment.Left};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");return label;}
+    protected static TextBlock Muted(string text,Thickness margin){var label=new TextBlock{Text=text,FontSize=12,TextWrapping=TextWrapping.Wrap,LineHeight=18,Margin=margin,MaxWidth=560,HorizontalAlignment=HorizontalAlignment.Left};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");return label;}
     // SemiBold resolves to Glow Sans' Medium face for Chinese and Segoe's Semibold for Latin.
-    protected static TextBlock GroupTitle(string title){var label=new TextBlock{Text=title,FontSize=13,FontWeight=FontWeights.SemiBold,Margin=new Thickness(DesignSystem.RowInset,0,0,8)};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsInk");return label;}
+    // Group names step back (12 Medium, secondary ink): they organise the page, the rows are what people read.
+    protected static TextBlock GroupTitle(string title){var label=new TextBlock{Text=title,FontSize=12,FontWeight=FontWeights.Medium,Margin=new Thickness(DesignSystem.RowInset,0,0,7)};label.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");return label;}
     protected static Border GroupSurface(UIElement content){var surface=new Border{Child=content};surface.SetResourceReference(FrameworkElement.StyleProperty,"SettingsSurface");return surface;}
     private static StackPanel Group(Panel body,string title)
     {
@@ -138,11 +139,14 @@ internal partial class SettingsShellWindow
     }
     protected static ControlTemplate LinkTemplate()
     {
-        var hover=new FrameworkElementFactory(typeof(Border)){Name="Hover"};hover.SetValue(Border.BackgroundProperty,Brushes.Transparent);hover.SetValue(Border.CornerRadiusProperty,new CornerRadius(8));hover.SetValue(Border.PaddingProperty,new Thickness(8,0,8,0));
+        var hover=new FrameworkElementFactory(typeof(Border)){Name="Hover"};hover.SetValue(Border.BackgroundProperty,Brushes.Transparent);hover.SetValue(Border.CornerRadiusProperty,new CornerRadius(8));hover.SetValue(Border.PaddingProperty,new Thickness(8,0,8,0));hover.SetValue(Border.BorderBrushProperty,Brushes.Transparent);hover.SetValue(Border.BorderThicknessProperty,new Thickness(1.5));
         var presenter=new FrameworkElementFactory(typeof(ContentPresenter));presenter.SetBinding(FrameworkElement.MarginProperty,new System.Windows.Data.Binding("Padding"){RelativeSource=System.Windows.Data.RelativeSource.TemplatedParent});hover.AppendChild(presenter);
         var template=new ControlTemplate(typeof(Button)){VisualTree=hover};
         var over=new Trigger{Property=UIElement.IsMouseOverProperty,Value=true};over.Setters.Add(new Setter(Border.BackgroundProperty,new DynamicResourceExtension("SettingsHover"),"Hover"));template.Triggers.Add(over);
         var pressed=new Trigger{Property=System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty,Value=true};pressed.Setters.Add(new Setter(Border.BackgroundProperty,new DynamicResourceExtension("SettingsPressed"),"Hover"));template.Triggers.Add(pressed);
+        // Keyboard focus shows a ring as well as the wash, but only while the keyboard is in use (KeyboardCue).
+        var focus=new MultiTrigger();focus.Conditions.Add(new System.Windows.Condition(UIElement.IsKeyboardFocusedProperty,true));focus.Conditions.Add(new System.Windows.Condition(KeyboardCue.VisibleProperty,true));
+        focus.Setters.Add(new Setter(Border.BackgroundProperty,new DynamicResourceExtension("SettingsHover"),"Hover"));focus.Setters.Add(new Setter(Border.BorderBrushProperty,new DynamicResourceExtension("SettingsFocusRing"),"Hover"));template.Triggers.Add(focus);
         return template;
     }
     private void More(Panel body){var link=Button("查看全部设置…",ReviewCurrent,"shell-all-settings-"+body.Children.Count);link.HorizontalAlignment=HorizontalAlignment.Left;link.Margin=new Thickness(0,0,0,8);body.Children.Add(link);}

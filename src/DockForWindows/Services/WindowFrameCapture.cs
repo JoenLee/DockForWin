@@ -168,6 +168,65 @@ public sealed class WindowFrameCapture : IDisposable
         }
         catch (Exception ex) { LastError = ex.GetType().Name + ": " + ex.Message; _failed[window] = now + 3000; return null; }
     }
+    // Copies this window's part of the sample straight into a reusable buffer (rows packed, 4 bytes per pixel,
+    // premultiplied BGRA) instead of allocating a Bitmap, and reports whether every copied pixel is opaque so the
+    // caller can skip the windows underneath. False without a live compositor frame; unchanged=true when the frame
+    // and region equal 'previous' (the buffer is then left as it is).
+    internal bool ReadInto(nint window, Rectangle sample, FrameStamp? previous, ref byte[] buffer, out Rectangle captured, out FrameStamp? stamp, out bool unchanged, out bool opaque)
+    {
+        stamp = null; unchanged = false; opaque = false; captured = Rectangle.Empty;
+        long now = Environment.TickCount64;
+        if (_failed.TryGetValue(window, out long retry) && now < retry) return false;
+        try
+        {
+            if (!_windows.TryGetValue(window, out var capture))
+            {
+                capture = new CaptureWindow(CreateItem(window), _winrtDevice, _minimumInterval); _windows.Add(window, capture);
+            }
+            capture.LastUsed = now;
+            if (DwmGetWindowAttribute(window, 9, out var r, Marshal.SizeOf<NativeMethods.WindowRect>()) != 0 && !NativeMethods.GetWindowRect(window, out r)) return false;
+            lock (capture.Gate)
+            {
+                var frame = capture.Latest;
+                if (frame is null) return false;
+                var windowBounds = new Rectangle(r.Left, r.Top, frame.ContentSize.Width, frame.ContentSize.Height);
+                captured = Rectangle.Intersect(windowBounds, sample);
+                if (captured.Width <= 0 || captured.Height <= 0) return false;
+                if (frame.SystemRelativeTime > TimeSpan.Zero) stamp = new FrameStamp(frame.SystemRelativeTime, windowBounds, captured);
+                if (stamp is not null && stamp == previous) { unchanged = true; return true; }
+                var textureIid = new Guid("6F15AAF2-D208-4E89-9AB4-489535D34F9C");
+                nint source = frame.Surface.As<SurfaceInterop>().GetInterface(ref textureIid);
+                try
+                {
+                    lock (_deviceGate)
+                    {
+                        if (capture.Staging == 0 || capture.StagingWidth < captured.Width || capture.StagingHeight < captured.Height)
+                        {
+                            if (capture.Staging != 0) Marshal.Release(capture.Staging);
+                            capture.Staging = 0;
+                            var description = new TextureDescription { Width = (uint)captured.Width, Height = (uint)captured.Height, Mips = 1, ArraySize = 1, Format = 87, SampleCount = 1, Usage = 3, CpuAccess = 0x20000 };
+                            Marshal.ThrowExceptionForHR(_createTexture(_device, ref description, 0, out capture.Staging));
+                            capture.StagingWidth = captured.Width; capture.StagingHeight = captured.Height;
+                        }
+                        var box = new Box { Left = (uint)(captured.Left - windowBounds.Left), Top = (uint)(captured.Top - windowBounds.Top), Right = (uint)(captured.Right - windowBounds.Left), Bottom = (uint)(captured.Bottom - windowBounds.Top), Back = 1 };
+                        _copy(_context, capture.Staging, 0, 0, 0, 0, source, 0, ref box);
+                        Marshal.ThrowExceptionForHR(_map(_context, capture.Staging, 0, 1, 0, out var mapped));
+                        try
+                        {
+                            int row = captured.Width * 4, length = row * captured.Height;
+                            if (buffer.Length < length) buffer = new byte[length];
+                            for (int y = 0; y < captured.Height; y++) Marshal.Copy(mapped.Data + (int)(y * mapped.RowPitch), buffer, y * row, row);
+                            opaque = PixelRows.Opaque(buffer.AsSpan(0, length));
+                            Copies++; return true;
+                        }
+                        finally { _unmap(_context, capture.Staging, 0); }
+                    }
+                }
+                finally { Marshal.Release(source); }
+            }
+        }
+        catch (Exception ex) { LastError = ex.GetType().Name + ": " + ex.Message; _failed[window] = now + 3000; return false; }
+    }
     public void Trim()
     {
         var obsolete = new List<nint>();

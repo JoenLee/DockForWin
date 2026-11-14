@@ -24,7 +24,8 @@ internal static class TrayMenu
     }
     private static ToolStripMenuItem Item(string text, Action action)
     {
-        var item = new ToolStripMenuItem(text) { AutoSize = false, Size = new Size(176, 32), Padding = new Padding(10, 0, 10, 0) };
+        // Sized by its text (audit W07-05): a fixed 176 px cut "退出 DockForWin" short at 150 % scaling.
+        var item = new ToolStripMenuItem(text) { AutoSize = true, Padding = new Padding(10, 7, 22, 7) };
         item.Click += (_, _) => action();
         return item;
     }

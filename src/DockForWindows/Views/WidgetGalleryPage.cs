@@ -50,6 +50,16 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         AutomationProperties.SetName(materials, "小组件材质"); AutomationProperties.SetAutomationId(materials, "widget-material"); appearance.Children.Add(materials);
         var curves = new ComboBox { ItemsSource = new[] { "柔和轮廓 · 2.5", "饱满轮廓 · 3" }, SelectedIndex = options.Exponent == 3 ? 1 : 0, Width = 154, Height = 34, Margin = new Thickness(0, 0, 0, 8) };
         AutomationProperties.SetName(curves, "超椭圆指数"); AutomationProperties.SetAutomationId(curves, "widget-exponent"); appearance.Children.Add(curves); body.Children.Add(appearance);
+        // Two outlines need no menu: show them as segments named by their look; the drop-down stays as the source.
+        // A caption says what these two choices apply to (audit P21-04).
+        curves.Visibility = Visibility.Collapsed;
+        var curveSegments = new SettingsSegmentedControl { ItemsSource = new[] { "柔和", "饱满" }, SelectedIndex = curves.SelectedIndex, Width = 128, Margin = new Thickness(0, 0, 0, 8), ToolTip = "组件四角的曲线：柔和更圆，饱满更方" };
+        AutomationProperties.SetName(curveSegments, "轮廓"); AutomationProperties.SetAutomationId(curveSegments, "widget-exponent-segment");
+        curveSegments.SelectionChanged += (_, _) => { if (curveSegments.SelectedIndex >= 0 && curves.SelectedIndex != curveSegments.SelectedIndex) curves.SelectedIndex = curveSegments.SelectedIndex; };
+        curves.SelectionChanged += (_, _) => curveSegments.SelectedIndex = curves.SelectedIndex;
+        appearance.Children.Add(curveSegments);
+        var caption = new TextBlock { Text = "新组件外观", FontSize = 12, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 8) };
+        caption.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted"); appearance.Children.Insert(0, caption);
         WeatherCarousel = new(WidgetRegistry.Definitions.Where(d => d.Kind == WidgetKind.Weather).ToArray(), options.WeatherSelection, options.Exponent);
         CalendarCarousel = new(WidgetRegistry.Definitions.Where(d => d.Kind == WidgetKind.Calendar).ToArray(), options.CalendarSelection, options.Exponent);
         AutomationProperties.SetAutomationId(WeatherCarousel, "weather-carousel"); AutomationProperties.SetAutomationId(CalendarCarousel, "calendar-carousel");
@@ -174,7 +184,7 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         foreach (var entry in _options.Events.OrderBy(e => e.Start)) {
             var row = new Grid { Margin = new Thickness(0, 8, 0, 0) }; row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             var text = Note(entry.Start.ToString("MM-dd HH:mm") + "  " + entry.Title, new Thickness(0)); text.TextTrimming = TextTrimming.CharacterEllipsis; text.TextWrapping = TextWrapping.NoWrap; text.ToolTip = entry.Title; row.Children.Add(text);
-            var remove = ActionButton("移除", () => { _options.Events.Remove(entry); RenderEvents(); RenderCalendar(); _calendarStatus.Text = "移除已保留在草稿，保存后生效。"; }, "widget-event-remove-" + entry.Id);
+            var remove = ActionButton("移除", () => { _options.Events.Remove(entry); RenderEvents(); RenderCalendar(); _calendarStatus.Text = "已移除，更改会自动保存。"; }, "widget-event-remove-" + entry.Id);
             Grid.SetColumn(remove, 1); row.Children.Add(remove); _eventList.Children.Add(row);
         }
     }

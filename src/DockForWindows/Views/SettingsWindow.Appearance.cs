@@ -32,7 +32,7 @@ internal sealed partial class SettingsWindow
     private readonly DockSurface _stageCenter = new() { IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Width = 196, Height = 172, Margin = new Thickness(0, 18, 18, 0) };
     private readonly StackPanel _stageIcons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false };
     private readonly Grid _stageCenterContent = new() { Width = 196, Height = 172, Margin = new Thickness(0, 18, 18, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
-    private CheckBox _liquid = null!; private Slider _quality = null!;
+    private CheckBox _liquid = null!; private Slider _quality = null!; private FrameworkElement _tintCell = null!, _magnifyCell = null!; private readonly List<(Button Dot, string Hex)> _tintDots = new();
     private const double StageHeight = 150;
 
     private FrameworkElement BuildAppearanceInspector(Func<int, string?> detailKey)
@@ -69,31 +69,39 @@ internal sealed partial class SettingsWindow
         qualityValue.Text = _quality.Value < .34 ? "磨砂" : _quality.Value > .66 ? "水光" : "适中";
         _quickSync.Add(() => _quality.Value = _draft.GlassQuality);
 
-        // One table, two columns, every cell the same anatomy: label, control, value.
-        var table = new StackPanel();
-        void Pair(FrameworkElement left, FrameworkElement right)
-        {
-            if (table.Children.Count > 0) table.Children.Add(Hairline());
-            var row = new Grid();
-            row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = new GridLength(41) }); row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-            row.Children.Add(left);
-            var divider = new Border { Width = 1, HorizontalAlignment = HorizontalAlignment.Center, SnapsToDevicePixels = true }; divider.SetResourceReference(Border.BackgroundProperty, "SettingsLine"); Grid.SetColumn(divider, 1); row.Children.Add(divider);
-            Grid.SetColumn(right, 2); row.Children.Add(right);
-            table.Children.Add(row);
-        }
-        Pair(Cell("材质", _material), Cell("位置", _position));
-        Pair(_qualityCell = Cell("质感", _quality, qualityValue), CornerCell());
-        Pair(Mirror("大小", "icon-size", "dock-icon-size", v => $"{v:0}"), Mirror("间距", "icon-spacing", "dock-spacing", v => $"{v:0}"));
-        Pair(Mirror("放大", "magnification", "dock-magnification", v => $"{v:0.00}×"), Switch("动画", "animations", "dock-animations", () => _draft.Animations));
-        Pair(Switch("自动隐藏", "auto-hide", "dock-auto-hide", () => _draft.AutoHide), Switch("最近应用", "recent-apps", "dock-recent", () => _draft.ShowRecentApps));
-        table.Children.Add(Hairline());
-        var advanced = Compact("高级设置", "材质、图标、动画与位置", "appearance-advanced", () => NavigateSettingsPage("dock-advanced"));
-        advanced.Height = 46; table.Children.Add(advanced);
-        var card = new SquircleBorder { CornerRadius = new CornerRadius(14), Exponent = 2.5, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(0, 16, 0, 0), Child = table, BorderThickness = new Thickness(1) };
-        card.SetResourceReference(Border.BorderBrushProperty, "SettingsGroupEdge");
-        card.SetResourceReference(Border.BackgroundProperty, "SettingsCard");
-        page.Children.Add(card);
+        // Two cards by intent rather than one table of arbitrary pairs (audit P01-01/06): what the Dock looks like, and
+        // how it behaves. Each card names itself; rows share one anatomy (label 64, control, value 52).
+        _material.HorizontalAlignment = HorizontalAlignment.Stretch; _material.Width = double.NaN;
+        _position.HorizontalAlignment = HorizontalAlignment.Stretch; _position.Width = double.NaN;
+        var looks = InspectorCard("外观"); var behaviour = InspectorCard("行为");
+        void Add(StackPanel card, FrameworkElement row) { if (card.Children.Count > 1) card.Children.Add(Hairline()); card.Children.Add(row); }
+        Add(looks, Cell("材质", _material));
+        Add(looks, _qualityCell = Cell("质感", _quality, qualityValue));
+        Add(looks, _tintCell = TintCell());
+        Add(looks, CornerCell());
+        Add(looks, Mirror("大小", "icon-size", "dock-icon-size", v => $"{v:0} px"));
+        Add(looks, Mirror("间距", "icon-spacing", "dock-spacing", v => $"{v:0} px"));
+        Add(behaviour, Cell("位置", _position));
+        Add(behaviour, Switch("动画", "animations", "dock-animations", () => _draft.Animations));
+        // 放大 only works while animations are on, so it sits under 动画, indented, and steps back when they are off.
+        _magnifyCell = Mirror("放大", "magnification", "dock-magnification", v => $"{v:0.00}×"); _magnifyCell.Margin = new Thickness(16, 0, 0, 0); Add(behaviour, _magnifyCell);
+        Add(behaviour, Switch("自动隐藏", "auto-hide", "dock-auto-hide", () => _draft.AutoHide));
+        Add(behaviour, Switch("最近应用", "recent-apps", "dock-recent", () => _draft.ShowRecentApps));
+        var cards = new Grid { Margin = new Thickness(0, 16, 0, 0) };
+        cards.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); cards.ColumnDefinitions.Add(new() { Width = new GridLength(16) }); cards.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        var looksCard = CardSurface(looks); var behaviourCard = CardSurface(behaviour); Grid.SetColumn(behaviourCard, 2);
+        behaviourCard.VerticalAlignment = VerticalAlignment.Top; cards.Children.Add(looksCard); cards.Children.Add(behaviourCard);
+        page.Children.Add(cards);
 
+        // Advanced settings, one click away each: a quiet link plus a chip per category (audit P01-05).
+        var advanced = new WrapPanel { Margin = new Thickness(0, 14, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var entry = QuietLink("高级设置", "appearance-advanced", () => NavigateSettingsPage("dock-advanced")); entry.Margin = new Thickness(-8, 0, 10, 0); advanced.Children.Add(entry);
+        foreach (var (title, key, id) in new[] { ("底板", detailKey(0), "advanced-chip-base"), ("玻璃", detailKey(1), "advanced-chip-glass"), ("边缘", detailKey(2), "advanced-chip-edge"), ("图标", "icons", "advanced-chip-icons"), ("动画", "motion", "advanced-chip-motion"), ("应用", "apps", "advanced-chip-apps"), ("位置", "placement", "advanced-chip-placement") })
+        {
+            if (key is null) continue; string route = key;
+            advanced.Children.Add(Chip(title, id, () => NavigateSettingsPage(route)));
+        }
+        page.Children.Add(advanced);
         SyncDockInspector();
         _stage.SizeChanged += (_, _) => RefreshStageBackdrop();
         _stage.Loaded += (_, _) => RefreshStage();
@@ -103,6 +111,52 @@ internal sealed partial class SettingsWindow
         return scroll;
     }
     private static Border Hairline() { var line = new Border { Height = 1, SnapsToDevicePixels = true }; line.SetResourceReference(Border.BackgroundProperty, "SettingsLine"); return line; }
+    // An inspector card: its name in quiet type on top, then rows.
+    private static StackPanel InspectorCard(string title)
+    {
+        var card = new StackPanel();
+        var name = new TextBlock { Text = title, FontSize = 12, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 12, 0, 2) }; name.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted");
+        card.Children.Add(name); return card;
+    }
+    private static SquircleBorder CardSurface(UIElement content)
+    {
+        var card = new SquircleBorder { CornerRadius = new CornerRadius(12), Exponent = 2.5, Padding = new Thickness(16, 0, 16, 4), Child = content, BorderThickness = new Thickness(1) };
+        card.SetResourceReference(Border.BorderBrushProperty, "SettingsGroupEdge"); card.SetResourceReference(Border.BackgroundProperty, "SettingsCard"); return card;
+    }
+    // A quiet pill link to one advanced category.
+    private static Button Chip(string title, string id, Action action)
+    {
+        var text = new TextBlock { Text = title, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }; text.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted");
+        var button = new Button { Content = text, Template = LinkTemplate(), Padding = new Thickness(2, 5, 2, 5), Margin = new Thickness(0, 0, 2, 0), Cursor = System.Windows.Input.Cursors.Hand };
+        button.MouseEnter += (_, _) => text.SetResourceReference(TextBlock.ForegroundProperty, "SettingsAccentInk"); button.MouseLeave += (_, _) => text.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted");
+        AutomationProperties.SetAutomationId(button, id); AutomationProperties.SetName(button, "高级设置：" + title); button.Click += (_, _) => action(); return button;
+    }
+    // 色调 for liquid glass: none, ice, lavender, blossom, mint (GlassMaterial.Tints) as small dots (audit P06-11).
+    private FrameworkElement TintCell()
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var (name, hex) in GlassMaterial.Tints)
+        {
+            string value = hex;
+            var swatch = new Grid { Width = 22, Height = 22 };
+            var ring = new Ellipse { StrokeThickness = 2, Opacity = 0 }; ring.SetResourceReference(Shape.StrokeProperty, "SettingsAccent");
+            var dot = new Ellipse { Width = 16, Height = 16, StrokeThickness = 1 };
+            dot.Fill = string.IsNullOrEmpty(hex) ? Brushes.White : DesignSystem.Brush(DesignSystem.Hex(hex)); dot.SetResourceReference(Shape.StrokeProperty, "SettingsControlStroke");
+            swatch.Children.Add(dot); swatch.Children.Add(ring);
+            if (string.IsNullOrEmpty(hex)) { var slash = new Line { X1 = 5.5, Y1 = 16.5, X2 = 16.5, Y2 = 5.5, StrokeThickness = 1.2 }; slash.SetResourceReference(Shape.StrokeProperty, "SettingsTertiary"); swatch.Children.Add(slash); }
+            var button = new Button { Content = swatch, Template = LinkTemplate(), Padding = new Thickness(2), Margin = new Thickness(0, 0, 4, 0), ToolTip = name, Cursor = System.Windows.Input.Cursors.Hand };
+            AutomationProperties.SetAutomationId(button, "glass-tint-" + _tintDots.Count); AutomationProperties.SetName(button, "色调 " + name);
+            button.Click += (_, _) => { if (!_ready || _updating) return; _draft.GlassTintColor = value; _glassOnlyPreview = true; QueuePreview(); RefreshStage(); SyncTintDots(); };
+            _tintDots.Add((button, value)); row.Children.Add(button);
+        }
+        SyncTintDots();
+        return Cell("色调", row);
+    }
+    private void SyncTintDots()
+    {
+        foreach (var (dot, hex) in _tintDots)
+            if (dot.Content is Grid swatch && swatch.Children[1] is Ellipse ring) ring.Opacity = string.Equals(hex, _draft.GlassTintColor ?? "", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+    }
     // A cell: label (fixed column), the control, and an optional muted value on the right.
     private static Grid Cell(string title, FrameworkElement control, TextBlock? value = null)
     {
@@ -120,7 +174,7 @@ internal sealed partial class SettingsWindow
         var slider = new Slider { Minimum = detail.Minimum, Maximum = detail.Maximum, TickFrequency = detail.TickFrequency, IsSnapToTickEnabled = true, Value = detail.Value };
         AutomationProperties.SetAutomationId(slider, id); AutomationProperties.SetName(slider, title);
         var value = new TextBlock { Text = format(slider.Value) };
-        slider.ValueChanged += (_, _) => { value.Text = format(slider.Value); if (!_ready || _updating) return; detail.Value = slider.Value; };
+        slider.ValueChanged += (_, _) => { value.Text = format(slider.Value); if (!_ready || _updating) return; detail.Value = slider.Value; if (source is "icon-size" or "icon-spacing") QueueStageRefresh(); };
         _quickSync.Add(() => slider.Value = detail.Value);
         return Cell(title, slider, value);
     }
@@ -144,7 +198,7 @@ internal sealed partial class SettingsWindow
     {
         var toggle = new CheckBox { Content = title, IsChecked = read(), Height = 46 };
         AutomationProperties.SetAutomationId(toggle, id); AutomationProperties.SetName(toggle, title);
-        void Changed() { if (!_ready || _updating) return; if (Setting<CheckBox>(source) is { } detail) detail.IsChecked = toggle.IsChecked; }
+        void Changed() { if (!_ready || _updating) return; if (Setting<CheckBox>(source) is { } detail) detail.IsChecked = toggle.IsChecked; Dispatcher.BeginInvoke(SyncDockInspector, DispatcherPriority.Background); }
         toggle.Checked += (_, _) => Changed(); toggle.Unchecked += (_, _) => Changed();
         _quickSync.Add(() => toggle.IsChecked = read());
         return toggle;
@@ -186,7 +240,11 @@ internal sealed partial class SettingsWindow
         {
             _material.SelectedIndex = MaterialIndex(); _liquid.IsChecked = _draft.LiquidGlass;
             foreach (var sync in _quickSync) sync();
-            _qualityCell.IsEnabled = Glass; _qualityCell.Opacity = Glass ? 1 : .45;
+            // Glass-only rows leave the card when the material is not glass, instead of greying out (audit P01-02).
+            var glassRows = Glass ? Visibility.Visible : Visibility.Collapsed;
+            _qualityCell.Visibility = glassRows; _tintCell.Visibility = glassRows; SyncTintDots();
+            foreach (var line in new[] { _qualityCell, _tintCell }) if (line.Parent is Panel card && card.Children.IndexOf(line) is int at && at > 0 && card.Children[at - 1] is Border hairline && hairline.Height == 1) hairline.Visibility = glassRows;
+            bool animated = _draft.Animations; _magnifyCell.IsEnabled = animated; _magnifyCell.Opacity = animated ? 1 : .45;
         }
         finally { _updating = was; }
     }
@@ -245,6 +303,13 @@ internal sealed partial class SettingsWindow
         _stageCenterContent.Children.Add(grid);
         static Border Tile(UIElement child) => new() { CornerRadius = new CornerRadius(14), Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)), BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255)), BorderThickness = new Thickness(0, .75, 0, 0), Padding = new Thickness(7), Child = child };
     }
+    private bool _stageRefreshQueued;
+    // Coalesces stage rebuilds while a size slider is being dragged: at most one per dispatcher turn.
+    private void QueueStageRefresh()
+    {
+        if (_stageRefreshQueued) return; _stageRefreshQueued = true;
+        Dispatcher.BeginInvoke(() => { _stageRefreshQueued = false; RefreshStage(); }, DispatcherPriority.Background);
+    }
     private void RefreshStage()
     {
         if (!_ready || !_stage.IsLoaded) return;
@@ -264,10 +329,12 @@ internal sealed partial class SettingsWindow
         _stageDock.Radius = p.CornerRadius; _stageCenter.Radius = 26;
         _stageDock.Effect = p.ShadowEnabled ? new DropShadowEffect { BlurRadius = p.ShadowBlur, ShadowDepth = 4, Opacity = p.ShadowOpacity } : null;
         _stageCenter.Effect = new DropShadowEffect { BlurRadius = 24, ShadowDepth = 6, Direction = 270, Opacity = .22 };
-        _stageIcons.Children.Clear(); var sample = _draft.Copy(); sample.IconSize = 40;
+        // The stage follows the real size and spacing in proportion (48 px icons draw at 40 on the stage).
+        _stageIcons.Children.Clear(); var sample = _draft.Copy(); double scale = 40.0 / 48; sample.IconSize = Math.Clamp(_draft.IconSize * scale, 26, 60); sample.Spacing = Math.Clamp(_draft.Spacing * scale, 2, 16);
         var items = _dock.Model.DisplayItems.Where(i => i.IsPinned).Take(8).ToArray();
         foreach (var item in items) _stageIcons.Children.Add(new DockTile(item, p, sample) { IsHitTestVisible = false, Focusable = false });
-        _stageDock.Width = Math.Max(140, items.Length * 52 + 16); _stageDock.Height = 66; _stageDock.Margin = new Thickness(0, 0, 0, 22); _stageIcons.Margin = new Thickness(0, 0, 0, 30);
+        double tile = sample.IconSize + sample.Spacing + 4;
+        _stageDock.Width = Math.Max(120, items.Length * tile + 16); _stageDock.Height = sample.IconSize + 26; _stageDock.Margin = new Thickness(0, 0, 0, 22); _stageIcons.Margin = new Thickness(0, 0, 0, 30);
         Dispatcher.BeginInvoke(RefreshStageBackdrop, DispatcherPriority.Render);
     }
     // Maps the stage's screen rectangle into the picture, then gives each glass object the piece of the picture
