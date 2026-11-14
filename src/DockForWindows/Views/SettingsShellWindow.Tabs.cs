@@ -29,7 +29,10 @@ internal partial class SettingsShellWindow
         System.Windows.Data.BindingOperations.SetBinding(bar.ColumnDefinitions[0],ColumnDefinition.WidthProperty,new System.Windows.Data.Binding("Width"){Source=_sidebarColumn});
         var header=new Grid{ClipToBounds=true,IsHitTestVisible=false};
         var sample=new VisualBrush(_pages){ViewboxUnits=BrushMappingMode.Absolute,Stretch=Stretch.Fill,AlignmentX=AlignmentX.Left,AlignmentY=AlignmentY.Top};
-        _toolbarBlur=new System.Windows.Shapes.Rectangle{Fill=sample,Opacity=0,Effect=new System.Windows.Media.Effects.BlurEffect{Radius=10,KernelType=System.Windows.Media.Effects.KernelType.Gaussian}};header.Children.Add(_toolbarBlur);
+        // The page under the bar is sampled and blurred at half resolution: the blur radius is in DIPs, so it looks
+        // the same (and shows through the 82% tint at half opacity), but each scrolled frame touches a quarter of the pixels.
+        _toolbarBlur=new System.Windows.Shapes.Rectangle{Fill=sample,Opacity=0,Effect=new System.Windows.Media.Effects.BlurEffect{Radius=10,KernelType=System.Windows.Media.Effects.KernelType.Gaussian}};
+        var blurLayer=new Grid{CacheMode=new BitmapCache(.5)};blurLayer.Children.Add(_toolbarBlur);header.Children.Add(blurLayer);
         var tint=new Border{Opacity=.82};tint.SetResourceReference(Border.BackgroundProperty,"SettingsCanvas");header.Children.Add(tint);
         var edge=new Border{Height=1,VerticalAlignment=VerticalAlignment.Bottom};edge.SetResourceReference(Border.BackgroundProperty,"SettingsLine");header.Children.Add(edge);
         header.SizeChanged+=(_,_)=>sample.Viewbox=new Rect(0,0,Math.Max(1,header.ActualWidth),TabBarHeight);Grid.SetColumn(header,1);bar.Children.Add(header);
@@ -42,7 +45,8 @@ internal partial class SettingsShellWindow
         capsule.SetResourceReference(Border.BackgroundProperty,"SettingsControlFill");
         var shadow=new System.Windows.Shapes.Path{Margin=capsule.Margin,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false,Effect=new System.Windows.Media.Effects.DropShadowEffect{BlurRadius=10,ShadowDepth=3,Direction=270,Opacity=.13}};
         shadow.SetResourceReference(System.Windows.Shapes.Shape.FillProperty,"SettingsControlFill");capsule.SizeChanged+=(_,_)=>{shadow.Width=capsule.ActualWidth;shadow.Height=capsule.ActualHeight;shadow.Data=SquircleBorder.Outline(capsule.RenderSize,8,2.5);};
-        AutomationProperties.SetAutomationId(capsule,"settings-navigation-capsule");Grid.SetColumn(shadow,1);bar.Children.Add(shadow);Grid.SetColumn(capsule,1);bar.Children.Add(capsule);
+        var shadowLayer=new Grid{IsHitTestVisible=false,CacheMode=new BitmapCache{SnapsToDevicePixels=true}};shadowLayer.Children.Add(shadow);
+        AutomationProperties.SetAutomationId(capsule,"settings-navigation-capsule");Grid.SetColumn(shadowLayer,1);bar.Children.Add(shadowLayer);Grid.SetColumn(capsule,1);bar.Children.Add(capsule);
         var controls=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,18,0)};
         controls.Children.Add(_toolbarActions);
         controls.Children.Add(Traffic(LocalizedText.Get("最小化"),"minimize","−","#F7D789","#93600C",HideToTray));

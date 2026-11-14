@@ -13,19 +13,22 @@ internal partial class SettingsShellWindow
     private void OpenWidgetCategory(WidgetKind kind){_pages.Navigate("widget-gallery");_widgetGallery?.ShowCategory(kind);}
     private FrameworkElement BuildWidgetHome()
     {
-        var (page,body)=Page(LocalizedText.Get("小组件"),"");body.Margin=new Thickness(DesignSystem.PageInset,18,DesignSystem.PageInset,28);
+        var (page,body)=Page(LocalizedText.Get("小组件"),"");body.Margin=new Thickness(DesignSystem.PageInset,10,DesignSystem.PageInset,28);
         var cards=new Grid();cards.ColumnDefinitions.Add(new());cards.ColumnDefinitions.Add(new());
         for(int row=0;row<3;row++)cards.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var navigator=BuildWidgetNavigator(query=>{int visible=0;foreach(Button card in cards.Children){var kind=(WidgetKind)card.Tag;card.Visibility=WidgetSizes.Category(kind).Contains(query,StringComparison.OrdinalIgnoreCase)||WidgetRegistry.Definitions.Any(d=>d.Kind==kind&&d.Title.Contains(query,StringComparison.OrdinalIgnoreCase))?Visibility.Visible:Visibility.Collapsed;if(card.Visibility==Visibility.Visible){Grid.SetRow(card,visible/2);Grid.SetColumn(card,visible%2);visible++;}}});body.Children.Add(navigator);
         string[] descriptions={LocalizedText.Get("实况、逐小时天气与多日预报"),LocalizedText.Get("月历、日期与本地日程"),LocalizedText.Get("本地时间、世界时钟与表盘"),LocalizedText.Get("管理待办，记录下一件要做的事"),LocalizedText.Get("便签、备忘录与文件夹笔记"),LocalizedText.Get("正在播放与最近播放的音乐")};
         int index=0;
         foreach(var kind in Enum.GetValues<WidgetKind>()){
-            var content=new StackPanel();var heading=new StackPanel{Orientation=Orientation.Horizontal};
+            // Heading and description at the top, the template count on the bottom edge: the six cards fill the
+            // default window without a scroll bar and without a band of empty card under the text.
+            var content=new Grid();content.RowDefinitions.Add(new(){Height=GridLength.Auto});content.RowDefinitions.Add(new(){Height=GridLength.Auto});content.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});content.RowDefinitions.Add(new(){Height=GridLength.Auto});
+            var heading=new StackPanel{Orientation=Orientation.Horizontal};
             var icon=WidgetGalleryPage.CategoryIcon(kind.ToString().ToLowerInvariant());icon.Margin=new Thickness(0,0,10,0);heading.Children.Add(icon);
             heading.Children.Add(new TextBlock{Text=WidgetSizes.Category(kind),FontSize=18,FontWeight=FontWeights.SemiBold,VerticalAlignment=VerticalAlignment.Center});content.Children.Add(heading);
-            content.Children.Add(Muted(descriptions[index],new Thickness(0,14,0,0)));
-            content.Children.Add(Muted(LocalizedText.Format($"{WidgetRegistry.Definitions.Count(d=>d.Kind==kind)} 种模板 · 查看与设置 ›"),new Thickness(0,20,0,0)));
-            var card=new Button{Tag=kind,Content=content,Height=164,Template=CardTemplate(),HorizontalContentAlignment=HorizontalAlignment.Stretch,Margin=new Thickness(index%2==0?0:8,0,index%2==0?8:0,16)};
+            var description=Muted(descriptions[index],new Thickness(0,9,0,0));Grid.SetRow(description,1);content.Children.Add(description);
+            var count=Muted(LocalizedText.Format($"{WidgetRegistry.Definitions.Count(d=>d.Kind==kind)} 种模板 · 查看与设置 ›"),new Thickness(0,10,0,0));Grid.SetRow(count,3);content.Children.Add(count);
+            var card=new Button{Tag=kind,Content=content,Height=124,Template=CardTemplate(),HorizontalContentAlignment=HorizontalAlignment.Stretch,VerticalContentAlignment=VerticalAlignment.Stretch,Margin=new Thickness(index%2==0?0:8,0,index%2==0?8:0,12)};
             AutomationProperties.SetAutomationId(card,"widget-home-"+kind.ToString().ToLowerInvariant());AutomationProperties.SetName(card,WidgetSizes.Category(kind));
             AttachWidgetCardMotion(card);card.Click+=(_,_)=>OpenWidgetCategory(kind);Grid.SetRow(card,index/2);Grid.SetColumn(card,index%2);cards.Children.Add(card);index++;
         }

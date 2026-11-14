@@ -21,9 +21,15 @@ public sealed class DockViewModel
     public event Action<string>? Error;
     public event Action? ItemsRebuilt;
     public void LogDiagnostic(string message, Exception? error = null) => _store.Log(message, error);
+    // Recent-app bookkeeping changes with every foreground switch; it is written a few seconds later in one save
+    // (and on exit, Program saves everything) instead of rewriting settings.json on the UI thread each time.
+    private readonly System.Windows.Threading.DispatcherTimer _recentSave = new() { Interval = TimeSpan.FromSeconds(3) };
+    // File.Exists for recent apps runs on the UI thread on every window refresh; a slow or offline path is asked at most every 30 s.
+    private readonly Dictionary<string, (bool Exists, long Checked)> _targetExists = new(StringComparer.OrdinalIgnoreCase);
     public DockViewModel(DockSettings settings, SettingsService store, IconService icons)
     {
         Settings = settings; _store = store; _icons = icons;
+        _recentSave.Tick += (_, _) => { _recentSave.Stop(); Save(); };
         foreach (var pin in settings.Pins) Items.Add(new DockItem(pin));
         if (!Items.Any(i => i.Pin.Kind == ItemKind.RecycleBin)) Items.Add(new DockItem(new PinnedItem { Name = LocalizedText.Get("回收站"), Kind = ItemKind.RecycleBin, Target = "shell:RecycleBinFolder" }));
     }
@@ -58,10 +64,14 @@ public sealed class DockViewModel
             try
             {
                 var pin = await _icons.RunShellAsync(() => LaunchService.CreatePin(path, Path.Combine(_store.DataDirectory, "shortcuts")));
-                if (Items.Any(i => i.IsPinned && LaunchService.Identity(i.Pin.Target) == LaunchService.Identity(pin.Target))) continue;
+                bool Pinned() => Items.Any(i => i.IsPinned && LaunchService.Identity(i.Pin.Target) == LaunchService.Identity(pin.Target));
+                if (Pinned()) continue;
+                var icon = await _icons.GetAsync(pin);
+                // A drop and the file picker can add concurrently: check again after the await, then insert without awaiting.
+                if (Pinned()) continue;
                 var existing = Items.FirstOrDefault(i => !i.IsPinned && SameApplication(i.Pin, pin));
                 if (existing is not null) Items.Remove(existing);
-                var item = new DockItem(pin) { Icon = await _icons.GetAsync(pin) };
+                var item = new DockItem(pin) { Icon = icon };
                 if (existing is not null) item.Windows = existing.Windows;
                 Items.Insert(Items.Count(i => i.IsPinned), item);
             }
@@ -147,7 +157,7 @@ public sealed class DockViewModel
         {
             foreach (var pin in Settings.RecentApps.Take(Settings.RecentLimit).ToArray())
             {
-                if (Items.Any(i => SameApplication(i.Pin, pin)) || !File.Exists(pin.Target)) continue;
+                if (Items.Any(i => SameApplication(i.Pin, pin)) || !TargetExists(pin.Target)) continue;
                 var recentItem = new DockItem(pin, false); Items.Add(recentItem); changed = true; _ = LoadRunningIconAsync(recentItem);
             }
         }
@@ -158,7 +168,14 @@ public sealed class DockViewModel
         if (pin.Kind != ItemKind.Application || Settings.RecentApps.FirstOrDefault() is { } first && SameApplication(first, pin)) return;
         Settings.RecentApps.RemoveAll(p => SameApplication(p, pin)); Settings.RecentApps.Insert(0, pin);
         if (Settings.RecentApps.Count > 8) Settings.RecentApps.RemoveRange(8, Settings.RecentApps.Count - 8);
-        Save();
+        _recentSave.Stop(); _recentSave.Start();
+    }
+    private bool TargetExists(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        long now = Environment.TickCount64;
+        if (_targetExists.TryGetValue(path, out var known) && now - known.Checked < 30_000) return known.Exists;
+        bool exists = File.Exists(path); _targetExists[path] = (exists, now); return exists;
     }
     private async Task LoadRunningIconAsync(DockItem item)
     {
@@ -167,6 +184,7 @@ public sealed class DockViewModel
     }
     public bool Save()
     {
+        _recentSave.Stop();
         try
         {
             Settings.Pins = Items.Where(i => i.IsPinned).Select(i => i.Pin).ToList();

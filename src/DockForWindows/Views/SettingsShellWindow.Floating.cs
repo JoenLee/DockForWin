@@ -17,14 +17,17 @@ internal partial class SettingsShellWindow
     {
         if(shell.ActualWidth<=0||shell.ActualHeight<=0)return;
         double radius=WindowState==WindowState.Maximized?0:ShellRadius;
-        var bounds=new Rect(shell.RenderSize);
-        var mask=new DrawingBrush(new GeometryDrawing(Brushes.White,null,new RectangleGeometry(bounds,radius,radius))){ViewboxUnits=BrushMappingMode.Absolute,Viewbox=bounds,ViewportUnits=BrushMappingMode.Absolute,Viewport=bounds,Stretch=Stretch.None};
-        mask.Freeze();shell.OpacityMask=mask;
+        // A rounded clip, not an opacity mask: a mask on the root re-renders the whole window into a layer on every
+        // frame (and on every animation tick, even when nothing visible changed); the clip gives the same edge.
+        var outline=new RectangleGeometry(new Rect(shell.RenderSize),radius,radius);
+        outline.Freeze();shell.OpacityMask=null;shell.Clip=outline;
     }
 
     private void AddFloatingSidebarMaterial(Grid sidebar)
     {
-        sidebar.Children.Add(_sidebarShadow);sidebar.Children.Add(_sidebarOutline);
+        // The shadow reaches under the page; cached in its own layer it is not re-blurred while the page scrolls.
+        var shadowLayer=new Grid{IsHitTestVisible=false,CacheMode=new BitmapCache{SnapsToDevicePixels=true}};shadowLayer.Children.Add(_sidebarShadow);
+        sidebar.Children.Add(shadowLayer);sidebar.Children.Add(_sidebarOutline);
     }
     private void RefreshFloatingSidebar()
     {

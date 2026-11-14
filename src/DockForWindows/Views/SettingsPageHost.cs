@@ -30,7 +30,15 @@ internal sealed class SettingsPageHost:Grid
     }
     internal double HeaderInset;
     private readonly HashSet<FrameworkElement> _prepared=new();
-    private void Prepare(FrameworkElement page){if(!_prepared.Add(page))return;if(page is ScrollViewer {Content:FrameworkElement body}){var margin=body.Margin;body.Margin=new Thickness(margin.Left,margin.Top+HeaderInset,margin.Right,margin.Bottom);}}
+    private void Prepare(FrameworkElement page){if(!_prepared.Add(page))return;if(page is ScrollViewer {Content:FrameworkElement body}){var margin=body.Margin;body.Margin=new Thickness(margin.Left,margin.Top+HeaderInset,margin.Right,margin.Bottom);TrimTrailingSpace(body);}}
+    // The space after a page's last group is its own margin plus the page's bottom inset (26 + 28 DIP); stacked, it
+    // alone pushed pages that otherwise fit the default window into scrolling. Keep one modest inset instead.
+    internal const double PageEndInset=20;
+    internal static void TrimTrailingSpace(FrameworkElement body)
+    {
+        var margin=body.Margin;body.Margin=new Thickness(margin.Left,margin.Top,margin.Right,Math.Min(margin.Bottom,PageEndInset));
+        if(body is Panel {Children.Count:>0} panel&&panel.Children[^1] is FrameworkElement last&&last.Margin.Bottom>0)last.Margin=new Thickness(last.Margin.Left,last.Margin.Top,last.Margin.Right,0);
+    }
     internal Func<bool>? MotionEnabled;
     public event Action? Navigated;
     public SettingsPageHost(){ClipToBounds=true;Unloaded+=(_,_)=>{_generation++;foreach(FrameworkElement page in Children)Stop(page);};}

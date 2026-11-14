@@ -26,10 +26,10 @@ internal sealed partial class SettingsWindow
             int section=i;var page=pages[i];var body=(StackPanel)page.Content;
             body.Margin=new Thickness(DesignSystem.PageInset,4,DesignSystem.PageInset,28);
             // Top-level pages are named by their tab; only the pages one level down carry a title.
-            if(i!=7)body.Children.Insert(0,PageHeader(i,FullTitles[i],subtitles[i]));else body.Margin=new Thickness(DesignSystem.PageInset,18,DesignSystem.PageInset,28);
+            if(i!=7)body.Children.Insert(0,PageHeader(i,FullTitles[i],subtitles[i]));else body.Margin=new Thickness(DesignSystem.PageInset,10,DesignSystem.PageInset,28);
             var groups=_settingsSections.Where(s=>ReferenceEquals(s.Parent,body)).ToArray();
             SetSettingsSearch(i,string.Join(" ",groups.Select(g=>g.Title+" "+g.Help)));
-            if(i==7&&_controlLive is not null){if(_controlLive.Parent is Panel previewParent)previewParent.Children.Remove(_controlLive);_controlLive.Content=LocalizedText.Get("实时预览");_controlLive.Margin=new Thickness(0,0,0,18);body.Children.Insert(0,_controlLive);}
+            if(i==7&&_controlLive is not null){if(_controlLive.Parent is Panel previewParent)previewParent.Children.Remove(_controlLive);_controlLive.Content=LocalizedText.Get("实时预览");_controlLive.Margin=new Thickness(0,0,0,10);body.Children.Insert(0,_controlLive);}
             if(i==0){
                 // 外观与主题 is an inspector (SettingsWindow.Appearance); every detailed group becomes a page it links to.
                 var details=new Dictionary<int,string>();
@@ -50,7 +50,7 @@ internal sealed partial class SettingsWindow
             if(i is 5 or 6){RegisterFullPage(FullKeys[i],i,FullTitles[i],true,page);continue;}
             // The control center keeps its first group inline; the rest become rows of one list that open detail pages.
             StackPanel? more=null;
-            StackPanel More(int at){if(more is not null)return more;more=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(more);surface.Margin=new Thickness(0,0,0,26);body.Children.Insert(at,surface);body.Children.Insert(at,GroupTitle(LocalizedText.Get("布局与材质")));return more;}
+            StackPanel More(int at){if(more is not null)return more;more=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(more);surface.Margin=new Thickness(0,0,0,22);body.Children.Insert(at,surface);body.Children.Insert(at,GroupTitle(LocalizedText.Get("布局与材质")));return more;}
             if(i==0)OverviewLink(More(groups.Length>0?body.Children.IndexOf(groups[0].Outer)+1:1),LocalizedText.Get("图标与倒影"),LocalizedText.Get("统一尺寸、间距和倒影效果"),"icons");
             for(int g=1;g<groups.Length;g++){
                 var group=groups[g];string key=$"settings-section-{i}-{g}";int at=body.Children.IndexOf(group.Outer);body.Children.Remove(group.Outer);

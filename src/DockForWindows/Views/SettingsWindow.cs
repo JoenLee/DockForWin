@@ -48,7 +48,7 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         ApplySettingsPalette(palette);Icon=IosStyles.AppIcon();
         Title=LocalizedText.Get("程序坞设置 · DockForWindows");FontFamily=DesignSystem.TextFont;UseLayoutRounding=true;SnapsToDevicePixels=true;
         // Wide and low, like a player's mini window (see SettingsShellWindow).
-        Width=Math.Min(880,SystemParameters.WorkArea.Width-48);Height=Math.Min(620,SystemParameters.WorkArea.Height-48);
+        Width=Math.Min(880,SystemParameters.WorkArea.Width-48);Height=Math.Min(640,SystemParameters.WorkArea.Height-48);
         MinWidth=Math.Min(760,Width);MinHeight=Math.Min(520,Height);WindowStartupLocation=WindowStartupLocation.CenterScreen;
         // Background, dark title colours and the Mica sidebar are handled by SettingsShellWindow.ApplyBackdrop.
         var pages=new List<ScrollViewer>();
@@ -151,7 +151,7 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
     // Inset group: title above, porcelain/graphite surface, footnote below.
     private StackPanel Section(Panel parent,string title,string help)
     {
-        var outer=new StackPanel{Margin=new Thickness(0,0,0,26)};var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};
+        var outer=new StackPanel{Margin=new Thickness(0,0,0,22)};var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};
         outer.Children.Add(GroupTitle(title));outer.Children.Add(GroupSurface(content));
         if(!string.IsNullOrWhiteSpace(help))Help(outer,help,new Thickness(DesignSystem.RowInset,8,8,0));parent.Children.Add(outer);_settingsSections.Add(new(parent,outer,title,help));return content;
     }
@@ -213,15 +213,19 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
     {
         if(!_ready||!_scene.IsLoaded||_scene.ActualWidth<=0||_scene.ActualHeight<=0)return;
         var dpi=VisualTreeHelper.GetDpi(_scene);int w=Math.Max(1,(int)Math.Ceiling(_scene.ActualWidth*dpi.DpiScaleX)),h=Math.Max(1,(int)Math.Ceiling(_scene.ActualHeight*dpi.DpiScaleY));
+        var point=_scene.PointToScreen(new Point());
+        // The picture depends only on the scene's size: re-render it when that changes, not on every preview flush.
+        if(_sampleDock.Backdrop is BitmapSource current&&current.PixelWidth==w&&current.PixelHeight==h){_sampleDock.BackdropScreenBounds=new Rect(point.X,point.Y,w,h);return;}
         var visual=new DrawingVisual();using(var dc=visual.RenderOpen())dc.DrawRectangle(new ImageBrush(_wallpaper){Stretch=Stretch.UniformToFill},null,new Rect(0,0,_scene.ActualWidth,_scene.ActualHeight));
-        var bitmap=new RenderTargetBitmap(w,h,96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);bitmap.Render(visual);bitmap.Freeze();var point=_scene.PointToScreen(new Point());_sampleDock.BackdropScreenBounds=new Rect(point.X,point.Y,w,h);_sampleDock.Backdrop=bitmap;
+        var bitmap=new RenderTargetBitmap(w,h,96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);bitmap.Render(visual);bitmap.Freeze();_sampleDock.BackdropScreenBounds=new Rect(point.X,point.Y,w,h);_sampleDock.Backdrop=bitmap;
     }
     private void RefreshSample()
     {
         if(!_scene.IsVisible||!_scene.IsLoaded){_sampleDirty=true;return;}_sampleDirty=false;
         var p=new Palette(_draft);_sampleDock.Fill=p.Surface;_sampleDock.Stroke=p.Line;_sampleDock.StrokeWidth=Glass?0:p.BorderThickness;_sampleDock.Radius=p.CornerRadius;_sampleDock.GlassIntensity=p.GlassIntensity;
         _sampleDock.UseGlass=Glass;_sampleDock.GlassOpacity=_draft.GlassOpacity;_sampleDock.GlassFrost=_draft.GlassFrost;_sampleDock.GlassDistortion=_draft.GlassDistortion;_sampleDock.GlassHighlight=_draft.GlassHighlight;_sampleDock.GlassHighlightWidth=_draft.GlassHighlightWidth;_sampleDock.GlassSideDarkness=_draft.GlassSideDarkness;_sampleDock.GlassTint=_draft.GlassTint;
-        _sampleDock.Effect=p.ShadowEnabled?new DropShadowEffect{BlurRadius=p.ShadowBlur,ShadowDepth=4,Opacity=p.ShadowOpacity}:null;
+        if(!p.ShadowEnabled)_sampleDock.Effect=null;
+        else{if(_sampleDock.Effect is not DropShadowEffect shadow)_sampleDock.Effect=shadow=new DropShadowEffect{ShadowDepth=4};if(shadow.BlurRadius!=p.ShadowBlur)shadow.BlurRadius=p.ShadowBlur;if(shadow.Opacity!=p.ShadowOpacity)shadow.Opacity=p.ShadowOpacity;}
         _sampleIcons.Children.Clear();var sample=_draft.Copy();sample.IconSize=36;var items=_dock.Model.DisplayItems.Where(i=>i.IsPinned).Take(4).ToArray();
         foreach(var item in items)_sampleIcons.Children.Add(new DockTile(item,p,sample){IsHitTestVisible=false,Focusable=false});
         double reflection=AppearancePolicy.ShowReflections(sample)?36*sample.ReflectionLength+sample.ReflectionGap+4:0;
