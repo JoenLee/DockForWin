@@ -161,6 +161,7 @@ internal static class WidgetGalleryChecks
                     Find<ListBox>(window,"settings-navigation").SelectedIndex=2;
                     window.Closed += (_, _) => { dock.Close(); tracker.Dispose(); icons.Dispose(); app.Shutdown(); }; result = 0; return;
                 }
+                Find<Button>(window, "widget-home-weather").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Task.Delay(350);
                 var nav = Find<ListBox>(window, "settings-navigation"); var page = Find<ScrollViewer>(window, "widget-gallery");
                 var weather = (FrameworkElement)Property(page, "WeatherCarousel"); var calendar = (FrameworkElement)Property(page, "CalendarCarousel");
                 void CalendarInView()=>page.ScrollToVerticalOffset(calendar.TranslatePoint(new Point(),page).Y+page.VerticalOffset-60);

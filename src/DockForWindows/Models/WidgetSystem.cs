@@ -44,7 +44,7 @@ public sealed class WidgetTask
     public Guid Id {get;set;}=Guid.NewGuid();
     public string Title {get;set;}="";
     public string Detail {get;set;}="";
-    public string List {get;set;}="提醒事项";
+    public string List {get;set;}=LocalizedText.Get("提醒事项");
     public DateTime? Due {get;set;}
     public bool Completed {get;set;}
     public WidgetTask Copy()=>(WidgetTask)MemberwiseClone();
@@ -54,7 +54,7 @@ public sealed class WidgetNote
     public Guid Id {get;set;}=Guid.NewGuid();
     public string Title {get;set;}="";
     public string Body {get;set;}="";
-    public string Folder {get;set;}="备忘录";
+    public string Folder {get;set;}=LocalizedText.Get("备忘录");
     public DateTime Modified {get;set;}=DateTime.Now;
     [System.Text.Json.Serialization.JsonIgnore] public string FilePath {get;set;}="";
     public WidgetNote Copy()=>(WidgetNote)MemberwiseClone();
@@ -84,14 +84,14 @@ public static class WidgetSizes
         WidgetKind.Music when d.Layout==WidgetLayout.MusicWide=>new[]{new WidgetSize(4,2),new(6,2)},
         WidgetKind.Music when d.Layout is WidgetLayout.MusicList or WidgetLayout.MusicLarge=>new[]{new WidgetSize(4,4),new(4,6)},
         _=>All };
-    public static string Category(WidgetKind kind)=>kind switch{WidgetKind.Weather=>"天气",WidgetKind.Calendar=>"日历",WidgetKind.Clock=>"时钟",WidgetKind.Reminders=>"提醒事项",WidgetKind.Notes=>"备忘录",_=>"音乐"};
+    public static string Category(WidgetKind kind)=>kind switch{WidgetKind.Weather=>LocalizedText.Get("天气"),WidgetKind.Calendar=>LocalizedText.Get("日历"),WidgetKind.Clock=>LocalizedText.Get("时钟"),WidgetKind.Reminders=>LocalizedText.Get("提醒事项"),WidgetKind.Notes=>LocalizedText.Get("备忘录"),_=>LocalizedText.Get("音乐")};
     public static string Description(WidgetDefinition d)=>d.Kind switch{
-        WidgetKind.Weather=>"当前实况与当地预报 · Open-Meteo",
-        WidgetKind.Calendar=>"日期、农历与本应用日程",
-        WidgetKind.Clock=>"本地与世界时间 · 可选择时区",
-        WidgetKind.Reminders=>"本应用待办 · 列表与截止日期",
-        WidgetKind.Notes=>"应用笔记或你选择的本地文件夹",
-        _=>"系统媒体会话与本应用观察到的播放记录"};
+        WidgetKind.Weather=>LocalizedText.Get("当前实况与当地预报 · Open-Meteo"),
+        WidgetKind.Calendar=>LocalizedText.Get("日期、农历与本应用日程"),
+        WidgetKind.Clock=>LocalizedText.Get("本地与世界时间 · 可选择时区"),
+        WidgetKind.Reminders=>LocalizedText.Get("本应用待办 · 列表与截止日期"),
+        WidgetKind.Notes=>LocalizedText.Get("应用笔记或你选择的本地文件夹"),
+        _=>LocalizedText.Get("系统媒体会话与本应用观察到的播放记录")};
 }
 public sealed partial class WidgetOptions
 {
@@ -111,9 +111,9 @@ public sealed partial class WidgetOptions
             x.Appearance??=new();x.Appearance.Normalize();x.Source??=new();x.Source.Normalize();x.Monitor??="";
             x.Column=Math.Clamp(x.Column,0,500);x.Row=Math.Clamp(x.Row,0,500);x.Exponent=x.Exponent==3?3:2.5;if(!Enum.IsDefined(x.Material))x.Material=WidgetMaterial.Light;}
         Tasks=(Tasks??new()).Where(x=>x!=null&&!string.IsNullOrWhiteSpace(x.Title)).DistinctBy(x=>x.Id).Take(500).ToList();
-        foreach(var t in Tasks){t.Title=t.Title[..Math.Min(300,t.Title.Length)];t.Detail=(t.Detail??"");if(t.Detail.Length>4000)t.Detail=t.Detail[..4000];t.List=string.IsNullOrWhiteSpace(t.List)?"提醒事项":t.List;}
+        foreach(var t in Tasks){t.Title=t.Title[..Math.Min(300,t.Title.Length)];t.Detail=(t.Detail??"");if(t.Detail.Length>4000)t.Detail=t.Detail[..4000];t.List=string.IsNullOrWhiteSpace(t.List)?LocalizedText.Get("提醒事项"):t.List;}
         Notes=(Notes??new()).Where(x=>x!=null).DistinctBy(x=>x.Id).Take(500).ToList();
-        foreach(var n in Notes){n.Title??="";n.Body??="";n.Folder??="备忘录";if(n.Title.Length>300)n.Title=n.Title[..300];if(n.Body.Length>100000)n.Body=n.Body[..100000];}
+        foreach(var n in Notes){n.Title??="";n.Body??="";n.Folder??=LocalizedText.Get("备忘录");if(n.Title.Length>300)n.Title=n.Title[..300];if(n.Body.Length>100000)n.Body=n.Body[..100000];}
         MusicHistory=(MusicHistory??new()).Where(x=>x!=null&&!string.IsNullOrWhiteSpace(x.Title)).Take(30).ToList();
         foreach(var entry in MusicHistory){entry.Title=entry.Title[..Math.Min(entry.Title.Length,300)];entry.Artist??="";if(entry.Artist.Length>300)entry.Artist=entry.Artist[..300];if(entry.ArtworkKey==null||entry.ArtworkKey.Length!=64||!entry.ArtworkKey.All(Uri.IsHexDigit))entry.ArtworkKey="";}
         Selections??=new();Sizes??=new();Sources=(Sources??new()).Where(x=>x.Value!=null&&WidgetRegistry.Definitions.Any(d=>d.Id==x.Key)).ToDictionary(x=>x.Key,x=>x.Value);foreach(var s in Sources.Values)s.Normalize();

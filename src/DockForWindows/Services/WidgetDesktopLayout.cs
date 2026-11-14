@@ -32,7 +32,7 @@ internal static class WidgetDesktopLayout
         if(_iconRead==null||_iconRead.IsCompleted)_iconRead=Task.Run<IReadOnlyList<Rect>>(()=>{
             var result=new List<Rect>();nint list=0;
             EnumWindows((h,_)=>{nint view=FindWindowEx(h,0,"SHELLDLL_DefView",null);if(view!=0){list=FindWindowEx(view,0,"SysListView32",null);return false;}return true;},0);
-            if(list==0)throw new InvalidOperationException("无法读取桌面图标区域，请确认使用 Windows Explorer 桌面。");
+            if(list==0)throw new InvalidOperationException(LocalizedText.Get("无法读取桌面图标区域，请确认使用 Windows Explorer 桌面。"));
             var root=AutomationElement.FromHandle(list);foreach(AutomationElement item in root.FindAll(TreeScope.Children,System.Windows.Automation.Condition.TrueCondition)){
                 var bounds=item.Current.BoundingRectangle;if(!bounds.IsEmpty&&bounds.Width>0&&bounds.Height>0)result.Add(bounds);}
             return result;

@@ -16,7 +16,7 @@ public static class StartupRegistration
         string command=Quote(process);
         if(Path.GetFileNameWithoutExtension(process).Equals("dotnet",StringComparison.OrdinalIgnoreCase))command+=" "+Quote(entryAssembly);
         command+=" --data-directory "+Quote(profile);
-        if(command.Length>260)throw new InvalidOperationException("启动路径过长，请将程序放到较短的安装路径。");
+        if(command.Length>260)throw new InvalidOperationException(LocalizedText.Get("启动路径过长，请将程序放到较短的安装路径。"));
         return command;
     }
     public static void WriteCommand(string? command,string? registryPath=null)
@@ -24,5 +24,5 @@ public static class StartupRegistration
         using var key=Registry.CurrentUser.CreateSubKey(registryPath??Key,true);
         if(command is null)key.DeleteValue(Name,false);else key.SetValue(Name,command,RegistryValueKind.String);
     }
-    public static string CurrentCommand(string profile) => BuildCommand(Environment.ProcessPath ?? throw new InvalidOperationException("无法确认程序路径"),Assembly.GetEntryAssembly()?.Location ?? "",profile);
+    public static string CurrentCommand(string profile) => BuildCommand(Environment.ProcessPath ?? throw new InvalidOperationException(LocalizedText.Get("无法确认程序路径")),Assembly.GetEntryAssembly()?.Location ?? "",profile);
 }

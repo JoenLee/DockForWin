@@ -19,12 +19,12 @@ public static class SystemToolService
     public static bool CanCapture=>Features.Value.Capture;
     public static bool CanRecord=>Features.Value.Record&&OperatingSystem.IsWindowsVersionAtLeast(10,0,22621);
     public static bool CanDictate=>OperatingSystem.IsWindowsVersionAtLeast(10,0,19041);
-    public static void OpenScreenshot(){if(!CanCapture)throw new InvalidOperationException("未检测到 Windows 截图工具，请先安装或修复该应用。");Chord(0x5B,0x10,0x53);}
-    public static void OpenRecording(){if(!CanRecord)throw new InvalidOperationException("此版本截图工具不支持系统录屏快捷入口，请更新 Windows 截图工具。");Chord(0x5B,0x10,0x52);}
-    public static void OpenDictation(){if(!CanDictate)throw new InvalidOperationException("此 Windows 版本不支持听写入口。");Chord(0x5B,0x48);}
+    public static void OpenScreenshot(){if(!CanCapture)throw new InvalidOperationException(LocalizedText.Get("未检测到 Windows 截图工具，请先安装或修复该应用。"));Chord(0x5B,0x10,0x53);}
+    public static void OpenRecording(){if(!CanRecord)throw new InvalidOperationException(LocalizedText.Get("此版本截图工具不支持系统录屏快捷入口，请更新 Windows 截图工具。"));Chord(0x5B,0x10,0x52);}
+    public static void OpenDictation(){if(!CanDictate)throw new InvalidOperationException(LocalizedText.Get("此 Windows 版本不支持听写入口。"));Chord(0x5B,0x48);}
     private static void Chord(params ushort[] keys)
     {
         var inputs=new Input[keys.Length*2];for(int i=0;i<keys.Length;i++){inputs[i]=new Input{Type=1,Data=new Union{Keyboard=new Keyboard{Key=keys[i]}}};inputs[keys.Length+i]=new Input{Type=1,Data=new Union{Keyboard=new Keyboard{Key=keys[keys.Length-1-i],Flags=2}}};}
-        if(SendInput((uint)inputs.Length,inputs,Marshal.SizeOf<Input>())!=inputs.Length)throw new Win32Exception(Marshal.GetLastWin32Error(),"Windows 未接受快捷键；请检查目标应用是否以更高权限运行。");
+        if(SendInput((uint)inputs.Length,inputs,Marshal.SizeOf<Input>())!=inputs.Length)throw new Win32Exception(Marshal.GetLastWin32Error(),LocalizedText.Get("Windows 未接受快捷键；请检查目标应用是否以更高权限运行。"));
     }
 }

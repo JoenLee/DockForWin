@@ -13,11 +13,11 @@ internal sealed class ControlCenterTaskbarEntry:Window,IDisposable
     private readonly Button _button=new();private bool _open,_disposed;
     internal ControlCenterTaskbarEntry(Action toggle)
     {
-        Title="控制中心任务栏开关";Width=28;Height=28;Left=-32000;Top=-32000;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;
+        Title=LocalizedText.Get("控制中心任务栏开关");Width=28;Height=28;Left=-32000;Top=-32000;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;
         AllowsTransparency=true;Background=Brushes.Transparent;ShowInTaskbar=false;ShowActivated=false;Topmost=true;
         var border=new FrameworkElementFactory(typeof(Border));border.SetValue(Border.CornerRadiusProperty,new CornerRadius(6));border.SetValue(Border.BackgroundProperty,new SolidColorBrush(Color.FromArgb(8,128,128,128)));var content=new FrameworkElementFactory(typeof(ContentPresenter));content.SetValue(HorizontalAlignmentProperty,HorizontalAlignment.Center);content.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);border.AppendChild(content);
-        _button.Template=new ControlTemplate(typeof(Button)){VisualTree=border};_button.BorderThickness=new Thickness(0);_button.Padding=new Thickness();_button.ToolTip="控制中心";
-        System.Windows.Automation.AutomationProperties.SetName(_button,"控制中心开关");_button.Click+=(_,_)=>toggle();_button.MouseEnter+=(_,_)=>_button.Opacity=.75;_button.MouseLeave+=(_,_)=>_button.Opacity=1;
+        _button.Template=new ControlTemplate(typeof(Button)){VisualTree=border};_button.BorderThickness=new Thickness(0);_button.Padding=new Thickness();_button.ToolTip=LocalizedText.Get("控制中心");
+        System.Windows.Automation.AutomationProperties.SetName(_button,LocalizedText.Get("控制中心开关"));_button.Click+=(_,_)=>toggle();_button.MouseEnter+=(_,_)=>_button.Opacity=.75;_button.MouseLeave+=(_,_)=>_button.Opacity=1;
         Content=_button;SetOpen(false);
         SourceInitialized+=(_,_)=>{var hwnd=new WindowInteropHelper(this).Handle;var style=NativeMethods.GetWindowLongPtr(hwnd,-20);SetWindowLongPtr(hwnd,-20,new nint((long)style|0x08000080));HwndSource.FromHwnd(hwnd)?.AddHook((nint h,int m,nint w,nint l,ref bool handled)=>{if(m==0x21){handled=true;return 3;}return 0;});};
         ControlCenterEntryService.NetworkAnchorChanged+=Place;SystemEvents.UserPreferenceChanged+=Preferences;
@@ -25,7 +25,7 @@ internal sealed class ControlCenterTaskbarEntry:Window,IDisposable
     }
     [System.Runtime.InteropServices.DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")]private static extern nint SetWindowLongPtr(nint hwnd,int index,nint value);
     private void Preferences(object sender,UserPreferenceChangedEventArgs e)=>Dispatcher.BeginInvoke(()=>{if(!_disposed)SetOpen(_open);});
-    internal void SetOpen(bool open){_open=open;_button.Content=new Image{Source=CreateSymbol(open),Width=16,Height=16,IsHitTestVisible=false};_button.ToolTip=open?"收起控制中心":"打开控制中心";}
+    internal void SetOpen(bool open){_open=open;_button.Content=new Image{Source=CreateSymbol(open),Width=16,Height=16,IsHitTestVisible=false};_button.ToolTip=open?LocalizedText.Get("收起控制中心"):LocalizedText.Get("打开控制中心");}
     internal static DrawingImage CreateSymbol(bool open)
     {
         bool light=false;try{using var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");light=key?.GetValue("SystemUsesLightTheme") is int v&&v!=0;}catch{}

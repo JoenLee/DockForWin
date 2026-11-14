@@ -37,7 +37,7 @@ internal sealed class WidgetRuntime : IDisposable
         _timer=new DispatcherTimer(TimeSpan.FromSeconds(1),DispatcherPriority.Background,Tick,dispatcher);_timer.Start();
         _media.Changed+=MediaChanged;_ = Initialize();
     }
-    private async Task Initialize(){try{await LoadArt();if(_disposed)return;await _media.Initialize();if(!_disposed)await ReadMedia();}catch(Exception e){if(!_disposed){MediaError="系统媒体会话不可用："+e.Message;Changed?.Invoke(WidgetKind.Music);}}}
+    private async Task Initialize(){try{await LoadArt();if(_disposed)return;await _media.Initialize();if(!_disposed)await ReadMedia();}catch(Exception e){if(!_disposed){MediaError=LocalizedText.Get("系统媒体会话不可用：")+e.Message;Changed?.Invoke(WidgetKind.Music);}}}
     private async Task LoadArt()
     {
         if(_cacheDirectory==null)return;foreach(var item in _options().MusicHistory.Take(8)){
@@ -64,11 +64,11 @@ internal sealed class WidgetRuntime : IDisposable
         try{var value=await _media.Read();if(_disposed)return;Media=value;MediaError=null;
             if(value!=null&&!string.IsNullOrWhiteSpace(value.Title)){
                 var options=_options().Copy();var history=options.MusicHistory;
-                if(history.Count==0||history[0].Title!=value.Title||history[0].Artist!=value.Artist){string artwork="";try{artwork=await CacheArt(value.Artwork);}catch(Exception e){MediaError="封面缓存不可用："+e.Message;}
+                if(history.Count==0||history[0].Title!=value.Title||history[0].Artist!=value.Artist){string artwork="";try{artwork=await CacheArt(value.Artwork);}catch(Exception e){MediaError=LocalizedText.Get("封面缓存不可用：")+e.Message;}
                     if(_disposed)return;options=_options().Copy();options.MusicHistory.Insert(0,new(){Title=value.Title,Artist=value.Artist,Played=DateTime.Now,ArtworkKey=artwork});options.MusicHistory=options.MusicHistory.Take(30).ToList();if(_save!=null)_save(options);else _options().MusicHistory=options.MusicHistory;}
             }
             Changed?.Invoke(WidgetKind.Music);
-        }catch(Exception e){if(!_disposed){MediaError="读取媒体失败："+e.Message;Changed?.Invoke(WidgetKind.Music);}}
+        }catch(Exception e){if(!_disposed){MediaError=LocalizedText.Get("读取媒体失败：")+e.Message;Changed?.Invoke(WidgetKind.Music);}}
         finally{_reading=false;if(_mediaAgain&&!_disposed){_mediaAgain=false;_ =ReadMedia();}}
     }
     internal async void Command(string command){try{await _media.Command(command);await ReadMedia();}catch(Exception e){MediaError=e.Message;Changed?.Invoke(WidgetKind.Music);}}
@@ -80,7 +80,7 @@ internal sealed class WidgetRuntime : IDisposable
     private static string Key(WidgetSource source)=>FormattableString.Invariant($"{source.Latitude:F6},{source.Longitude:F6}");
     internal (WidgetWeatherSnapshot? Weather,string? Error) Weather(WidgetSource source)
     {
-        if(source.Latitude is not double lat||source.Longitude is not double lon)return(null,"选择天气城市");string key=Key(source);
+        if(source.Latitude is not double lat||source.Longitude is not double lon)return(null,LocalizedText.Get("选择天气城市"));string key=Key(source);
         _forecasts.TryGetValue(key,out var result);
         if(result.Next<=DateTime.Now&&_requests.Add(key))_ =ReadWeather(key,lat,lon);
         return(result.Weather,result.Error);
@@ -89,7 +89,7 @@ internal sealed class WidgetRuntime : IDisposable
     {
         try{var value=await _weather.ReadAsync(latitude,longitude,_lifetime.Token);if(!_disposed)_forecasts[key]=(value,null,DateTime.Now.AddMinutes(15));}
         catch(OperationCanceledException){return;}
-        catch(Exception e){if(!_disposed){_forecasts.TryGetValue(key,out var previous);_forecasts[key]=(previous.Weather,"天气更新失败："+e.Message,DateTime.Now.AddMinutes(5));}}
+        catch(Exception e){if(!_disposed){_forecasts.TryGetValue(key,out var previous);_forecasts[key]=(previous.Weather,LocalizedText.Get("天气更新失败：")+e.Message,DateTime.Now.AddMinutes(5));}}
         finally{_requests.Remove(key);if(!_disposed)Changed?.Invoke(WidgetKind.Weather);}
     }
     internal (IReadOnlyList<WidgetNote>? Notes,string? Error) Folder(string folder)
@@ -101,12 +101,12 @@ internal sealed class WidgetRuntime : IDisposable
     private async Task ReadFolder(string folder)
     {
         try{var notes=await Task.Run(()=>{
-            if(!Directory.Exists(folder))throw new IOException("笔记文件夹不存在。");var result=new List<WidgetNote>();
+            if(!Directory.Exists(folder))throw new IOException(LocalizedText.Get("笔记文件夹不存在。"));var result=new List<WidgetNote>();
             foreach(var f in Directory.EnumerateFiles(folder).Where(f=>Path.GetExtension(f).ToLowerInvariant() is ".txt" or ".md").Select(f=>new FileInfo(f)).OrderByDescending(f=>f.LastWriteTime).Take(30)){
                 _lifetime.Token.ThrowIfCancellationRequested();using var reader=new StreamReader(f.FullName);var chars=new char[4096];int count=reader.ReadBlock(chars,0,chars.Length);result.Add(new(){Title=Path.GetFileNameWithoutExtension(f.Name),Body=new string(chars,0,count),Folder=Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)),Modified=f.LastWriteTime,FilePath=f.FullName});}
             return (IReadOnlyList<WidgetNote>)result;},_lifetime.Token);
             if(!_disposed)_folders[folder]=(notes,null,DateTime.Now.AddMinutes(1));
-        }catch(OperationCanceledException){return;}catch(Exception e){if(!_disposed)_folders[folder]=(Array.Empty<WidgetNote>(),"笔记读取失败："+e.Message,DateTime.Now.AddMinutes(1));}
+        }catch(OperationCanceledException){return;}catch(Exception e){if(!_disposed)_folders[folder]=(Array.Empty<WidgetNote>(),LocalizedText.Get("笔记读取失败：")+e.Message,DateTime.Now.AddMinutes(1));}
         finally{_requests.Remove("folder:"+folder);if(!_disposed)Changed?.Invoke(WidgetKind.Notes);}
     }
     public void Dispose(){if(_disposed)return;_disposed=true;_timer.Stop();_timer.Tick-=Tick;_lifetime.Cancel();_media.Changed-=MediaChanged;_media.Dispose();_lifetime.Dispose();Changed=null;}

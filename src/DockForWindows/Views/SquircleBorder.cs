@@ -12,7 +12,8 @@ public class SquircleBorder : Border
     private Geometry? _outline;
     // Corner curve |x|^n+|y|^n=1. 3 suits icon outlines; the flat settings surfaces use 2.5, a gentler corner
     // whose curvature still runs smoothly into the straight edges.
-    public double Exponent { get; set; } = 3;
+    public static readonly DependencyProperty ExponentProperty=DependencyProperty.Register(nameof(Exponent),typeof(double),typeof(SquircleBorder),new FrameworkPropertyMetadata(3d,FrameworkPropertyMetadataOptions.AffectsRender));
+    public double Exponent { get => (double)GetValue(ExponentProperty); set => SetValue(ExponentProperty,value); }
     public static Geometry Outline(Size size, double radius) => Outline(size, radius, 3);
     public static Geometry Outline(Size size, double radius, double exponent)
     {

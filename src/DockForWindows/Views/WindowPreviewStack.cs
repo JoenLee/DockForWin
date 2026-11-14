@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -59,11 +59,11 @@ internal sealed class WindowPreviewStack:IDisposable
         [DllImport("gdi32.dll")]private static extern bool DeleteObject(nint region);
         [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")]private static extern nint SetLong(nint window,int index,nint value);
         private nint _handle,_thumbnail,_source;private readonly TextBlock _title=new(){FontSize=11,TextTrimming=TextTrimming.CharacterEllipsis,Margin=new Thickness(10,0,10,0),VerticalAlignment=VerticalAlignment.Center,Foreground=Brushes.White};
-        private readonly TextBlock _fallback=new(){Text="无法获取预览 · 点击切换窗口",Foreground=Brushes.LightGray,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
+        private readonly TextBlock _fallback=new(){Text=LocalizedText.Get("无法获取预览 · 点击切换窗口"),Foreground=Brushes.LightGray,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
         private readonly WindowPreviewStack _stack;private TrackedWindow? _window;private int _depth;
         internal PreviewCard(WindowPreviewStack stack,DockWindow owner)
         {
-            _stack=stack;Owner=owner;Width=260;Height=178;Left=Top=-20000;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;ShowInTaskbar=false;ShowActivated=false;Topmost=true;Background=new SolidColorBrush(Color.FromRgb(34,39,43));Title="Dock 窗口预览";
+            _stack=stack;Owner=owner;Width=260;Height=178;Left=Top=-20000;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;ShowInTaskbar=false;ShowActivated=false;Topmost=true;Background=new SolidColorBrush(Color.FromRgb(34,39,43));Title=LocalizedText.Get("Dock 窗口预览");
             var grid=new Grid();grid.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});grid.RowDefinitions.Add(new(){Height=new GridLength(30)});grid.Children.Add(_fallback);Grid.SetRow(_title,1);grid.Children.Add(_title);Content=grid;
             SourceInitialized+=(_,_)=>{_handle=new WindowInteropHelper(this).Handle;long style=(long)NativeMethods.GetWindowLongPtr(_handle,-20);SetLong(_handle,-20,new nint(style|0x08000000|0x80));((HwndSource)PresentationSource.FromVisual(this)).AddHook((nint h,int m,nint w,nint l,ref bool handled)=>{if(m==0x0021){handled=true;return 3;}return 0;});};
             SizeChanged+=(_,_)=>UpdateThumbnail();MouseWheel+=(_,e)=>{_stack.Scroll(e.Delta);e.Handled=true;};MouseLeftButtonUp+=(_,e)=>{if(_window is {} window)_stack.Activate(window);e.Handled=true;};

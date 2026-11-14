@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -89,7 +89,7 @@ public sealed partial class DockWindow
             if(!NativeMethods.IsWindow(window.Handle)){_tracker.Refresh();return;}
             var foreground=WindowTracker.ForegroundWindow;
             if(foreground!=window.Handle&&GetAncestor(foreground,3)!=window.Handle&&!WindowTracker.Activate(window)){
-                ShowError("Windows 暂未允许切换到该窗口，可通过任务栏手动激活。");return;
+                ShowError(LocalizedText.Get("Windows 暂未允许切换到该窗口，可通过任务栏手动激活。"));return;
             }
         }
         UpdateAttentionState();_tracker.Refresh();

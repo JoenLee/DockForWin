@@ -10,9 +10,9 @@ public static class ControlCenterDesign
 {
     public static void Apply(string json,ControlCenterOptions destination)
     {
-        if(json.Length>128*1024)throw new ArgumentException("参数文件超过 128 KB。");
+        if(json.Length>128*1024)throw new ArgumentException(LocalizedText.Get("参数文件超过 128 KB。"));
         using var document=JsonDocument.Parse(json);var root=document.RootElement;
-        if(!root.TryGetProperty("Schema",out var schema)||schema.GetString() is not ("DockForWindows.ControlCenterDesign/v1" or "DockForWindows.ControlCenterDesign/v2"))throw new ArgumentException("请选择控制中心设计参数文件。");
+        if(!root.TryGetProperty("Schema",out var schema)||schema.GetString() is not ("DockForWindows.ControlCenterDesign/v1" or "DockForWindows.ControlCenterDesign/v2"))throw new ArgumentException(LocalizedText.Get("请选择控制中心设计参数文件。"));
         var geometry=root.GetProperty("Geometry");var next=JsonSerializer.Deserialize<ControlCenterGeometry>(geometry.GetRawText())??new();
         if(!geometry.TryGetProperty("SquareRoundness",out _)&&geometry.TryGetProperty("MediaRoundness",out var oldRadius))next.SquareRoundness=oldRadius.GetDouble();next.Normalize();
         var modules=new List<ControlModuleLayout>();

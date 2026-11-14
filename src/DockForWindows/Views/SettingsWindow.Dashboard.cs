@@ -14,18 +14,55 @@ internal sealed partial class SettingsWindow
 {
     // 通用 › 偏好: 开机自启 and 窗口外观 are single controls, so they sit on the 通用 page itself. Each one drives the
     // detailed control with the same meaning, so the draft is written (and saved) exactly once.
-    protected override string? DataDirectory => _dock.Model.DataDirectory;
     protected override void BuildGeneralPreferences(Panel group)
     {
-        var startup = new CheckBox { Content = "开机自启", IsChecked = _draft.StartWithWindows };
-        System.Windows.Automation.AutomationProperties.SetAutomationId(startup, "general-startup"); System.Windows.Automation.AutomationProperties.SetName(startup, "开机自启");
+        var startup = new CheckBox { Content = LocalizedText.Get("开机自启（保存后生效）"), IsChecked = _draft.StartWithWindows };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(startup, "general-startup"); System.Windows.Automation.AutomationProperties.SetName(startup, LocalizedText.Get("开机自启"));
         void Startup() { if (!_ready || _updating) return; if (Setting<CheckBox>("start-with-windows") is { } detail) detail.IsChecked = startup.IsChecked; }
         startup.Checked += (_, _) => Startup(); startup.Unchecked += (_, _) => Startup();
         AddRow(group, startup);
-        var theme = Segmented(new[] { "跟随系统", "浅色", "深色" }, (int)_draft.InterfaceTheme);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(theme, "general-interface-theme"); System.Windows.Automation.AutomationProperties.SetName(theme, "窗口外观");
+        var theme = Segmented(new[] { LocalizedText.Get("跟随系统"), LocalizedText.Get("浅色"), LocalizedText.Get("深色") }, (int)_draft.InterfaceTheme);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(theme, "general-interface-theme"); System.Windows.Automation.AutomationProperties.SetName(theme, LocalizedText.Get("窗口外观"));
         theme.SelectionChanged += (_, _) => { if (!_ready || _updating || theme.SelectedIndex < 0) return; if (Setting<ComboBox>("interface-theme") is { } detail) detail.SelectedIndex = theme.SelectedIndex; };
-        AddRow(group, LabeledRow("窗口外观", theme));
+        AddRow(group, LabeledRow(LocalizedText.Get("窗口外观"), theme));
+        _overviewRefresh.Add(()=>theme.SelectedIndex=(int)_draft.InterfaceTheme);
+        var accents=new System.Windows.Controls.Primitives.UniformGrid{Columns=3,Margin=new Thickness(0,9,0,3)};
+        System.Windows.Automation.AutomationProperties.SetAutomationId(accents,"general-accent-grid");
+        var customEdit=new TextBox{Text=_draft.InterfaceAccent,Width=96,MaxLength=7,FontSize=12.5,CharacterCasing=CharacterCasing.Upper};
+        System.Windows.Automation.AutomationProperties.SetAutomationId(customEdit,"general-accent-custom");System.Windows.Automation.AutomationProperties.SetName(customEdit,LocalizedText.Get("自定义颜色"));
+        _colors["interface-accent"]=customEdit;
+        void ApplyAccent(string hex)
+        {
+            _draft.InterfaceAccent=hex;ApplySettingsPalette(new Palette(_draft));foreach(var refresh in _overviewRefresh)refresh();QueuePreview();
+        }
+        foreach(var preset in SettingsAccentPresets.Values){
+            var color=DesignSystem.Hex(preset.Color);var swatch=new System.Windows.Shapes.Ellipse{Width=14,Height=14,Fill=DesignSystem.Brush(color),Margin=new Thickness(0,0,6,0)};
+            var row=new Grid();row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.Children.Add(swatch);
+            var label=new TextBlock{Text=preset.Name,FontSize=12.5,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis};Grid.SetColumn(label,1);row.Children.Add(label);
+            var choice=new Button{Content=row,Padding=new Thickness(8,6,8,6),Margin=new Thickness(0,0,4,6),Template=SidebarTemplate(),HorizontalContentAlignment=HorizontalAlignment.Stretch};
+            System.Windows.Automation.AutomationProperties.SetAutomationId(choice,"general-accent-"+preset.Color[1..]);System.Windows.Automation.AutomationProperties.SetName(choice,preset.Name);
+            void Refresh(){choice.SetResourceReference(Control.BackgroundProperty,_draft.InterfaceAccent==preset.Color?"SettingsSelection":"SettingsCard");System.Windows.Automation.AutomationProperties.SetItemStatus(choice,_draft.InterfaceAccent==preset.Color?LocalizedText.Get("已选中"):"");}
+            _overviewRefresh.Add(Refresh);Refresh();
+            choice.Click+=(_,_)=>{customEdit.Text=preset.Color;ApplyAccent(preset.Color);};accents.Children.Add(choice);
+        }
+        var customSwatch=new System.Windows.Shapes.Ellipse{Width=14,Height=14,Margin=new Thickness(0,0,6,0)};
+        var choose=SettingsButton("",(_,_)=>{
+            var color=DesignSystem.Hex(_draft.InterfaceAccent);
+            using var dialog=new System.Windows.Forms.ColorDialog{FullOpen=true,Color=System.Drawing.Color.FromArgb(color.R,color.G,color.B)};
+            if(dialog.ShowDialog()==System.Windows.Forms.DialogResult.OK)customEdit.Text=$"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+        });
+        var customContent=new StackPanel{Orientation=Orientation.Horizontal};customContent.Children.Add(customSwatch);customContent.Children.Add(new TextBlock{Text=LocalizedText.Get("自定义颜色"),VerticalAlignment=VerticalAlignment.Center,FontSize=12.5});
+        choose.Content=customContent;choose.Margin=new Thickness(0,0,8,0);choose.Padding=new Thickness(8,4,8,4);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(choose,"pick-general-accent");System.Windows.Automation.AutomationProperties.SetName(choose,LocalizedText.Get("自定义颜色"));
+        var customRow=new DockPanel{Margin=new Thickness(0,0,4,9)};DockPanel.SetDock(customEdit,Dock.Right);customRow.Children.Add(customEdit);customRow.Children.Add(choose);
+        var field=new StackPanel{Width=360};field.Children.Add(accents);field.Children.Add(customRow);
+        _overviewRefresh.Add(()=>customSwatch.Fill=DesignSystem.Brush(DesignSystem.Hex(_draft.InterfaceAccent)));customSwatch.Fill=DesignSystem.Brush(DesignSystem.Hex(_draft.InterfaceAccent));
+        customEdit.TextChanged+=(_,_)=>{if(!_ready||_updating)return;if(ThemeAppearance.TryColor(customEdit.Text,out var hex))ApplyAccent(hex);ValidateColors();};
+        AddRow(group,LabeledRow(LocalizedText.Get("主题色"),field));
+        var language = new ComboBox { ItemsSource = new[] { LocalizedText.Get("简体中文"), "English" }, SelectedIndex = _draft.Language == "en-US" ? 1 : 0, MinWidth = 160 };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(language,"general-language");
+        language.SelectionChanged += (_,_) => { if(language.SelectedIndex >= 0) { _draft.Language=language.SelectedIndex==1?"en-US":"zh-CN"; QueuePreview(); } };
+        AddRow(group,LabeledRow(LocalizedText.Get("语言（保存后重启生效）"),language));
     }
 
     // The dashboard hero shows the user's own pinned apps in a dock of the current material, floating on the

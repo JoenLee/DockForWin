@@ -15,7 +15,7 @@ namespace DockForWindows.Views;
 // routes, automation ids and saved navigation keep working.
 internal sealed partial class SettingsWindow
 {
-    private sealed record AdvancedCategory(string Key, string Title, string Group, string Glyph, ScrollViewer Page);
+    private sealed record AdvancedCategory(string Key, string Title, string Group, string Glyph, ScrollViewer Page, int Order);
     private readonly List<AdvancedCategory> _advanced = new();
     private readonly Dictionary<string, Button> _advancedButtons = new(StringComparer.Ordinal);
     private Grid? _advancedPane; private Border _advancedHost = null!; private Border _advancedMarker = null!; private StackPanel _advancedList = null!;
@@ -39,17 +39,18 @@ internal sealed partial class SettingsWindow
         _settingsPages.Add(key, page);
         RegisterSettingsPage(key, section, title, true, BuildAdvancedPane);
         foreach (var control in WalkSettings(page)) { string id = AutomationProperties.GetAutomationId(control); if (id.Length > 0) _controlRoutes[id] = key; }
-        (string Group, string Glyph, int Order) layout = AdvancedLayout.TryGetValue(title, out var known) ? known : ("行为", "M2,8 H14", 99);
-        _advanced.Add(new(key, title, layout.Group, layout.Glyph, page));
+        string? originalTitle = AdvancedLayout.Keys.FirstOrDefault(key => key == title || LocalizedText.Get(key) == title);
+        (string Group, string Glyph, int Order) layout = originalTitle is not null ? AdvancedLayout[originalTitle] : ("行为", "M2,8 H14", 99);
+        _advanced.Add(new(key, title, LocalizedText.Get(layout.Group), layout.Glyph, page, layout.Order));
     }
 
     private FrameworkElement BuildAdvancedPane()
     {
         if (_advancedPane is not null) return _advancedPane;
-        var ordered = _advanced.OrderBy(c => AdvancedLayout.TryGetValue(c.Title, out var l) ? l.Order : 99).ToArray();
+        var ordered = _advanced.OrderBy(c => c.Order).ToArray();
         var pane = _advancedPane = new Grid { Margin = new Thickness(DesignSystem.PageInset - 10, 6, 0, 0) };
         pane.ColumnDefinitions.Add(new() { Width = new GridLength(176) }); pane.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        AutomationProperties.SetAutomationId(pane, "dock-advanced-pane"); AutomationProperties.SetName(pane, "高级设置");
+        AutomationProperties.SetAutomationId(pane, "dock-advanced-pane"); AutomationProperties.SetName(pane, LocalizedText.Get("高级设置"));
 
         // Left: the categories, grouped by what they change. The chosen one sits on a raised pill that glides.
         var listHost = new Grid { VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 0, 0) };

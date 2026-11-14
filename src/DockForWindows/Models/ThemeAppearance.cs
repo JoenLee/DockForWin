@@ -43,12 +43,18 @@ public sealed class ThemeAppearance
 
 public static class ThemePresets
 {
-    public static readonly string[] Names = { "自由调整", "雾白", "深空", "海湾蓝", "暖沙" };
-    public static ThemeAppearance Create(string name) => name switch
+    private static readonly string[] Keys = { "自由调整", "雾白", "深空", "海湾蓝", "暖沙" };
+    public static string[] Names => Array.ConvertAll(Keys, LocalizedText.Get);
+    public static ThemeAppearance Create(string name)
     {
-        "雾白" => new() { BackgroundColor = "#F2F5FA", Opacity = .88, BorderOpacity = .70, IndicatorColor = "#243047", ShadowOpacity = .17 },
-        "海湾蓝" => new() { BackgroundColor = "#173B57", Opacity = .88, BorderColor = "#91CBED", BorderOpacity = .55, IndicatorColor = "#A8E4FF", CornerRadius = 26, ShadowOpacity = .26 },
-        "暖沙" => new() { BackgroundColor = "#E9D8BD", Opacity = .90, BorderColor = "#FFF5E6", BorderOpacity = .75, IndicatorColor = "#675139", CornerRadius = 18, ShadowOpacity = .16 },
-        _ => new()
-    };
+        foreach (var key in Keys)
+            if (LocalizedText.Get(key) == name) { name = key; break; }
+        return name switch
+        {
+            "雾白" => new() { BackgroundColor = "#F2F5FA", Opacity = .88, BorderOpacity = .70, IndicatorColor = "#243047", ShadowOpacity = .17 },
+            "海湾蓝" => new() { BackgroundColor = "#173B57", Opacity = .88, BorderColor = "#91CBED", BorderOpacity = .55, IndicatorColor = "#A8E4FF", CornerRadius = 26, ShadowOpacity = .26 },
+            "暖沙" => new() { BackgroundColor = "#E9D8BD", Opacity = .90, BorderColor = "#FFF5E6", BorderOpacity = .75, IndicatorColor = "#675139", CornerRadius = 18, ShadowOpacity = .16 },
+            _ => new()
+        };
+    }
 }

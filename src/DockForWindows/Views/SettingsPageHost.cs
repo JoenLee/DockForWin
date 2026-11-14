@@ -28,6 +28,10 @@ internal sealed class SettingsPageHost:Grid
         _history.Clear();_history.AddRange(valid.Select(p=>p.Key));
         _index=Array.FindLastIndex(valid,p=>p.Index<=state.Index);if(_index<0)_index=0;Show(1,IsDetail);
     }
+    internal double HeaderInset;
+    private readonly HashSet<FrameworkElement> _prepared=new();
+    private void Prepare(FrameworkElement page){if(!_prepared.Add(page))return;if(page is ScrollViewer {Content:FrameworkElement body}){var margin=body.Margin;body.Margin=new Thickness(margin.Left,margin.Top+HeaderInset,margin.Right,margin.Bottom);}}
+    internal Func<bool>? MotionEnabled;
     public event Action? Navigated;
     public SettingsPageHost(){ClipToBounds=true;Unloaded+=(_,_)=>{_generation++;foreach(FrameworkElement page in Children)Stop(page);};}
     public void Register(string key,int section,string title,bool detail,Func<FrameworkElement> factory)=>_routes.Add(key,new(section,title,detail,factory));
@@ -44,14 +48,15 @@ internal sealed class SettingsPageHost:Grid
     private static void Stop(FrameworkElement page)
     {
         double opacity=page.Opacity;var shift=(TranslateTransform)page.RenderTransform;double x=shift.X;
-        page.BeginAnimation(OpacityProperty,null);shift.BeginAnimation(TranslateTransform.XProperty,null);page.Opacity=opacity;shift.X=x;
+        page.BeginAnimation(OpacityProperty,null);shift.BeginAnimation(TranslateTransform.XProperty,null);ControlMotion.Stop(shift,TranslateTransform.XProperty,x);page.Opacity=opacity;shift.X=x;
     }
     // Every page is built once and then kept: switching only flips visibility, so returning to a page costs no
     // rebuild, no reload and no re-layout of its template. Top-level tabs switch instantly; a detail page eases in
     // (only the incoming page moves, so no two whole pages are ever composited at once).
     private void Show(int direction,bool detail)
     {
-        var route=_routes[CurrentKey];var next=route.Page??=route.Build();
+        var route=_routes[CurrentKey];var next=route.Page??=route.Build();Prepare(next);
+        if(next is ScrollViewer scroll)SettingsScrollMotion.Attach(scroll,()=>MotionEnabled?.Invoke()??true);
         if(next.RenderTransform is not TranslateTransform)next.RenderTransform=new TranslateTransform();
         bool focus=Children.OfType<FrameworkElement>().Any(p=>p.IsKeyboardFocusWithin);
         if(!Children.Contains(next))Children.Add(next);
@@ -63,15 +68,15 @@ internal sealed class SettingsPageHost:Grid
             page.Visibility=Visibility.Collapsed;page.IsHitTestVisible=false;KeyboardNavigation.SetTabNavigation(page,KeyboardNavigationMode.None);Panel.SetZIndex(page,0);
         }
         next.Visibility=Visibility.Visible;next.IsHitTestVisible=true;KeyboardNavigation.SetTabNavigation(next,KeyboardNavigationMode.Continue);Panel.SetZIndex(next,1);
-        bool animate=detail&&IsLoaded&&SystemParameters.ClientAreaAnimation&&!SystemParameters.HighContrast;
+        bool animate=IsLoaded&&SystemParameters.ClientAreaAnimation&&!SystemParameters.HighContrast&&(MotionEnabled?.Invoke()??true);
         Stop(next);
         if(animate)
         {
             const double seconds=.22;next.Opacity=0;((TranslateTransform)next.RenderTransform).X=direction*14;
             next.BeginAnimation(OpacityProperty,new DoubleAnimation(1,TimeSpan.FromSeconds(seconds)){EasingFunction=new CubicEase{EasingMode=EasingMode.EaseOut}},HandoffBehavior.SnapshotAndReplace);
-            SettingsSwitchMotion.Move((TranslateTransform)next.RenderTransform,TranslateTransform.XProperty,0,seconds);
+            ControlMotion.To((TranslateTransform)next.RenderTransform,TranslateTransform.XProperty,0,speed:ControlMotion.PageSpeed,damping:ControlMotion.PageDamping);
         }
-        else{next.Opacity=1;SettingsSwitchMotion.Move((TranslateTransform)next.RenderTransform,TranslateTransform.XProperty,0,0);}
+        else{next.Opacity=1;ControlMotion.Stop((TranslateTransform)next.RenderTransform,TranslateTransform.XProperty,0);}
         if(focus){next.Focusable=true;next.Focus();}Navigated?.Invoke();
     }
     // Builds the given pages ahead of time and lays them out once while hidden, so their first visit is instant too.
@@ -80,7 +85,7 @@ internal sealed class SettingsPageHost:Grid
         foreach(var key in keys)
         {
             if(!_routes.TryGetValue(key,out var route)||key==CurrentKey)continue;
-            var page=route.Page??=route.Build();if(Children.Contains(page))continue;
+            var page=route.Page??=route.Build();Prepare(page);if(Children.Contains(page))continue;
             if(page.RenderTransform is not TranslateTransform)page.RenderTransform=new TranslateTransform();
             page.Visibility=Visibility.Hidden;page.IsHitTestVisible=false;KeyboardNavigation.SetTabNavigation(page,KeyboardNavigationMode.None);Children.Add(page);
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,()=>{if(page.Visibility==Visibility.Hidden)page.Visibility=Visibility.Collapsed;});

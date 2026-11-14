@@ -9,6 +9,9 @@ namespace DockForWindows.Views;
 
 public static class SettingsSwitchMotion
 {
+    public static readonly DependencyProperty AccentProperty=DependencyProperty.RegisterAttached("Accent",typeof(Brush),typeof(SettingsSwitchMotion),new PropertyMetadata(null,(owner,_)=>{if(owner is CheckBox box)Update(box,false,false);}));
+    public static Brush? GetAccent(DependencyObject owner)=>(Brush?)owner.GetValue(AccentProperty);
+    public static void SetAccent(DependencyObject owner,Brush? value)=>owner.SetValue(AccentProperty,value);
     public static readonly DependencyProperty EnabledProperty=DependencyProperty.RegisterAttached("Enabled",typeof(bool),typeof(SettingsSwitchMotion),new PropertyMetadata(false,Changed));
     public static bool GetEnabled(DependencyObject owner)=>(bool)owner.GetValue(EnabledProperty);
     public static void SetEnabled(DependencyObject owner,bool value)=>owner.SetValue(EnabledProperty,value);

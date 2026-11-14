@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Windows.Media.Control;
 using Windows.UI.Shell;
@@ -62,16 +62,16 @@ public sealed class MediaControlService : IDisposable
     public static TimeSpan PositionAt(TimeSpan position,TimeSpan duration,bool playing,double rate,double elapsed)=>TimeSpan.FromSeconds(Math.Clamp(position.TotalSeconds+(playing?Math.Max(0,elapsed)*rate:0),0,Math.Max(0,duration.TotalSeconds)));
     public async Task Command(string command)
     {
-        var session=_session??throw new InvalidOperationException("没有支持系统媒体控制的播放器。");
+        var session=_session??throw new InvalidOperationException(LocalizedText.Get("没有支持系统媒体控制的播放器。"));
         bool result=command switch{"previous"=>await session.TrySkipPreviousAsync(),"next"=>await session.TrySkipNextAsync(),_=>await session.TryTogglePlayPauseAsync()};
-        if(!result)throw new InvalidOperationException("播放器拒绝了此控制操作。");
+        if(!result)throw new InvalidOperationException(LocalizedText.Get("播放器拒绝了此控制操作。"));
     }
     public static bool? ReadFocus()=>ApiInformation.IsTypePresent("Windows.UI.Shell.FocusSessionManager")&&FocusSessionManager.IsSupported?FocusSessionManager.GetDefault().IsFocusActive:null;
     public async Task Seek(TimeSpan position)
     {
-        var session=_session??throw new InvalidOperationException("没有正在播放的媒体。");
+        var session=_session??throw new InvalidOperationException(LocalizedText.Get("没有正在播放的媒体。"));
         var start=session.GetTimelineProperties()?.StartTime??TimeSpan.Zero;
-        if(!await session.TryChangePlaybackPositionAsync((position+start).Ticks))throw new InvalidOperationException("播放器不支持跳转。");
+        if(!await session.TryChangePlaybackPositionAsync((position+start).Ticks))throw new InvalidOperationException(LocalizedText.Get("播放器不支持跳转。"));
         var properties=await session.TryGetMediaPropertiesAsync();
         _seekAnchor=(position,DateTimeOffset.UtcNow,session.SourceAppUserModelId+properties?.Title+properties?.Artist);
     }

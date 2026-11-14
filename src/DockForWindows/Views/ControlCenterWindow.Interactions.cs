@@ -71,29 +71,29 @@ public sealed partial class ControlCenterWindow
     private void AddRadioToggle(RadioKind kind)
     {
         var module=kind==RadioKind.WiFi?ControlModule.Wifi:ControlModule.Bluetooth;
-        AddToggleDetail(kind==RadioKind.WiFi?"Wi-Fi":"蓝牙",
+        AddToggleDetail(kind==RadioKind.WiFi?"Wi-Fi":LocalizedText.Get("蓝牙"),
             ()=>_connectivity.State(kind) is {} state?state==RadioState.On:null,
-            on=>Execute(module,on?"正在开启…":"正在关闭…",()=>_connectivity.SetRadio(kind,on)));
+            on=>Execute(module,on?LocalizedText.Get("正在开启…"):LocalizedText.Get("正在关闭…"),()=>_connectivity.SetRadio(kind,on)));
     }
     private void OpenBluetoothDevice(BluetoothPeer peer)
     {
         _page=ControlPage.BluetoothDevice;ShowDetails(peer.Name);
-        AddStatusRow("Bluetooth",peer.Name,peer.Connected?"已连接":peer.Paired?"已配对，未连接":"可配对");
-        if(!peer.Paired)AddDetail("配对此设备",()=>Run(async()=>{
+        AddStatusRow("Bluetooth",peer.Name,peer.Connected?LocalizedText.Get("已连接"):peer.Paired?LocalizedText.Get("已配对，未连接"):LocalizedText.Get("可配对"));
+        if(!peer.Paired)AddDetail(LocalizedText.Get("配对此设备"),()=>Run(async()=>{
             _systemDialog=true;
-            try{await Execute(ControlModule.Bluetooth,"正在配对…",()=>_connectivity.PairBluetooth(peer));}
+            try{await Execute(ControlModule.Bluetooth,LocalizedText.Get("正在配对…"),()=>_connectivity.PairBluetooth(peer));}
             finally{_systemDialog=false;}
             if(!_closing&&_page==ControlPage.BluetoothDevice&&Operation(ControlModule.Bluetooth).Phase!=OperationPhase.Error)BackDetails();
         }),true);
         else
         {
-            _detailBody.Children.Add(new TextBlock{Text="此设备的连接和断开由 Windows 蓝牙驱动管理。控制中心不会把取消配对当作断开连接。",TextWrapping=TextWrapping.Wrap,FontSize=11,Margin=new Thickness(0,8,0,8)});
-            AddDetail("打开 Windows 连接管理…",()=>Native("ms-settings:bluetooth"),true);
-            AddDetail("取消配对…",()=>{
+            _detailBody.Children.Add(new TextBlock{Text=LocalizedText.Get("此设备的连接和断开由 Windows 蓝牙驱动管理。控制中心不会把取消配对当作断开连接。"),TextWrapping=TextWrapping.Wrap,FontSize=11,Margin=new Thickness(0,8,0,8)});
+            AddDetail(LocalizedText.Get("打开 Windows 连接管理…"),()=>Native("ms-settings:bluetooth"),true);
+            AddDetail(LocalizedText.Get("取消配对…"),()=>{
                 // Unpairing removes the remembered device, so require an explicit second action.
-                ShowDetails("取消配对 "+peer.Name);
-                AddDetail("确认取消配对",()=>Run(async()=>{
-                    await Execute(ControlModule.Bluetooth,"正在取消配对…",()=>_connectivity.ForgetBluetooth(peer));
+                ShowDetails(LocalizedText.Get("取消配对 ")+peer.Name);
+                AddDetail(LocalizedText.Get("确认取消配对"),()=>Run(async()=>{
+                    await Execute(ControlModule.Bluetooth,LocalizedText.Get("正在取消配对…"),()=>_connectivity.ForgetBluetooth(peer));
                     if(!_closing&&_page==ControlPage.BluetoothDevice&&Operation(ControlModule.Bluetooth).Phase!=OperationPhase.Error)BackDetails();
                 }),true);UpdateDetailLayout();
             },true);
@@ -102,7 +102,7 @@ public sealed partial class ControlCenterWindow
     }
     private void DetailHotspot(FrameworkElement element,ControlModule kind)
     {
-        element.Cursor=Cursors.Hand;AutomationProperties.SetName(element,ControlCenterCatalog.Name(kind)+"快捷操作");
+        element.Cursor=Cursors.Hand;AutomationProperties.SetName(element,ControlCenterCatalog.Name(kind)+LocalizedText.Get("快捷操作"));
         element.MouseEnter+=(_,_)=>element.Opacity=.76;element.MouseLeave+=(_,_)=>element.Opacity=1;
         element.MouseLeftButtonUp+=(_,e)=>{if(!_editing&&!_dragged){OpenModule(kind);e.Handled=true;}};
         element.Focusable=true;element.KeyDown+=(_,e)=>{if((e.Key is Key.Enter or Key.Space)&&!_editing){PrimaryAction(kind);e.Handled=true;}};

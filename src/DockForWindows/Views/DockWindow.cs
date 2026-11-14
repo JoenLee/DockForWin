@@ -86,7 +86,7 @@ public sealed partial class DockWindow : Window
         _root.Children.Add(_surface);
         _strip.LayoutTransform = _fitTransform;
         System.Windows.Automation.AutomationProperties.SetAutomationId(_surface, "dock-surface");
-        System.Windows.Automation.AutomationProperties.SetName(_surface, "程序坞底板");
+        System.Windows.Automation.AutomationProperties.SetName(_surface, LocalizedText.Get("程序坞底板"));
         _scroll = new ScrollViewer
         {
             Content = _strip, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
@@ -141,7 +141,7 @@ public sealed partial class DockWindow : Window
             if (!_glassBusy) _glassBackdrop.Dispose();
             _model.ItemsRebuilt -= Rebuild;
             _model.Error -= ShowError;
-            _settings?.Close();
+            _settings?.ClosePermanently();
             _controlCenter?.Dismiss();
         };
         Closing += (_, _) => { _closing = true; _edgeTimer.Stop(); _hideDelay.Stop(); _glassTimer.Stop(); };
@@ -199,7 +199,7 @@ public sealed partial class DockWindow : Window
                 UpdateSeparatorBackdrop(frame,_surface.BackdropScreenBounds,tint,now,ViewSettings.Animations&&!_palette.ReducedMotion);
             }
         }
-        catch (Exception ex) { if (!_glassErrorLogged) { _model.LogDiagnostic("玻璃背景采样回退", ex); _glassErrorLogged = true; } }
+        catch (Exception ex) { if (!_glassErrorLogged) { _model.LogDiagnostic(LocalizedText.Get("玻璃背景采样回退"), ex); _glassErrorLogged = true; } }
         finally { _glassBusy = false; if (_closing) _glassBackdrop.Dispose(); }
     }
 
@@ -251,8 +251,8 @@ public sealed partial class DockWindow : Window
             startupChanged=requested!=previousStartup;
             if(startupChanged)StartupRegistration.WriteCommand(requested);
         }
-        catch(Exception ex){ShowError("无法更新开机自启："+ex.Message);return false;}
-        if (!_model.TryApplyPreferences(draft)) { if(startupChanged)try{StartupRegistration.WriteCommand(previousStartup);}catch(Exception ex){_model.LogDiagnostic("恢复开机自启设置失败",ex);} return false; }
+        catch(Exception ex){ShowError(LocalizedText.Get("无法更新开机自启：")+ex.Message);return false;}
+        if (!_model.TryApplyPreferences(draft)) { if(startupChanged)try{StartupRegistration.WriteCommand(previousStartup);}catch(Exception ex){_model.LogDiagnostic(LocalizedText.Get("恢复开机自启设置失败"),ex);} return false; }
         _previewSettings = null;
         _model.UpdateWindows(WindowTracker.Snapshot());
         if(_controlCenter?.IsVisible==true)_controlCenter.ApplyPreview(_model.Settings);
@@ -387,27 +387,27 @@ public sealed partial class DockWindow : Window
     }
     private ContextMenu NewMenu()
     {
-        var menu = new ContextMenu { Padding = new Thickness(0) }; DockMenuStyle.Apply(menu);
-        menu.Opened += (_, _) => { CloseWindowPreviews();_openDockMenu=menu;_menuOpen = true; _hideDelay.Stop();WatchPopupClicks(); };
+        var menu = new ContextMenu { FontSize = 13 };
+        NativeMenuStyles.Apply(menu,ViewSettings);menu.Opened += (_, _) => { NativeMenuStyles.Apply(menu,ViewSettings);CloseWindowPreviews();_openDockMenu=menu;_menuOpen = true; _hideDelay.Stop();WatchPopupClicks(); };
         menu.Closed += (_, _) => { if(_openDockMenu==menu)_openDockMenu=null;WatchPopupClicks();_menuOpen = false; if (ViewSettings.AutoHide && !IsMouseOver) _hideDelay.Start(); };
         return menu;
     }
     private static void AddMenu(ContextMenu menu, string label, Action action)
     {
-        var entry = new MenuItem { Header = label };
+        var entry = new MenuItem { Header = label, Padding = new Thickness(10, 6, 10, 6) };
         entry.Click += (_, _) => action(); menu.Items.Add(entry);
     }
     private ContextMenu BuildBackgroundMenu()
     {
         var menu = NewMenu();
-        AddMenu(menu, "添加应用与文件…", AddApplication);
-        AddMenu(menu, "添加文件夹…", AddFolder);
-        AddMenu(menu, "重新加载图标", () => _ = _model.LoadIconsAsync(true));
+        AddMenu(menu, LocalizedText.Get("添加应用与文件…"), AddApplication);
+        AddMenu(menu, LocalizedText.Get("添加文件夹…"), AddFolder);
+        AddMenu(menu, LocalizedText.Get("重新加载图标"), () => _ = _model.LoadIconsAsync(true));
         menu.Items.Add(new Separator());
-        AddMenu(menu, "程序坞设置…", OpenSettings);
-        AddMenu(menu, "打开控制中心", ToggleControlCenter);
+        AddMenu(menu, LocalizedText.Get("程序坞设置…"), OpenSettings);
+        AddMenu(menu, LocalizedText.Get("打开控制中心"), ToggleControlCenter);
         menu.Items.Add(new Separator());
-        AddMenu(menu, "退出程序坞", () => Application.Current.Shutdown());
+        AddMenu(menu, LocalizedText.Get("退出程序坞"), () => Application.Current.Shutdown());
         return menu;
     }
     private ContextMenu BuildItemMenu(DockItem item)
@@ -421,31 +421,31 @@ public sealed partial class DockWindow : Window
             foreach (var window in item.Windows)
             {
                 string label = window.Title.Length > 40 ? window.Title[..18] + "…" + window.Title[^18..] : window.Title;
-                AddMenu(menu, label, () => { if (!WindowTracker.Activate(window)) ShowError("Windows 暂未允许激活此窗口。"); });
+                AddMenu(menu, label, () => { if (!WindowTracker.Activate(window)) ShowError(LocalizedText.Get("Windows 暂未允许激活此窗口。")); });
             }
             if (item.IsRunning) menu.Items.Add(new Separator());
-            AddMenu(menu, "打开", () => { try { _launcher.Launch(item.Pin); } catch (Exception ex) { ShowError(ex.Message); } });
-            if(LaunchService.CanCreateNewWindow(item.Pin))AddMenu(menu,"新建窗口",()=>NewApplicationWindow(item));
-            if (item.IsRunning) AddMenu(menu, item.Windows.Count == 1 ? "关闭窗口" : $"关闭全部 {item.Windows.Count} 个窗口", () => { foreach (var window in item.Windows) WindowTracker.Close(window); });
+            AddMenu(menu, LocalizedText.Get("打开"), () => { try { _launcher.Launch(item.Pin); } catch (Exception ex) { ShowError(ex.Message); } });
+            if(LaunchService.CanCreateNewWindow(item.Pin))AddMenu(menu,LocalizedText.Get("新建窗口"),()=>NewApplicationWindow(item));
+            if (item.IsRunning) AddMenu(menu, item.Windows.Count == 1 ? LocalizedText.Get("关闭窗口") : LocalizedText.Format($"关闭全部 {item.Windows.Count} 个窗口"), () => { foreach (var window in item.Windows) WindowTracker.Close(window); });
             menu.Items.Add(new Separator());
-            if (item.Pin.Kind != ItemKind.RecycleBin) AddMenu(menu, item.IsPinned ? "从程序坞取消固定" : "固定到程序坞", () => { if (item.IsPinned) _model.Remove(item); else _model.Pin(item); });
-            if (File.Exists(item.Pin.Target)) AddMenu(menu, "在资源管理器中显示", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "/select,\"" + item.Pin.Target + "\"") { UseShellExecute = true }));
+            if (item.Pin.Kind != ItemKind.RecycleBin) AddMenu(menu, item.IsPinned ? LocalizedText.Get("从程序坞取消固定") : LocalizedText.Get("固定到程序坞"), () => { if (item.IsPinned) _model.Remove(item); else _model.Pin(item); });
+            if (File.Exists(item.Pin.Target)) AddMenu(menu, LocalizedText.Get("在资源管理器中显示"), () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "/select,\"" + item.Pin.Target + "\"") { UseShellExecute = true }));
             menu.Items.Add(new Separator());
-            AddMenu(menu, "程序坞设置…", OpenSettings);
+            AddMenu(menu, LocalizedText.Get("程序坞设置…"), OpenSettings);
         };
         return menu;
     }
     public void AddApplication()
     {
         SetHidden(false);
-        var picker = new Microsoft.Win32.OpenFileDialog { Title = "选择应用、快捷方式或文件", Filter = "所有文件 (*.*)|*.*|应用与快捷方式 (*.exe;*.lnk)|*.exe;*.lnk", Multiselect = true, DereferenceLinks = false };
+        var picker = new Microsoft.Win32.OpenFileDialog { Title = LocalizedText.Get("选择应用、快捷方式或文件"), Filter = LocalizedText.Get("所有文件 (*.*)|*.*|应用与快捷方式 (*.exe;*.lnk)|*.exe;*.lnk"), Multiselect = true, DereferenceLinks = false };
         _menuOpen = true;
         try { if (picker.ShowDialog() == true) _ = _model.AddAsync(picker.FileNames); }
         finally { _menuOpen = false; }
     }
     public void AddFolder()
     {
-        var picker = new Microsoft.Win32.OpenFolderDialog { Title = "选择要固定的文件夹", Multiselect = true };
+        var picker = new Microsoft.Win32.OpenFolderDialog { Title = LocalizedText.Get("选择要固定的文件夹"), Multiselect = true };
         _menuOpen = true;
         try { if (picker.ShowDialog() == true) _ = _model.AddAsync(picker.FolderNames); }
         finally { _menuOpen = false; }
@@ -462,7 +462,7 @@ public sealed partial class DockWindow : Window
     public void OpenSettings()
     {
         Reveal();
-        if (_settings?.IsVisible == true) { _settings.Activate(); return; }
+        if (_settings is not null) { _settings.RestoreFromTray(); return; }
         _settings = new SettingsWindow(this, _palette);
         _settings.Closed += (_, _) => { _settings = null; CancelPreview(); if (!_closing && ViewSettings.AutoHide && !IsMouseOver) _hideDelay.Start(); };
         _settings.Show(); _settings.Activate();
@@ -473,7 +473,7 @@ public sealed partial class DockWindow : Window
     {
         if(_closing)return;
         if(_controlCenter?.IsVisible==true){_controlCenter.TogglePresentation();return;}
-        var window=new ControlCenterWindow(_model.Settings,(message,error)=>_model.LogDiagnostic(message,error),options=>{var previous=_model.Settings.ControlCenter;_model.Settings.ControlCenter=options;if(!_model.Save()){_model.Settings.ControlCenter=previous;throw new IOException("控制中心排列未能保存，请检查配置文件的写入权限。");}},()=>ReopenSettings(_model.Settings,7));_controlCenter=window;
+        var window=new ControlCenterWindow(_model.Settings,(message,error)=>_model.LogDiagnostic(message,error),options=>{var previous=_model.Settings.ControlCenter;_model.Settings.ControlCenter=options;if(!_model.Save()){_model.Settings.ControlCenter=previous;throw new IOException(LocalizedText.Get("控制中心排列未能保存，请检查配置文件的写入权限。"));}},()=>ReopenSettings(_model.Settings,7));_controlCenter=window;
         window.PresentationChanged+=open=>ControlCenterStateChanged?.Invoke(open);window.Closed+=(_,_)=>{if(_controlCenter==window)_controlCenter=null;ControlCenterStateChanged?.Invoke(false);};window.Show();window.Activate();
     }
     internal void ReopenSettings(DockSettings draft, int page)
@@ -484,7 +484,7 @@ public sealed partial class DockWindow : Window
         double width=previous?.Width??double.NaN,height=previous?.Height??double.NaN;
         var windowState=previous?.WindowState??WindowState.Normal;
         var navigation=previous?.CaptureNavigationState();
-        previous?.Close();
+        previous?.ClosePermanently();
         _settings = new SettingsWindow(this, new Palette(draft), draft, page);
         if(navigation?.Section==page)_settings.RestoreNavigationState(navigation);
         if(double.IsFinite(width)&&double.IsFinite(height)){_settings.Width=width;_settings.Height=height;}
@@ -499,8 +499,8 @@ public sealed partial class DockWindow : Window
     internal void RecoverFromUiFault()
     {
         var panel = _controlCenter; _controlCenter = null;
-        try { panel?.CloseAfterFault(); } catch (Exception error) { _model.LogDiagnostic("关闭出错的控制中心失败", error); }
-        try { CloseWindowPreviews(); if (_openDockMenu is { IsOpen: true } menu) menu.IsOpen = false; } catch (Exception error) { _model.LogDiagnostic("关闭程序坞弹出层失败", error); }
+        try { panel?.CloseAfterFault(); } catch (Exception error) { _model.LogDiagnostic(LocalizedText.Get("关闭出错的控制中心失败"), error); }
+        try { CloseWindowPreviews(); if (_openDockMenu is { IsOpen: true } menu) menu.IsOpen = false; } catch (Exception error) { _model.LogDiagnostic(LocalizedText.Get("关闭程序坞弹出层失败"), error); }
         _strip.ResetHover();
         ControlCenterStateChanged?.Invoke(false);
     }
@@ -692,4 +692,3 @@ public sealed partial class DockWindow : Window
         if (alongDock && atEdge) { SetHidden(false); _hideDelay.Start(); }
     }
 }
-

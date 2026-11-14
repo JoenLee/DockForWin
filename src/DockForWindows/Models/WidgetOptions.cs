@@ -19,7 +19,7 @@ public readonly record struct WidgetSize(int Columns, int Rows)
 public sealed record WidgetDefinition(string Id, WidgetKind Kind, string Title, WidgetSize Size, WidgetLayout Layout = WidgetLayout.Standard);
 public static class WidgetRegistry
 {
-    public static IReadOnlyList<WidgetDefinition> Definitions { get; } = Array.AsReadOnly(new[] {
+    private static readonly IReadOnlyList<WidgetDefinition> ChineseDefinitions = Array.AsReadOnly(new[] {
         new WidgetDefinition("weather-small", WidgetKind.Weather, "一眼天气", new(2,2)),
         new WidgetDefinition("weather-square", WidgetKind.Weather, "今日天气", new(2,2)),
         new WidgetDefinition("weather-strip", WidgetKind.Weather, "天气速览", new(6,2)),
@@ -59,8 +59,10 @@ public static class WidgetRegistry
         new("music-list",WidgetKind.Music,"播放记录",new(4,4),WidgetLayout.MusicList),
         new("music-large",WidgetKind.Music,"完整播放记录",new(4,6),WidgetLayout.MusicLarge),
         new("music-now",WidgetKind.Music,"当前播放",new(4,4),WidgetLayout.MusicNow) });
+    private static readonly Lazy<IReadOnlyList<WidgetDefinition>> EnglishDefinitions=new(()=>Array.AsReadOnly(ChineseDefinitions.Select(d=>d with{Title=LocalizedText.Get(d.Title)}).ToArray()));
+    public static IReadOnlyList<WidgetDefinition> Definitions=>LocalizedText.IsEnglish?EnglishDefinitions.Value:ChineseDefinitions;
     public static WidgetDefinition Get(string id) => Definitions.FirstOrDefault(d => d.Id == id)
-        ?? throw new ArgumentException("未知小组件。", nameof(id));
+        ?? throw new ArgumentException(LocalizedText.Get("未知小组件。"), nameof(id));
     public static WidgetInstance CreateInstance(string id, WidgetMaterial material, WidgetOptions? configuration = null)
     {
         var copy = configuration?.Copy() ?? new(); copy.Material = material; copy.Normalize();

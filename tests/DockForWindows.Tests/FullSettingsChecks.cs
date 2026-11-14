@@ -63,7 +63,7 @@ internal static class FullSettingsChecks
                 Assert(seed.ControlCenter.Modules.All(m=>ids.Contains("module-"+m.Module)),"all existing module toggles remain reachable");
                 Assert(ids.Contains("start-with-windows")&&!ids.Contains("control-center-hotkey")&&ids.Contains("dock-monitor"),"startup and monitor controls retained; removed hotkey field absent");
                 Assert(!Tree<GlassButtonChrome>(window).Any(),"settings buttons use local native templates without glass sampling");
-                Assert(Find<FrameworkElement>(window,"appearance-stage") is not null&&Find<CheckBox>(window,"liquid-glass") is not null&&Find<Slider>(window,"glass-quality") is not null,"appearance opens as an inspector with stage, liquid-glass switch and quality slider");
+                Assert(Find<CheckBox>(window,"live-preview") is not null&&Find<CheckBox>(window,"liquid-glass") is not null&&Find<Slider>(window,"glass-quality") is not null,"appearance opens with desktop live preview, liquid-glass switch and quality slider");
                 await Task.Delay(400);Capture(window,Path.Combine(directory,"01-appearance.png"));
                 Call(window,"ShowSetting","theme-mode");await Task.Delay(310);
                 var segment=Find<ListBox>(window,"theme-mode-segment");segment.SelectedIndex=(int)DockTheme.Custom;await Task.Delay(160);
