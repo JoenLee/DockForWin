@@ -42,23 +42,27 @@ public sealed partial class ControlCenterWindow
     private void UpdateSafetyFade()
     {
         // Classic already has one continuous blurred backdrop; no duplicate edge-material blur.
-        if(UsesClassicBlur){foreach(var edge in _safetyEdges)edge.Edge.Visibility=Visibility.Collapsed;return;}
+        if(UsesClassicBlur){foreach(var edge in _safetyEdges)edge.Edge.Visibility=Visibility.Collapsed;SetGutterActive(false);return;}
         if(Content is not Grid host||host.ActualWidth<=0||host.ActualHeight<=0)return;
+        bool gutter=false;
         foreach(var item in _safetyEdges){
             double x=item.Left?0:host.ActualWidth-SideGutter;var strip=new Rect(x,0,SideGutter,host.ActualHeight);bool visible=false;
             foreach(var layer in item.Layers.Values)layer.Active=false;
             void Include(FrameworkElement element){
                 if(!element.IsVisible||element.Opacity<.001||element.ActualWidth<=0)return;
-                var bounds=element.TransformToAncestor(host).TransformBounds(new Rect(element.RenderSize));if(!bounds.IntersectsWith(strip))return;visible=true;
+                // Only content that actually enters the gutter: Rect.IntersectsWith also counts a shared edge, and the
+                // cards and detail page end exactly where the strips begin, which kept both strips re-rendering every card.
+                var bounds=element.TransformToAncestor(host).TransformBounds(new Rect(element.RenderSize));var overlap=Rect.Intersect(bounds,strip);if(overlap.IsEmpty||overlap.Width<.5||overlap.Height<.5)return;visible=true;
                 if(!item.Layers.TryGetValue(element,out var layer)){layer=new SafetyVisual{Brush=new VisualBrush(element){ViewboxUnits=BrushMappingMode.Absolute,Stretch=Stretch.Fill}};layer.Drawing.Geometry=layer.Geometry;item.Layers.Add(element,layer);item.Drawing.Children.Add(layer.Drawing);}
                 layer.Active=true;bounds.Offset(-x,0);if(layer.Geometry.Rect!=bounds)layer.Geometry.Rect=bounds;
                 var viewbox=new Rect(element.RenderSize);if(layer.Brush.Viewbox!=viewbox)layer.Brush.Viewbox=viewbox;
             }
             foreach(var card in _modules)Include(card.Root);Include(_details);
             foreach(var layer in item.Layers.Values){var brush=layer.Active?layer.Brush:null;if(layer.Drawing.Brush!=brush)layer.Drawing.Brush=brush;}
-            item.Edge.Visibility=visible?Visibility.Visible:Visibility.Collapsed;
+            item.Edge.Visibility=visible?Visibility.Visible:Visibility.Collapsed;gutter|=visible;
             var clip=new Rect(0,0,SideGutter,host.ActualHeight);if(item.Clip.Rect!=clip){item.Clip.Rect=clip;item.Brush.Viewbox=clip;}
         }
+        SetGutterActive(gutter);
     }
     private async Task RefreshEnteredDevices(ControlModule kind,int page)
     {

@@ -28,6 +28,7 @@ public sealed class GlassButtonChrome : Grid
     private readonly MaterialLayer _lens=new(),_light=new();
     private readonly OutlineLayer _tint=new(){Opacity=.96};
     private readonly OutlineLayer _edge=new();
+    private readonly Grid _material=new(){IsHitTestVisible=false};
     private OutlineLayer? _shadow;
     private readonly ImageBrush _input=new(){Stretch=Stretch.Fill};
     private readonly LiquidGlassEffect _lensEffect=new(),_lightEffect=new(){LightingOnly=1};
@@ -37,8 +38,12 @@ public sealed class GlassButtonChrome : Grid
     public GlassButtonChrome()
     {
         Background=Brushes.Transparent;
+        // The material (lens, tint, light, edge) is one cached texture: it changes only with its backdrop mapping, size,
+        // fill or interaction, while the page around it fades, scales and repaints far more often. It is cached at twice
+        // its size so it stays sharp when a page transition enlarges the control; the button's content is not cached.
+        _material.CacheMode=new BitmapCache{RenderAtScale=2,EnableClearType=false};
         _lensEffect.Input=_lightEffect.Input=_input;_lens.Effect=_lensEffect;_light.Effect=_lightEffect;_edge.RenderTransform=_edgeOffset;
-        Children.Add(_lens);Children.Add(_tint);Children.Add(_light);Children.Add(_edge);
+        _material.Children.Add(_lens);_material.Children.Add(_tint);_material.Children.Add(_light);_material.Children.Add(_edge);Children.Add(_material);
         Loaded+=(_,_)=>Refresh();SizeChanged+=(_,_)=>Refresh();IsVisibleChanged+=(_,_)=>{if(IsVisible)Refresh();};
     }
     private (Brush Brush,Rect Bounds) HostBackground(double pad)

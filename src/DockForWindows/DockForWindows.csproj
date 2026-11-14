@@ -19,7 +19,7 @@
     <ApplicationIcon>Assets\DockForWindows.ico</ApplicationIcon>
     <RootNamespace>DockForWindows</RootNamespace>
   </PropertyGroup>
-  <ItemGroup><Resource Include="Shaders\LiquidGlass.ps" /><Resource Include="Shaders\LiquidGlass.ControlCenterLighting.ps" /></ItemGroup>
+  <ItemGroup><Resource Include="Shaders\LiquidGlass.ps" /><Resource Include="Shaders\LiquidGlass.ControlCenterLighting.ps" /><Resource Include="Shaders\LiquidGlass.Fused.ps" /></ItemGroup>
   <ItemGroup><Resource Include="Assets\PreviewWallpaper.png" /><Resource Include="Assets\Ionicons\*.svg" /><Resource Include="Assets\Ionicons\LICENSE" /></ItemGroup>
   <ItemGroup><Resource Include="Assets\Fonts\VarelaRound-Regular.ttf" /><Resource Include="Assets\Fonts\VarelaRound-OFL.txt" /></ItemGroup>
   <ItemGroup><Content Include="Assets\Fonts\VarelaRound-OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>

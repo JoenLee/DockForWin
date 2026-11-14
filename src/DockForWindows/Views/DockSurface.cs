@@ -12,7 +12,11 @@ namespace DockForWindows.Views;
 // Continuous-curvature corners, capped at a capsule rather than an ellipse.
 public sealed class DockSurface : FrameworkElement
 {
-    private readonly Image _backdropImage = new() { Stretch = Stretch.Fill, IsHitTestVisible = false };
+    // The part of the shared capture this plate reads: under the plate plus the frost kernel's reach, at one capture
+    // pixel per device pixel. Drawing the whole capture and clipping it to the plate made every plate's effects, and
+    // its cache, as large as the capture itself (about 0.9 MP per plate in the control center).
+    private readonly ImageBrush _backdropBrush = new() { Stretch = Stretch.Fill, ViewboxUnits = BrushMappingMode.RelativeToBoundingBox };
+    private readonly Border _backdropImage = new() { IsHitTestVisible = false };
     private readonly Grid _backdropHost = new() { ClipToBounds = true, IsHitTestVisible = false };
     private readonly BlurEffect _frost = new() { Radius = 0, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
     private readonly SurfaceOverlay _overlay;
@@ -42,6 +46,12 @@ public sealed class DockSurface : FrameworkElement
     private readonly LiquidGlassEffect? _refraction;
     private readonly LiquidGlassEffect? _lighting;
     internal void UseControlCenterLighting()=>_lighting?.SetControlCenterLighting(true);
+    // Control-center plates (outline-constrained frost, control-center lighting) are drawn in one effect
+    // (Shaders/LiquidGlass.Fused.hlsl) while WPF's Gaussian kernel for their frost fits that shader; the result
+    // matches the refraction -> frost -> lighting chain below, which wider frost keeps using. One effect instead of
+    // three per plate is what makes moving glass (the entrance, a reflow) cheap.
+    internal bool FusedOptics { get; set; }
+    private bool _fused;
     private ImageSource? _backdrop;
     private readonly AdaptiveGlassAppearance _adaptiveAppearance = new();
     public double EffectiveGlassTint => AdaptiveGlassAppearance.TintOpacity(GlassTint, _adaptiveAppearance.Luminance);
@@ -59,7 +69,7 @@ public sealed class DockSurface : FrameworkElement
     public DockSurface()
     {
         _overlay = new SurfaceOverlay(this); _tintLayer = new TintLayer(this);
-        _backdropHost.Children.Add(_backdropImage);
+        _backdropImage.Background = _backdropBrush; _backdropHost.Children.Add(_backdropImage);
         if ((RenderCapability.Tier >> 16) >= 2)
         {
             _refraction = new LiquidGlassEffect(); _backdropImage.Effect = _refraction;
@@ -127,26 +137,58 @@ public sealed class DockSurface : FrameworkElement
             origin = new Point(); bounds = new Rect(0, 0, image.PixelWidth, image.PixelHeight);
         }
         else origin = PointToScreen(new Point());
-        var imageRectangle = new Rect((bounds.X - origin.X) / dpi.DpiScaleX, (bounds.Y - origin.Y) / dpi.DpiScaleY, image.PixelWidth / dpi.DpiScaleX, image.PixelHeight / dpi.DpiScaleY);
-        if (_geometry is not null)
+        double frostRadius = 24 * Math.Pow(Math.Clamp(GlassFrost, 0, 1), 1.6);
+        double reachX = (Math.Ceiling(frostRadius) + 3) * dpi.DpiScaleX, reachY = (Math.Ceiling(frostRadius) + 3) * dpi.DpiScaleY;
+        int left = (int)Math.Clamp(Math.Floor(origin.X - bounds.X - reachX), 0, image.PixelWidth), top = (int)Math.Clamp(Math.Floor(origin.Y - bounds.Y - reachY), 0, image.PixelHeight);
+        int right = (int)Math.Clamp(Math.Ceiling(origin.X - bounds.X + size.Width * dpi.DpiScaleX + reachX), left, image.PixelWidth), bottom = (int)Math.Clamp(Math.Ceiling(origin.Y - bounds.Y + size.Height * dpi.DpiScaleY + reachY), top, image.PixelHeight);
+        var crop = new Int32Rect(left, top, Math.Max(1, right - left), Math.Max(1, bottom - top));
+        if (!ReferenceEquals(_backdropBrush.ImageSource, image)) _backdropBrush.ImageSource = image;
+        var viewbox = new Rect((double)crop.X / image.PixelWidth, (double)crop.Y / image.PixelHeight, (double)crop.Width / image.PixelWidth, (double)crop.Height / image.PixelHeight);
+        if (_backdropBrush.Viewbox != viewbox) _backdropBrush.Viewbox = viewbox;
+        var imageRectangle = new Rect((bounds.X - origin.X + crop.X) / dpi.DpiScaleX, (bounds.Y - origin.Y + crop.Y) / dpi.DpiScaleY, crop.Width / dpi.DpiScaleX, crop.Height / dpi.DpiScaleY);
+        // WPF's Gaussian BlurEffect, measured: sigma = floor(radius in device pixels) / 3, and no visible blur below
+        // two pixels. The fused pass covers kernels up to three pixels (sigma <= 1) with a five-tap Gaussian.
+        int kernel = (int)Math.Floor(frostRadius * dpi.DpiScaleX + 1e-9);
+        bool fused = FusedOptics && _refraction is not null && _lighting is not null && ConstrainFrostToOutline && GlassTintColor.A == 0 && kernel <= 3;
+        _fused = fused;
+        if (!fused && _geometry is not null)
         {
             var sourceClip = _geometry.Clone(); sourceClip.Transform = new TranslateTransform(-imageRectangle.X, -imageRectangle.Y);
             sourceClip.Freeze(); _backdropHost.Clip = sourceClip;
         }
-        _backdropHost.Opacity = Math.Clamp(GlassOpacity, 0, 1);
-        _frost.Radius = 24 * Math.Pow(Math.Clamp(GlassFrost, 0, 1), 1.6);
-        _backdropHost.Effect = _frost.Radius > 0 ? _frost : null;
+        if (fused)
+        {
+            _backdropHost.Clip = null; _backdropHost.Effect = null; _backdropHost.Opacity = 1; _frostClip.Clip = null;
+            _overlay.Visibility = Visibility.Hidden;
+            _refraction!.Frost = FrostWeights(kernel);
+            _refraction.Lighting = new Point(GlassHighlight, GlassHighlightWidth);
+            _refraction.Tint = new Point(EffectiveGlassTint, Math.Clamp(GlassOpacity, 0, 1));
+        }
+        else
+        {
+            _backdropHost.Opacity = Math.Clamp(GlassOpacity, 0, 1);
+            _frost.Radius = frostRadius;
+            _backdropHost.Effect = _frost.Radius > 0 ? _frost : null;
+        }
+        _refraction?.SetFused(fused);
         _backdropHost.Measure(imageRectangle.Size); _backdropHost.Arrange(imageRectangle);
         if (_refraction is not null)
         {
             _refraction.ControlProfile=new Point(0,CornerExponent);
-            _refraction.SourceSize = new Point(image.PixelWidth, image.PixelHeight);
-            _refraction.PlateOrigin = new Point(origin.X - bounds.X, origin.Y - bounds.Y);
+            _refraction.SourceSize = new Point(crop.Width, crop.Height);
+            _refraction.PlateOrigin = new Point(origin.X - bounds.X - crop.X, origin.Y - bounds.Y - crop.Y);
             _refraction.PlateSize = new Point(size.Width * dpi.DpiScaleX, size.Height * dpi.DpiScaleY);
             _refraction.Shape = new Point(Radius, GlassIntensity);
             _refraction.Material = new Point(dpi.DpiScaleX, GlassFrost);
-            _refraction.Texture = new Point(GlassGrain, GlassDistortion); _refraction.WorldOrigin = bounds.TopLeft;
+            _refraction.Texture = new Point(GlassGrain, GlassDistortion); _refraction.WorldOrigin = new Point(bounds.X + crop.X, bounds.Y + crop.Y);
         }
+    }
+    // Normalised five-tap weights of WPF's frost kernel (sigma = kernel / 3) at 0, 1 and 2 pixels; none below two pixels.
+    private static System.Windows.Media.Media3D.Point4D FrostWeights(int kernel)
+    {
+        if (kernel <= 1) return new System.Windows.Media.Media3D.Point4D();
+        double sigma = kernel / 3d, g0 = 1, g1 = Math.Exp(-1 / (2 * sigma * sigma)), g2 = Math.Exp(-4 / (2 * sigma * sigma)), sum = g0 + 2 * g1 + 2 * g2;
+        return new System.Windows.Media.Media3D.Point4D(g0 / sum, g1 / sum, g2 / sum, 1);
     }
     protected override AutomationPeer OnCreateAutomationPeer() => new SurfacePeer(this);
     private sealed class SurfacePeer : FrameworkElementAutomationPeer
@@ -167,7 +209,7 @@ public sealed class DockSurface : FrameworkElement
         get => _backdrop;
         set
         {
-            _backdrop = value; _backdropImage.Source = value;
+            _backdrop = value; _backdropBrush.ImageSource = value;
             InvalidateArrange(); InvalidateVisual();
         }
     }
@@ -246,7 +288,8 @@ public sealed class DockSurface : FrameworkElement
         }
         // Clip the material children, not the outer surface: its ambient shadow
         // must be able to extend beyond the rounded outline.
-        _overlay.Clip = _geometry;_frostClip.Clip=ConstrainFrostToOutline?_geometry:null;
+        // A fused plate clips itself in its shader; its outline clips stay off.
+        _overlay.Clip = _geometry;_frostClip.Clip=ConstrainFrostToOutline&&!_fused?_geometry:null;
         ConfigureBackdrop(RenderSize); _overlay.InvalidateVisual(); _tintLayer.InvalidateVisual();
     }
     private void DrawOverlay(DrawingContext drawing)

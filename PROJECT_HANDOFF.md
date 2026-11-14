@@ -1,5 +1,7 @@
 # Windows Liquid Glass 控制中心项目交接
 
+> 控制中心性能（2026-11-13）：见 `docs/CONTROL-CENTER-PERFORMANCE-2026-11-13.md`。控制中心改为非分层窗口（DWM 透明）；背景采集改走 `GlassBackdropService.ReadPixels`（从上到下遮挡剔除、无变化不上传、静止降频）；控制中心玻璃板用单个合并着色器（`LiquidGlass.Fused.hlsl`），只处理板下区域，静止才缓存。测量用 `--measure-control-center-perf`。下文"背景采样与坐标"中控制中心部分以该说明为准。
+
 > 最新视觉修正：按用户图二改为小连续圆角，轮播内滚轮不再滚动页面，卡片边缘统一约22 DIP间距。71项定向检查通过；详见 docs/APP-WIDGET-CORNERS-2026-11-11.md。该说明优先于下文完整超椭圆及边界滚轮冒泡的旧设计。
 
 > APP / 小组件原型后续更新（2026-11-11）：见 `docs/APP-WIDGET-PROTOTYPE-2026-11-11.md`。新版 APP 外壳、天气和日历两类已有源码与隔离预览；正式 PID 10604 未重启。实际 FPS、GPU 和长时资源验收仍待完成，暂不扩展其他类别。
@@ -142,10 +144,10 @@ Program
 1. `GlassBackdropService.RenderCore` 在目标窗口背后按 Z 序组合桌面和应用窗口，不只读取壁纸。过滤不适合采集的工具/HUD 等窗口，采样区外扩约 `ceil(24*dpi)`，屏幕边缘补像素。
 2. `WindowFrameCapture` 使用 D3D11/DXGI、WGC free-threaded frame pool；保留最新帧，窗口尺寸变化重建相关资源，闲置采集对象会清理。
 3. `ReadWindow` 优先 WGC，短期缓存防止采集空帧退回壁纸，再尝试有超时约束的 PrintWindow。受保护内容、驱动或系统限制仍可能采不到。
-4. 控制中心 `CaptureLoop` 串行异步采样，`CaptureFrame` 用 `Task.Run(Sample)` 避免阻塞 UI；仅保留 `_pendingSample` 最新结果，`OnRendering` 每个呈现回调最多上传一次。
+4. 控制中心 `CaptureLoop` 串行异步采样，`CaptureFrame` 用 `Task.Run(Sample)` 避免阻塞 UI；`ReadPixels` 判定背后无变化时不复制、不上传。背景变化时按刷新率跟随，静止 0.5 s 后每秒 30 次，窗口移动/改尺寸立即补采（2026-11-13）。
 5. 所有卡片复用 `_wholeFrame`（全分辨率 `WriteableBitmap`）；`MapGlassFrame`、`PointToScreen`、`BackdropScreenBounds`、`CapturePixelScale` 按屏幕坐标和实际变换取样，不能随卡片大小随意拉伸背景。
 
-**当前并非 GPU 零拷贝：** D3D staging 读回、CPU 位图/字节数组及 WPF `WritePixels` 上传仍存在；这是高刷新率性能的重要成本。
+**当前并非 GPU 零拷贝：** 背后有变化时，D3D staging 读回和 WPF `WritePixels` 上传仍存在（控制中心已去掉 GDI+ 拼合和被遮挡窗口的读回；Dock 路径未改）。背后有高帧率内容时这仍是主要成本。
 
 ### 材质与光学
 

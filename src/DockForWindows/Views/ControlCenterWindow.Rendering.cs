@@ -17,7 +17,7 @@ public sealed partial class ControlCenterWindow
 {
     private sealed class SurfaceFrame
     {
-        public Point Origin;public Size Size;public Rect Logical;public double LastTint;
+        public Point Origin;public Size Size;public Rect Logical;public double LastTint,Moved;
     }
     private sealed class SampleResult:IDisposable
     {
@@ -25,6 +25,8 @@ public sealed partial class ControlCenterWindow
         public readonly int Width,Height;
         public readonly Rect BackdropBounds;
         private int ByteCount=>checked(Width*Height*4);
+        // False when the capture service found nothing new under the panel; such a result carries no pixels.
+        public bool Changed {get;private init;}=true;
         public SampleResult(byte[] pixels,int width,int height,Rect bounds)
         {
             Width=width;Height=height;BackdropBounds=bounds;
@@ -32,14 +34,19 @@ public sealed partial class ControlCenterWindow
             Pixels=ArrayPool<byte>.Shared.Rent(source.Length);
             source.CopyTo(Pixels);
         }
+        private SampleResult(int width,int height,Rect bounds){Width=width;Height=height;BackdropBounds=bounds;Pixels=Array.Empty<byte>();Changed=false;}
+        public static SampleResult Unchanged(int width,int height,Rect bounds)=>new(width,height,bounds);
         public bool SamePixels(SampleResult? previous)=>previous is not null&&Width==previous.Width&&Height==previous.Height&&Pixels.AsSpan(0,ByteCount).SequenceEqual(previous.Pixels.AsSpan(0,ByteCount));
         public void Dispose(){var pixels=Pixels;Pixels=Array.Empty<byte>();if(pixels.Length>0)ArrayPool<byte>.Shared.Return(pixels);}
     }
     private static readonly Brush DarkInk=Palette.Brush("#202124");
+    private static readonly BitmapCache StillPlate=Frozen(new BitmapCache{RenderAtScale=1,SnapsToDevicePixels=false,EnableClearType=false});
+    private static T Frozen<T>(T value)where T:Freezable{value.Freeze();return value;}
     private readonly Dictionary<DockSurface,SurfaceFrame> _surfaceFrames=new();
     private WriteableBitmap? _wholeFrame;
     private bool _backgroundPixelsChanged;
     private SampleResult? _displayedSample;
+    internal long UploadedFrames {get;private set;}
     private double _lastChrome,_lastMotion;
     private readonly FramePerformance _perf=new();private TimeSpan _renderTime;
     private void OnRendering(object? sender,EventArgs args)
@@ -61,18 +68,25 @@ public sealed partial class ControlCenterWindow
             if(delta>.02){_lastMotion=now;_chromeDirty=true;}
             if(delta>.002){c.Position.X=x;c.Position.Y=y;c.Root.Width=w;c.Root.Height=h;}
         }
-        StepNavigationGlass();MapGlassFrame(_backgroundPixelsChanged);_backgroundPixelsChanged=false;UpdateSmoothMediaTimeline();UpdateSafetyFade();
+        StepNavigationGlass();MapGlassFrame(_backgroundPixelsChanged);_backgroundPixelsChanged=false;UpdateSmoothMediaTimeline();UpdateSafetyFade();UpdateInputRegion();
         // No dispatcher timer limits the animation frame rate. Acquisition runs independently,
         // with one request in flight and no accumulating queue when a window is slow to capture.
         // The independent serial pump acquires the next sample without waiting an extra composition frame.
         if(!UsesClassicBlur&&_chromeDirty&&GlassBackdrop is not null&&now-_lastChrome>.05){_lastChrome=now;_chromeDirty=false;foreach(var chrome in _chrome)chrome.RefreshMaterial();}
     }
+    // A changing backdrop is followed at the display's rate. Once nothing behind the panel has changed for half a
+    // second, it is looked at 30 times a second instead; the first change found brings the full rate straight back,
+    // and moving or resizing the window asks for a sample at once (RequestSample).
+    private readonly System.Threading.SemaphoreSlim _sampleRequested=new(0,1);
+    private double _lastBackdropChange=double.NegativeInfinity;
+    private void RequestSample(){if(_sampleRequested.CurrentCount==0)try{_sampleRequested.Release();}catch(System.Threading.SemaphoreFullException){}}
     private async Task CaptureLoop()
     {
         try{
             while(!_closing){double started=_runtime.Elapsed.TotalMilliseconds;await CaptureFrame();
-                double period=1000/Math.Clamp(_perf.RefreshRate,30,360);
-                await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(1,period-(_runtime.Elapsed.TotalMilliseconds-started))),_lifetime.Token);
+                bool settled=_runtime.Elapsed.TotalSeconds-_lastBackdropChange>.5&&_entranceStarted;
+                double period=1000/(settled?30:Math.Clamp(_perf.RefreshRate,30,360));
+                await _sampleRequested.WaitAsync(TimeSpan.FromMilliseconds(Math.Max(1,period-(_runtime.Elapsed.TotalMilliseconds-started))),_lifetime.Token);
             }
         }catch(OperationCanceledException)when(_closing){}
     }
@@ -103,7 +117,7 @@ public sealed partial class ControlCenterWindow
             if(_closing){outcome?.Dispose();return;}
             if(outcome is null)return;
             // Upload on the UI continuation: retaining a completed snapshot until Rendering adds stale-frame latency.
-            try{ApplySample(outcome);_displayedSample?.Dispose();_displayedSample=outcome;}
+            try{ApplySample(outcome);if(outcome.Changed){_displayedSample?.Dispose();_displayedSample=outcome;}else outcome.Dispose();}
             catch{outcome.Dispose();throw;}
         }
         catch(Exception ex){if(_runtime.Elapsed.TotalSeconds-_lastCaptureError>5){_lastCaptureError=_runtime.Elapsed.TotalSeconds;_log?.Invoke(LocalizedText.Get("控制中心背景采样"),ex);}}
@@ -114,15 +128,20 @@ public sealed partial class ControlCenterWindow
     private SampleResult? Sample(nint handle,System.Drawing.Rectangle bounds,double dpi)
     {
         if(_capture.ReadPixels(handle,bounds,dpi) is not {} raw)return null;
-        int pad=(int)Math.Ceiling(24*dpi);
-        return new SampleResult(raw.Pixels,raw.Width,raw.Height,new Rect(bounds.X-pad,bounds.Y-pad,raw.Width,raw.Height));
+        int pad=(int)Math.Ceiling(24*dpi);var backdrop=new Rect(bounds.X-pad,bounds.Y-pad,raw.Width,raw.Height);
+        // Nothing new under the panel: no copy here, no upload on the UI thread.
+        return raw.Changed?new SampleResult(raw.Pixels,raw.Width,raw.Height,backdrop):SampleResult.Unchanged(raw.Width,raw.Height,backdrop);
     }    private void ApplySample(SampleResult outcome)
     {
         bool fresh=_wholeFrame is null||_wholeFrame.PixelWidth!=outcome.Width||_wholeFrame.PixelHeight!=outcome.Height;
-        bool pixelsChanged=fresh||!outcome.SamePixels(_displayedSample);
+        // An unchanged result cannot fill a new bitmap; have the next read compose a whole frame.
+        if(fresh&&!outcome.Changed){_capture.ForgetComposite();return;}
+        // The capture service already compared these pixels with the frame it handed over last.
+        bool pixelsChanged=fresh||outcome.Changed;
         bool mappingChanged=fresh||GlassBackdropBounds!=outcome.BackdropBounds;
         if(fresh)_wholeFrame=new WriteableBitmap(outcome.Width,outcome.Height,96,96,PixelFormats.Bgra32,null);
         var frame=_wholeFrame!;int rawStride=outcome.Width*4;
+        if(pixelsChanged){UploadedFrames++;_lastBackdropChange=_runtime.Elapsed.TotalSeconds;}
         if(pixelsChanged)frame.WritePixels(new Int32Rect(0,0,outcome.Width,outcome.Height),outcome.Pixels,rawStride,0);
         GlassBackdropBounds=outcome.BackdropBounds;GlassBackdrop=frame;CapturedFrames++;UpdateDetailForeground(frame);
         // Pixels are already uploaded. Coalesce only mapping work, never capture frames.
@@ -153,6 +172,12 @@ public sealed partial class ControlCenterWindow
             if(!_surfaceFrames.TryGetValue(surface,out var cached)){cached=new SurfaceFrame();_surfaceFrames.Add(surface,cached);}
             var origin=surface.PointToScreen(new Point());var logical=surface.TransformToAncestor(this).TransformBounds(new Rect(surface.RenderSize));
             bool geometry=cached.Origin!=origin||cached.Size!=surface.RenderSize||cached.Logical!=logical;
+            // A still plate is one cached texture while the page around it repaints. A moving plate re-renders every
+            // frame anyway (what lies behind it changes), and its cache would only add a pass to write and one to draw;
+            // it renders directly until it has been still for a moment. The morphing navigation plate never settles.
+            if(geometry)cached.Moved=_lastFrame;
+            var mode=surface==_navigationGlass?null:_lastFrame-cached.Moved>.12?StillPlate:null;
+            if(!ReferenceEquals(surface.CacheMode,mode))surface.CacheMode=mode;
             bool source=surface.BackdropScreenBounds!=GlassBackdropBounds||!ReferenceEquals(surface.Backdrop,frame);
             if(geometry||source||(pixelsChanged&&_lastFrame-cached.LastTint>.12)){
                 var dpi=VisualTreeHelper.GetDpi(this);

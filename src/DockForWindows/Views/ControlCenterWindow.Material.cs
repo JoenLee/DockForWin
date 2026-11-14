@@ -21,18 +21,27 @@ public sealed partial class ControlCenterWindow
         if(classic){surface.Backdrop=null;surface.Opacity=1;}
         surface.InvalidateVisual();
     }
+    private LinearGradientBrush? _edgeFeather;private double _edgeFeatherWidth=-1;
+    // The window's side feather fades whatever reaches its edges. Only content in the gutters (a card dragged or
+    // springing to the edge, which also shows the safety fade) gets there; the halo's own falloff ends before the
+    // feathered strips (they would change its outer fringe by under 1% alpha). Without such content the mask, which
+    // renders the whole window into an extra layer every frame, is left off.
     private void UpdateMaterialMask()
     {
         if(Content is not Grid host)return;
-        if(UsesClassicBlur){host.OpacityMask=null;return;}
+        if(UsesClassicBlur||!_gutterActive){host.OpacityMask=null;return;}
         double feather=System.Math.Min(.12,(SideGutter-20)/System.Math.Max(1,host.ActualWidth));
-        host.OpacityMask=new LinearGradientBrush(new GradientStopCollection{new(Colors.Transparent,0),new(Colors.White,feather),new(Colors.White,1-feather),new(Colors.Transparent,1)},new Point(0,0),new Point(1,0));
+        if(_edgeFeather is null||_edgeFeatherWidth!=feather){_edgeFeatherWidth=feather;_edgeFeather=new LinearGradientBrush(new GradientStopCollection{new(Colors.Transparent,0),new(Colors.White,feather),new(Colors.White,1-feather),new(Colors.Transparent,1)},new Point(0,0),new Point(1,0));_edgeFeather.Freeze();}
+        host.OpacityMask=_edgeFeather;
     }
     private void ApplyMaterialMode()
     {
         UpdateMaterialMask();
         if(!SystemParameters.HighContrast){
-            if(_classicBackdrop is null){_classicBackdrop=new();Panel.SetZIndex(_classicBackdrop,-100);((Grid)Content).Children.Add(_classicBackdrop);}
+            // The peripheral frost is a radius-22 Gaussian over the whole window. Rendered into a quarter-resolution
+            // cache it is the same soft light (within 1/255 on screen) for a sixteenth of the pixels, and it is redrawn
+            // only when the capture changes, not whenever something in front of it moves.
+            if(_classicBackdrop is null){_classicBackdrop=new(){CacheMode=new BitmapCache{RenderAtScale=.25}};Panel.SetZIndex(_classicBackdrop,-100);((Grid)Content).Children.Add(_classicBackdrop);}
             _classicBackdrop.Visibility=Visibility.Visible;
         }else if(_classicBackdrop is not null){_classicBackdrop.Visibility=Visibility.Collapsed;_classicBackdrop.Release();}
         if(UsesClassicBlur){

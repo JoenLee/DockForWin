@@ -2,13 +2,21 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Media3D;
 
 namespace DockForWindows.Views;
 
 public sealed class LiquidGlassEffect : ShaderEffect
 {
     private static readonly PixelShader Shader = new() { UriSource = new Uri("pack://application:,,,/DockForWindows;component/Shaders/LiquidGlass.ps") };
-    private static PixelShader? _controlCenterLighting;
+    private static PixelShader? _controlCenterLighting, _fused;
+    // The control center's plate in one pass (Shaders/LiquidGlass.Fused.hlsl) instead of this refraction pass
+    // followed by a separate frost and lighting pass.
+    internal void SetFused(bool fused)
+    {
+        var shader=fused?(_fused??=new PixelShader{UriSource=new Uri("pack://application:,,,/DockForWindows;component/Shaders/LiquidGlass.Fused.ps")}):Shader;
+        if(PixelShader!=shader)PixelShader=shader;
+    }
     internal void SetControlCenterLighting(bool enabled)
     {
         var shader=enabled?(_controlCenterLighting??=new PixelShader{UriSource=new Uri("pack://application:,,,/DockForWindows;component/Shaders/LiquidGlass.ControlCenterLighting.ps")}):Shader;
@@ -28,6 +36,8 @@ public sealed class LiquidGlassEffect : ShaderEffect
     public static readonly DependencyProperty LightingOnlyProperty = DependencyProperty.Register(nameof(LightingOnly), typeof(double), typeof(LiquidGlassEffect), new UIPropertyMetadata(0d, PixelShaderConstantCallback(9)));
     public static readonly DependencyProperty TintProperty = Constant(nameof(Tint), new Point(.06, 0), 10);
     public static readonly DependencyProperty ControlProfileProperty = Constant(nameof(ControlProfile), new Point(), 11);
+    // Fused pass only: Gaussian frost weights at 0, 1 and 2 pixels, and w > 0 when frosted.
+    public static readonly DependencyProperty FrostProperty = DependencyProperty.Register(nameof(Frost), typeof(Point4D), typeof(LiquidGlassEffect), new UIPropertyMetadata(new Point4D(), PixelShaderConstantCallback(12)));
     private static DependencyProperty Constant(string name, Point value, int register) => DependencyProperty.Register(name, typeof(Point), typeof(LiquidGlassEffect), new UIPropertyMetadata(value, PixelShaderConstantCallback(register)));
     public Brush? Input { get => (Brush?)GetValue(InputProperty); set { if (Input != value) SetValue(InputProperty, value); } }
     public Brush? ClearInput { get => (Brush?)GetValue(ClearInputProperty); set { if (ClearInput != value) SetValue(ClearInputProperty, value); } }
@@ -43,9 +53,10 @@ public sealed class LiquidGlassEffect : ShaderEffect
     public double LightingOnly { get => (double)GetValue(LightingOnlyProperty); set { if (LightingOnly != value) SetValue(LightingOnlyProperty, value); } }
     public Point Tint { get => (Point)GetValue(TintProperty); set { if (Tint != value) SetValue(TintProperty, value); } }
     public Point ControlProfile { get => (Point)GetValue(ControlProfileProperty); set { if (ControlProfile != value) SetValue(ControlProfileProperty, value); } }
+    public Point4D Frost { get => (Point4D)GetValue(FrostProperty); set { if (Frost != value) SetValue(FrostProperty, value); } }
     public LiquidGlassEffect()
     {
         PixelShader = Shader;
-        foreach (var property in new[] { InputProperty, ClearInputProperty, SourceSizeProperty, PlateOriginProperty, PlateSizeProperty, ShapeProperty, MaterialProperty, TextureProperty, WorldOriginProperty, LightingProperty, SidesProperty, LightingOnlyProperty, TintProperty, ControlProfileProperty }) UpdateShaderValue(property);
+        foreach (var property in new[] { InputProperty, ClearInputProperty, SourceSizeProperty, PlateOriginProperty, PlateSizeProperty, ShapeProperty, MaterialProperty, TextureProperty, WorldOriginProperty, LightingProperty, SidesProperty, LightingOnlyProperty, TintProperty, ControlProfileProperty, FrostProperty }) UpdateShaderValue(property);
     }
 }

@@ -3,8 +3,10 @@ $projectRoot=Split-Path -Parent $PSScriptRoot
 $source=Join-Path $projectRoot 'src\DockForWindows\Shaders\LiquidGlass.hlsl'
 $destination=Join-Path $projectRoot 'src\DockForWindows\Shaders\LiquidGlass.ps'
 $lightingDestination=Join-Path $projectRoot 'src\DockForWindows\Shaders\LiquidGlass.ControlCenterLighting.ps'
-function NeedsCompile($target){!(Test-Path -LiteralPath $target)-or(Get-Item -LiteralPath $target).LastWriteTimeUtc-lt(Get-Item -LiteralPath $source).LastWriteTimeUtc}
-if(!(NeedsCompile $destination)-and!(NeedsCompile $lightingDestination)){return}
+$fusedSource=Join-Path $projectRoot 'src\DockForWindows\Shaders\LiquidGlass.Fused.hlsl'
+$fusedDestination=Join-Path $projectRoot 'src\DockForWindows\Shaders\LiquidGlass.Fused.ps'
+function NeedsCompile($target,$from=$source){!(Test-Path -LiteralPath $target)-or(Get-Item -LiteralPath $target).LastWriteTimeUtc-lt(Get-Item -LiteralPath $from).LastWriteTimeUtc}
+if(!(NeedsCompile $destination)-and!(NeedsCompile $lightingDestination)-and!(NeedsCompile $fusedDestination $fusedSource)){return}
 if(!('DockShaderCompiler' -as [type])){
 Add-Type -TypeDefinition @'
 using System; using System.IO; using System.Runtime.InteropServices;
@@ -24,3 +26,4 @@ public static class DockShaderCompiler {
 }
 if(NeedsCompile $destination){[DockShaderCompiler]::Compile($source,$destination,$false)}
 if(NeedsCompile $lightingDestination){[DockShaderCompiler]::Compile($source,$lightingDestination,$true)}
+if(NeedsCompile $fusedDestination $fusedSource){[DockShaderCompiler]::Compile($fusedSource,$fusedDestination,$false)}

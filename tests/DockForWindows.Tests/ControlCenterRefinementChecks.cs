@@ -58,7 +58,12 @@ internal static class ControlCenterRefinementChecks
                 var settings=new DockSettings();settings.ControlCenter.Geometry.PanelScale=1;
                 window=new ControlCenterWindow(settings,connectivity:new Connectivity()){DismissOnDeactivate=false};window.Show();window.Activate();await Task.Delay(850);
                 var stage=Field<Grid>(window,"_stage");Check(window.ActualWidth-stage.ActualWidth>=70,"outer gutter allows shadows and transition overshoot");
-                var host=(Grid)window.Content;Check(host.OpacityMask is LinearGradientBrush,"outer boundary feathers rather than clipping along card edges");
+                // The outer boundary feathers rather than clipping along card edges: the halo fades on its own falloff, and the
+                // window-wide side feather (a full-window layer) is applied while content reaches into the gutters.
+                var host=(Grid)window.Content;var halo=Field<FrameworkElement>(window,"_classicBackdrop");
+                Check(halo.OpacityMask is DrawingBrush&&host.OpacityMask is null,"still panel: halo falloff only, no full-window mask");
+                Call(window,"SetGutterActive",true);Check(host.OpacityMask is LinearGradientBrush,"outer boundary feathers rather than clipping along card edges");
+                Call(window,"SetGutterActive",false);Check(host.OpacityMask is null,"feather is released once nothing is in the gutters");
                 foreach(var module in new[]{ControlModule.Wifi,ControlModule.Bluetooth,ControlModule.Volume,ControlModule.Focus}){
                     Call(window,"OpenModule",module,false);await Task.Delay(90);
                     Check(Field<bool>(window,"_transitioning"),"nonlinear page transition remains active after 90ms: "+module);
