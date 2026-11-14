@@ -125,8 +125,8 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
         var kind=WidgetRegistry.Get(instance.DefinitionId).Kind;
         var weather=kind==WidgetKind.Weather||WidgetRegistry.Get(instance.DefinitionId).Layout==WidgetLayout.CalendarWeather?Runtime.Weather(instance.Source):default;
         var notes=kind==WidgetKind.Notes?Runtime.Folder(instance.Source.NotesFolder):default;
-        return new(_model.Settings.Widgets,instance.Source,weather.Weather,Runtime.Media,notes.Notes,notes.Error??weather.Error??(kind==WidgetKind.Music?Runtime.MediaError:null),false,
-            id=>{var options=_model.Settings.Widgets.Copy();var task=options.Tasks.FirstOrDefault(t=>t.Id==id);if(task!=null){task.Completed=!task.Completed;_model.TrySaveWidgets(options);}},EditTask,EditNote,Runtime.Command,HistoryArt:Runtime.HistoryArt);
+        return Runtime.Populate(new(_model.Settings.Widgets,Runtime.ResolvedSource(instance.Source),weather.Weather,Runtime.Media,notes.Notes,notes.Error??weather.Error??(kind==WidgetKind.Music?Runtime.MediaError:null),false,
+            id=>{var options=_model.Settings.Widgets.Copy();var task=options.Tasks.FirstOrDefault(t=>t.Id==id);if(task!=null){task.Completed=!task.Completed;_model.TrySaveWidgets(options);}},EditTask,EditNote,Runtime.Command,HistoryArt:Runtime.HistoryArt),kind);
     }
     internal void EditTask(Guid id)=>WidgetDataEditor.Task(_model.Settings.Widgets,id,options=>{var latest=_model.Settings.Widgets.Copy();var item=options.Tasks.FirstOrDefault(x=>x.Id==id);if(item==null||!latest.Tasks.Any(x=>x.Id==id))return false;latest.Tasks.RemoveAll(x=>x.Id==id);latest.Tasks.Add(item.Copy());return _model.TrySaveWidgets(latest);});
     internal void EditNote(Guid id)=>WidgetDataEditor.Note(_model.Settings.Widgets,id,options=>{var latest=_model.Settings.Widgets.Copy();var item=options.Notes.FirstOrDefault(x=>x.Id==id);if(item==null||!latest.Notes.Any(x=>x.Id==id))return false;latest.Notes.RemoveAll(x=>x.Id==id);latest.Notes.Add(item.Copy());return _model.TrySaveWidgets(latest);});

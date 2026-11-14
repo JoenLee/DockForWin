@@ -963,5 +963,22 @@
   "自动": "Auto",
   "快捷键": "Shortcut",
   "任务栏": "Taskbar",
-  "刷新窗口列表失败": "Refreshing the window list failed"
+  "刷新窗口列表失败": "Refreshing the window list failed",
+  "请输入有效的 Microsoft 客户端 ID。": "Enter a valid Microsoft application (client) ID.",
+  "Microsoft 返回了无效的登录地址。": "Microsoft returned an invalid sign-in URL.",
+  "Microsoft 登录未完成：": "Microsoft sign-in did not complete: ",
+  "登录代码已过期，请重试。": "The sign-in code has expired. Please try again.",
+  "Microsoft 未返回访问令牌。": "Microsoft did not return an access token.",
+  "请先登录 Microsoft 账户。": "Sign in to your Microsoft account first.",
+  "Microsoft 授权失败：": "Microsoft authorization failed: ",
+  "Microsoft 数据读取失败：": "Microsoft data request failed: ",
+  "定位权限未开启，请在 Windows 隐私设置中允许位置访问，或手动选择城市。": "Location access is disabled. Allow location access in Windows privacy settings, or choose a city manually.",
+  "当前位置": "Current location",
+  "定位失败：": "Location failed: ",
+  "正在获取当前位置…": "Finding your current location…",
+  "正在更新天气…": "Updating weather…",
+  "暂无待办": "No tasks",
+  "暂无笔记": "No notes",
+  "Microsoft To Do 或本应用待办 · 清单与截止日期": "Microsoft To Do or local tasks · Lists and due dates",
+  "OneNote、应用笔记或本地文件夹": "OneNote, local notes or a selected folder"
 }
