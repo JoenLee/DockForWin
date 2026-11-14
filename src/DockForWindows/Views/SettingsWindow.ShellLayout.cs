@@ -38,7 +38,7 @@ internal sealed partial class SettingsWindow
                     if(group.Outer.Children.Count>0&&group.Outer.Children[0] is TextBlock groupTitle)groupTitle.Visibility=Visibility.Collapsed;
                     var detailBody=PageBody();detailBody.Children.Add(PageHeader(i,group.Title,""));detailBody.Children.Add(group.Outer);
                     if(g==0){var resetButton=body.Children.OfType<Button>().FirstOrDefault();if(resetButton is not null){body.Children.Remove(resetButton);detailBody.Children.Add(resetButton);}}
-                    RegisterAdvancedPage(key,section,group.Title,new ScrollViewer{Content=detailBody,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});details[g]=key;
+                    RegisterFullPage(key,section,group.Title,true,new ScrollViewer{Content=detailBody,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});details[g]=key;
                 }
                 RegisterFullPage(FullKeys[0],0,FullTitles[0],false,(ScrollViewer)BuildAppearanceInspector(g=>details.TryGetValue(g,out var k)?k:null,BuildDockAdvanced(details,groups.Select(g=>g.Title).ToArray())));
                 continue;
@@ -46,8 +46,7 @@ internal sealed partial class SettingsWindow
             // A group named like its page would only repeat the title above it.
             foreach(var group in groups)if((group.Title==FullTitles[i]||group.Title==LocalizedText.Get("控制中心")&&i==7)&&group.Outer.Children.Count>0&&group.Outer.Children[0] is TextBlock repeated)repeated.Visibility=Visibility.Collapsed;
             // The Dock's detail pages (sections 1–6) are already one level down: everything stays on the page.
-            if(i is >=1 and <=4){RegisterAdvancedPage(FullKeys[i],i,FullTitles[i],page);continue;}
-            if(i is 5 or 6){RegisterFullPage(FullKeys[i],i,FullTitles[i],true,page);continue;}
+            if(i is >=1 and <=6){RegisterFullPage(FullKeys[i],i,FullTitles[i],true,page);continue;}
             // The control center keeps its first group inline; the rest become rows of one list that open detail pages.
             StackPanel? more=null;
             StackPanel More(int at){if(more is not null)return more;more=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(more);surface.Margin=new Thickness(0,0,0,26);body.Children.Insert(at,surface);body.Children.Insert(at,GroupTitle(LocalizedText.Get("布局与材质")));return more;}
@@ -66,7 +65,7 @@ internal sealed partial class SettingsWindow
         }
         preview.Margin=new Thickness(DesignSystem.PageInset,4,DesignSystem.PageInset,28);var previewPage=new ScrollViewer{Content=preview,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
         for(int section=0;section<8;section++)RegisterFullPage("settings-preview-"+section,section,LocalizedText.Get("预览"),true,previewPage);
-        PageHost.Navigated+=RestoreCurrentScroll;PageHost.Navigated+=()=>{if(PageHost.CurrentKey==FullKeys[0])SyncDockInspector();if(_advanced.Any(c=>c.Key==PageHost.CurrentKey))SelectAdvanced(PageHost.CurrentKey,false);};
+        PageHost.Navigated+=RestoreCurrentScroll;PageHost.Navigated+=()=>{if(PageHost.CurrentKey==FullKeys[0])SyncDockInspector();};
         Loaded+=(_,_)=>RestoreCurrentScroll();
         CompleteSettingsShell(footer,selected);
     }
