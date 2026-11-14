@@ -19,13 +19,13 @@ internal partial class SettingsShellWindow
     {
         _pages.Register("dashboard",8,"概览",false,BuildDashboard);
         _pages.Register("widgets",9,"桌面小组件",false,()=>new WidgetGalleryPage(_draft.Widgets));
-        _pages.Register("performance",10,"性能与渲染",false,BuildPerformance);
+        _pages.Register("performance",10,"性能",true,BuildPerformance);
         _pages.Register("general",11,"通用设置",false,()=>{
-            var (page,body)=Page("通用设置","应用行为、窗口外观与系统集成",11);var group=Group(body,"应用偏好");
-            OverviewLink(group,"应用与文件","固定项目、运行与最近使用","apps");OverviewLink(group,"位置与隐藏","显示器、停靠和自动隐藏","placement");
-            OverviewLink(group,"系统与启动","登录后自动启动","system");OverviewLink(group,"窗口外观","跟随系统、浅色或深色","interface");return page;
+            // The tab names the page; preferences that are a single control live right here instead of a page each.
+            var (page,body)=Page("通用","");body.Margin=new Thickness(DesignSystem.PageInset,18,DesignSystem.PageInset,28);var group=Group(body,"偏好");BuildGeneralPreferences(group);
+            var more=Group(body,"关于与诊断");OverviewLink(more,"性能","当前进程的内存快照","performance");OverviewLink(more,"关于 DockForWin","版本 "+typeof(SettingsShellWindow).Assembly.GetName().Version?.ToString(3),"about");return page;
         });
-        _pages.Register("about",12,"关于",false,BuildAbout);
+        _pages.Register("about",12,"关于",true,BuildAbout);
         _pages.Navigated+=()=>{foreach(var refresh in _overviewRefresh)refresh();};
     }
     private static string ThemeName(DockTheme theme)=>theme switch{DockTheme.Glass=>"液态玻璃",DockTheme.Light=>"浅色",DockTheme.Dark=>"深色",DockTheme.Custom=>"自定义",_=>"跟随系统"};
@@ -75,6 +75,8 @@ internal partial class SettingsShellWindow
     }
     // The full settings window adds the live dock sample; the bare shell keeps just the wallpaper.
     protected virtual void DecorateDashboardHero(Grid scene){}
+    // 通用 › 偏好: the bare shell links to the pages; the full settings window puts the controls themselves here.
+    protected virtual void BuildGeneralPreferences(Panel group){OverviewLink(group,"系统与启动","登录后自动启动","system");OverviewLink(group,"窗口外观","跟随系统、浅色或深色","interface");}
     // Status card: a raised tile that lifts a little further under the pointer.
     private static ControlTemplate CardTemplate()
     {
@@ -89,25 +91,23 @@ internal partial class SettingsShellWindow
     }
     private FrameworkElement BuildPerformance()
     {
-        var (page,body)=Page("性能与渲染","只显示已经接入的真实数据，快照不会持续轮询",10);var group=Group(body,"当前进程");
+        var (page,body)=Page("性能","当前进程的内存快照，打开或刷新时读取一次",10);var group=Group(body,"当前进程");
         var working=new TextBlock{FontSize=13.5};var privateBytes=new TextBlock{FontSize=13.5};var sampled=new TextBlock{FontSize=13.5};
-        foreach(var value in new[]{working,privateBytes,sampled})value.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");
+        foreach(var value in new[]{working,privateBytes,sampled}){value.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");System.Windows.Documents.Typography.SetNumeralAlignment(value,FontNumeralAlignment.Tabular);}
         AddRow(group,LabeledRow("工作集内存",working));AddRow(group,LabeledRow("私有内存",privateBytes));AddRow(group,LabeledRow("采样时间",sampled));
         void Refresh(){using var process=Process.GetCurrentProcess();working.Text=$"{process.WorkingSet64/1048576d:0.0} MB";privateBytes.Text=$"{process.PrivateMemorySize64/1048576d:0.0} MB";sampled.Text=DateTime.Now.ToString("HH:mm:ss");}
         _overviewRefresh.Add(Refresh);Refresh();var refresh=Button("刷新快照",Refresh,"performance-refresh");refresh.HorizontalAlignment=HorizontalAlignment.Left;refresh.Margin=new Thickness(0,-12,0,26);body.Children.Add(refresh);
-        var rendering=Group(body,"渲染监测");
-        foreach(var item in new[]{"CPU / GPU 占用","实际呈现帧率","背景更新延迟","显存与提交内存"}){var pending=new TextBlock{Text="尚未接入",FontSize=13.5};pending.SetResourceReference(TextBlock.ForegroundProperty,"SettingsTertiary");AddRow(rendering,LabeledRow(item,pending));}
-        OverviewLink(rendering,"材质与画质参数","调整现有设置，不改变渲染管线","appearance");return page;
+        return page;
     }
     private FrameworkElement BuildAbout()
     {
         var body=PageBody();var page=new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=false};AutomationProperties.SetName(page,"关于");
         var identity=new StackPanel{HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,26,0,30)};
-        identity.Children.Add(new Image{Source=IosStyles.AppIcon(),Width=88,Height=88,Effect=new DropShadowEffect{BlurRadius=18,ShadowDepth=5,Direction=270,Opacity=.22}});
-        identity.Children.Add(new TextBlock{Text="DockForWin",FontFamily=DesignSystem.DisplayFont,FontSize=24,FontWeight=FontWeights.SemiBold,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,16,0,2)});
+        identity.Children.Add(new Image{Source=IosStyles.AppIcon(),Width=88,Height=88,Effect=new DropShadowEffect{BlurRadius=24,ShadowDepth=6,Direction=270,Opacity=.16}});
+        identity.Children.Add(new TextBlock{Text="DockForWin",FontFamily=DesignSystem.DisplayFont,FontSize=24,FontWeight=FontWeights.SemiBold,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,16,0,4)});
         identity.Children.Add(Muted("版本 "+typeof(SettingsShellWindow).Assembly.GetName().Version?.ToString(3)+" · 开发预览",new Thickness(0)).With(t=>t.HorizontalAlignment=HorizontalAlignment.Center));body.Children.Add(identity);
         var group=Group(body,"应用信息");
-        foreach(var (label,value) in new[]{("技术栈","C# · WPF · .NET 10"),("设置","保存前保留为草稿"),("字体","Segoe UI Variable · 未来荧黑")}){var text=new TextBlock{Text=value,FontSize=13.5};text.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");AddRow(group,LabeledRow(label,text));}
+        foreach(var (label,value) in new[]{("技术栈","C# · WPF · .NET 10"),("字体","Segoe UI Variable · 微软雅黑 UI · 未来荧黑（标题）")}){var text=new TextBlock{Text=value,FontSize=13.5};text.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");AddRow(group,LabeledRow(label,text));}
         return page;
     }
     protected void OverviewLink(Panel group,string title,string subtitle,string route)=>Link(group,title,subtitle,"overview-"+route,()=>_pages.Navigate(route));

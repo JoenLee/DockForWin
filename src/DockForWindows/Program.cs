@@ -18,11 +18,14 @@ public static class Program
     public static int Main(string[] args)
     {
         try { NativeMethods.SetProcessDpiAwarenessContext(new nint(-4)); } catch { }
-        using var mutex = new Mutex(true, @"Local\DockForWindows.Development.Instance", out bool first);
-        using var signal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.Show");
-        using var settingsSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.Settings");
-        using var exitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.Exit");
-        using var controlSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.ControlCenter");
+        // DOCKFORWINDOWS_INSTANCE gives a test run its own instance, so it never hands its arguments (or --shutdown)
+        // to the copy the person is using.
+        string instance = Environment.GetEnvironmentVariable("DOCKFORWINDOWS_INSTANCE") is { Length: > 0 } tag ? "." + tag : "";
+        using var mutex = new Mutex(true, @"Local\DockForWindows.Development.Instance" + instance, out bool first);
+        using var signal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.Show" + instance);
+        using var settingsSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.Settings" + instance);
+        using var exitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.Exit" + instance);
+        using var controlSignal = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\DockForWindows.Development.ControlCenter" + instance);
         bool exitRequested = Array.Exists(args, a => a == "--shutdown");
         if (!first)
         {
@@ -66,15 +69,10 @@ public static class Program
                 app.Shutdown(1);
             };
             using var controlTaskbar=new ControlCenterTaskbarEntry(window.ToggleControlCenter);window.ControlCenterStateChanged+=controlTaskbar.SetOpen;controlTaskbar.Show();
-            var menu = new Forms.ContextMenuStrip();
-            menu.Items.Add("显示程序坞", null, (_, _) => window.Reveal());
-            menu.Items.Add("添加应用与文件…", null, (_, _) => window.AddApplication());
-            menu.Items.Add("外观与设置…", null, (_, _) => window.OpenSettings());
-            menu.Items.Add("液态玻璃控制中心",null,(_,_)=>window.ToggleControlCenter());
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add("退出", null, (_, _) => app.Shutdown());
+            // Clicking the icon opens the settings, where everything else lives; the menu adds the control center and quit.
+            var menu = TrayMenu.Create(window.OpenSettings, window.ToggleControlCenter, app.Shutdown);
             tray.ContextMenuStrip = menu;
-            tray.DoubleClick += (_, _) => window.Reveal();
+            tray.MouseClick += (_, e) => { if (e.Button == Forms.MouseButtons.Left) window.OpenSettings(); };
             var registration = ThreadPool.RegisterWaitForSingleObject(signal, (_, _) => app.Dispatcher.BeginInvoke(window.Reveal), null, Timeout.Infinite, false);
             var settingsRegistration = ThreadPool.RegisterWaitForSingleObject(settingsSignal, (_, _) => app.Dispatcher.BeginInvoke(window.OpenSettings), null, Timeout.Infinite, false);
             var exitRegistration = ThreadPool.RegisterWaitForSingleObject(exitSignal, (_, _) => app.Dispatcher.BeginInvoke(() => app.Shutdown()), null, Timeout.Infinite, false);

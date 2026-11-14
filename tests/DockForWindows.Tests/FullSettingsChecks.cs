@@ -55,7 +55,7 @@ internal static class FullSettingsChecks
                 Click(window,"settings-sidebar-collapse");await Task.Delay(80);Assert(Math.Abs(columns[0].ActualWidth-240)<1,"sidebar restores its original width");
                 Click(window,"settings-about");await Task.Delay(240);Assert((string)Property(host,"CurrentKey")=="about","bottom about action is reachable");Click(window,"settings-shell-back");await Task.Delay(280);
                 nav.SelectedIndex=6;await Task.Delay(240);Click(window,"overview-apps");await Task.Delay(280);Assert((string)Property(host,"CurrentKey")=="apps"&&(bool)Property(host,"IsDetail"),"legacy application settings retained under general navigation");
-                nav.SelectedIndex=5;await Task.Delay(280);Assert(Tree<TextBlock>(window).Any(t=>t.Text=="私有内存")&&Tree<TextBlock>(window).Any(t=>t.Text.EndsWith(" MB"))&&Tree<TextBlock>(window).Count(t=>t.Text=="尚未接入")>=4,"performance page distinguishes measured memory from unavailable rendering data");
+                nav.SelectedIndex=5;await Task.Delay(280);Assert(Tree<TextBlock>(window).Any(t=>t.Text=="私有内存")&&Tree<TextBlock>(window).Any(t=>t.Text.EndsWith(" MB"))&&!Tree<TextBlock>(window).Any(t=>t.Text=="尚未接入"),"performance page shows measured memory only, no placeholder rows");
                 Capture(window,Path.Combine(directory,"00-performance.png"));
                 nav.SelectedIndex=3;await Task.Delay(280);
                 if(dashboardOnly){Click(window,"overview-icons");await Task.Delay(280);Assert((string)Property(host,"CurrentKey")=="icons","icon/reflection settings have a visible appearance entry");nav.SelectedIndex=0;await Task.Delay(240);Capture(window,Path.Combine(directory,"00-dashboard.png"));result=0;return;}

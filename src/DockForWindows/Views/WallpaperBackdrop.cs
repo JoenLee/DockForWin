@@ -71,7 +71,8 @@ internal static class WallpaperFrost
 {
     // Cover: where the picture lies on screen (physical pixels; may overhang the monitor like "Fill").
     // Clear: the picture itself, for liquid glass to refract. Light/Dark: heavily frosted, toned per appearance.
-    internal sealed record Frost(BitmapSource Light, BitmapSource Dark, BitmapSource Clear, Rect Cover);
+    // Sharp is the picture at screen resolution, for places that show the desktop itself rather than glass.
+    internal sealed record Frost(BitmapSource Light, BitmapSource Dark, BitmapSource Clear, Rect Cover, BitmapSource Sharp);
     private sealed class Entry { public Frost? Frost; public bool Loading; public bool Stale; }
     private static readonly Dictionary<string, Entry> Cache = new(StringComparer.OrdinalIgnoreCase);
     public static event Action? Changed;
@@ -123,7 +124,10 @@ internal static class WallpaperFrost
         // "Fill": scale the picture to cover the target, centred.
         double scale = Math.Max(target.Width / clear.PixelWidth, target.Height / clear.PixelHeight);
         var cover = new Rect(target.X + (target.Width - clear.PixelWidth * scale) / 2, target.Y + (target.Height - clear.PixelHeight * scale) / 2, clear.PixelWidth * scale, clear.PixelHeight * scale);
-        return new Frost(Tone(pixels, w, h, false), Tone(pixels, w, h, true), clear, cover);
+        BitmapSource sharp = clear;
+        try { if (path is { Length: > 0 } && File.Exists(path)) { sharp = Decode(path, (int)Math.Clamp(Math.Ceiling(cover.Width), ClearWidth, 3840)); sharp = new FormatConvertedBitmap(sharp, PixelFormats.Bgra32, null, 0); sharp.Freeze(); } }
+        catch { sharp = clear; }
+        return new Frost(Tone(pixels, w, h, false), Tone(pixels, w, h, true), clear, cover, sharp);
     }
     // Decoded below screen size on purpose: magnified, it carries the faint scatter of real glass, so busy photos never fight the text.
     private const int ClearWidth = 960;

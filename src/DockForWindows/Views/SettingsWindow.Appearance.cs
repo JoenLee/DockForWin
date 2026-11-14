@@ -16,94 +16,180 @@ using Forms = System.Windows.Forms;
 
 namespace DockForWindows.Views;
 
-// 外观与主题 as an inspector: the person's own desktop as a stage in the middle, with the Dock and a Control Center
-// rendered in the material being chosen, and a narrow inspector on the right holding the few choices that matter —
-// liquid or frosted glass, light or dark, how far toward 磨砂 or 水光, the Dock's shape, and a tint. The detailed
-// renderer values stay one click away under 高级调节.
+// 程序坞: a low strip of the person's own desktop with the Dock on it, in the material being chosen, then two quiet
+// groups of choices — the material (液态玻璃/浅色/深色, 质感, 色调) and the Dock itself (size, corners, hiding).
+// Every detailed value stays one link away under 高级设置.
 internal sealed partial class SettingsWindow
 {
     private readonly Grid _stage = new() { ClipToBounds = true };
-    private readonly Image _stageWall = new() { Stretch = Stretch.UniformToFill, IsHitTestVisible = false };
+    private readonly Rectangle _stageWall = new() { IsHitTestVisible = false };
+    private readonly ImageBrush _stageBrush = new() { ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill };
+    private Rect _stageCover = Rect.Empty;
+    private SettingsSegmentedControl _material = null!, _position = null!; private FrameworkElement _qualityCell = null!;
+    // Quick controls on the 程序坞 page, each mirroring a detailed control by id (or writing the draft directly).
+    private readonly List<Action> _quickSync = new();
     private readonly DockSurface _stageDock = new() { IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom };
     private readonly DockSurface _stageCenter = new() { IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Width = 196, Height = 172, Margin = new Thickness(0, 18, 18, 0) };
     private readonly StackPanel _stageIcons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false };
     private readonly Grid _stageCenterContent = new() { Width = 196, Height = 172, Margin = new Thickness(0, 18, 18, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false };
-    private readonly List<(Border Ring, string Hex)> _tintChoices = new();
     private CheckBox _liquid = null!; private Slider _quality = null!;
+    private const double StageHeight = 150;
 
     private FrameworkElement BuildAppearanceInspector(Func<int, string?> detailKey)
     {
-        var page = new Grid { Margin = new Thickness(12, 0, 12, 12) };
-        page.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        page.ColumnDefinitions.Add(new() { Width = new GridLength(12) });
-        page.ColumnDefinitions.Add(new() { Width = new GridLength(276) });
+        var page = new StackPanel { Margin = new Thickness(DesignSystem.PageInset, 18, DesignSystem.PageInset, 18) };
 
-        // Stage: the real desktop picture, the Dock in the chosen material with the person's pinned apps, and a
-        // small Control Center in the same glass.
-        var frame = new Border { CornerRadius = new CornerRadius(14), Child = _stage };
-        frame.SizeChanged += (_, _) => { var clip = new RectangleGeometry(new Rect(frame.RenderSize), 14, 14); clip.Freeze(); frame.Clip = clip; };
-        AutomationProperties.SetAutomationId(_stage, "appearance-stage");
-        _stage.Children.Add(_stageWall);
-        var label = new TextBlock { Text = "你的桌面", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White, Margin = new Thickness(14, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Effect = new DropShadowEffect { BlurRadius = 4, ShadowDepth = 1, Direction = 270, Opacity = .45 } };
-        _stage.Children.Add(label);
-        _stage.Children.Add(_stageCenter); _stage.Children.Add(_stageCenterContent); BuildStageCenter();
-        _stage.Children.Add(_stageDock); _stage.Children.Add(_stageIcons);
-        var shadow = new Border { CornerRadius = new CornerRadius(14), Background = Brushes.Black, Opacity = .12, Margin = new Thickness(0, 2, 0, -2), Effect = new BlurEffect { Radius = 10 }, IsHitTestVisible = false };
-        var stageHost = new Grid(); stageHost.Children.Add(shadow); stageHost.Children.Add(frame); page.Children.Add(stageHost);
+        // The strip: wallpaper, a small caption, the Dock sitting on it.
+        var frame = new SquircleBorder { CornerRadius = new CornerRadius(16), Exponent = 2.5, Height = StageHeight, Child = _stage };
+        AutomationProperties.SetAutomationId(_stage, "appearance-stage"); AutomationProperties.SetAutomationId(frame, "rounded-stage-frame");
+        // The caption is a quiet dark pill, legible on any picture without a drop shadow.
+        var caption = new Border { Background = DesignSystem.Brush(Color.FromArgb(92, 0, 0, 0)), CornerRadius = new CornerRadius(9), Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(12, 10, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false,
+            Child = new TextBlock { Text = "你的桌面", FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = DesignSystem.Brush(Color.FromArgb(240, 255, 255, 255)) } };
+        // A soft floor under the Dock gives it somewhere to stand on bright pictures.
+        var floor = new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(0, 0, 0, 0), 0), new(Color.FromArgb(46, 0, 0, 0), 1) }, 90); floor.Freeze();
+        var ground = new Border { Background = floor, Height = StageHeight * .45, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false };
+        _stage.Children.Add(_stageWall); _stage.Children.Add(ground); _stage.Children.Add(_stageDock); _stage.Children.Add(_stageIcons); _stage.Children.Add(caption);
+        // A hairline of light along the stage's edge separates the picture from the canvas.
+        var edge = new SquircleBorder { CornerRadius = new CornerRadius(16), Exponent = 2.5, BorderThickness = new Thickness(1), IsHitTestVisible = false, BorderBrush = DesignSystem.Brush(Color.FromArgb(Design.Dark ? (byte)26 : (byte)20, Design.Dark ? (byte)255 : (byte)0, Design.Dark ? (byte)255 : (byte)0, Design.Dark ? (byte)255 : (byte)0)) };
+        var stageHost = new Grid { Height = StageHeight }; stageHost.Children.Add(frame); stageHost.Children.Add(edge);
+        page.Children.Add(stageHost);
 
-        // Inspector.
-        var card = new Border { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(16, 6, 16, 14) };
-        card.SetResourceReference(Border.BackgroundProperty, "SettingsCard"); card.SetResourceReference(Border.BorderBrushProperty, "SettingsGroupEdge");
-        Grid.SetColumn(card, 2); page.Children.Add(card);
-        var dock = new DockPanel { LastChildFill = true }; card.Child = dock;
-
-        var tints = new StackPanel(); DockPanel.SetDock(tints, Dock.Bottom); dock.Children.Add(tints);
-        tints.Children.Add(Caption("色调", new Thickness(0, 12, 0, 8)));
-        var row = new WrapPanel(); tints.Children.Add(row);
-        foreach (var (name, hex) in GlassMaterial.Tints) row.Children.Add(TintSwatch(name, hex));
-        row.Children.Add(TintSwatch("自定义", null));
-
-        // Everything above the tints scrolls on its own when the window is short; the tints stay pinned at the bottom.
-        var top = new StackPanel(); dock.Children.Add(new ScrollViewer { Content = top, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Margin = new Thickness(0, 0, -10, 0), Padding = new Thickness(0, 0, 10, 0) });
-        top.Children.Add(Caption("材质", new Thickness(0, 10, 0, 0)));
-        _liquid = new CheckBox { Content = "液态玻璃", IsChecked = _draft.LiquidGlass }; AutomationProperties.SetAutomationId(_liquid, "liquid-glass"); AutomationProperties.SetName(_liquid, "液态玻璃");
-        _liquid.Checked += (_, _) => MaterialChanged(); _liquid.Unchecked += (_, _) => MaterialChanged(); top.Children.Add(_liquid);
-        var mode = Segmented(new[] { "跟随系统", "浅色", "深色" }, (int)_draft.InterfaceTheme); mode.Width = double.NaN; mode.HorizontalAlignment = HorizontalAlignment.Stretch; mode.Margin = new Thickness(0, 2, 0, 12);
-        AutomationProperties.SetAutomationId(mode, "appearance-mode"); AutomationProperties.SetName(mode, "外观");
-        mode.SelectionChanged += (_, _) =>
-        {
-            if (!_ready || mode.SelectedIndex < 0 || (int)_draft.InterfaceTheme == mode.SelectedIndex) return;
-            _draft.InterfaceTheme = (InterfaceTheme)mode.SelectedIndex; _draft.ControlCenter.ColorMode = (ControlCenterColorMode)mode.SelectedIndex;
-            Dispatcher.BeginInvoke(() => _dock.ReopenSettings(_draft, CurrentSettingsSection));
-        };
-        top.Children.Add(mode);
-        top.Children.Add(new TextBlock { Text = "质感", FontSize = DesignSystem.Body });
-        _quality = new Slider { Minimum = 0, Maximum = 1, Value = _draft.GlassQuality, Margin = new Thickness(0, 4, 0, 0) }; AutomationProperties.SetAutomationId(_quality, "glass-quality"); AutomationProperties.SetName(_quality, "质感");
+        _material = Segmented(new[] { "液态玻璃", "浅色", "深色" }, 0); _material.SelectedIndex = MaterialIndex();
+        AutomationProperties.SetAutomationId(_material, "dock-material"); AutomationProperties.SetName(_material, "材质");
+        _material.SelectionChanged += (_, _) => MaterialPicked();
+        _position = Segmented(new[] { "底部", "左侧", "右侧" }, (int)_draft.Edge);
+        AutomationProperties.SetAutomationId(_position, "dock-position"); AutomationProperties.SetName(_position, "位置");
+        _position.SelectionChanged += (_, _) => { if (!_ready || _updating || _position.SelectedIndex < 0) return; if (Setting<ComboBox>("dock-edge") is { } edge) edge.SelectedIndex = _position.SelectedIndex; };
+        _quickSync.Add(() => _position.SelectedIndex = (int)_draft.Edge);
+        // 质感: from milk glass (磨砂) to clear water-light glass (水光); the renderer values follow it.
+        _liquid = new CheckBox { IsChecked = _draft.LiquidGlass }; AutomationProperties.SetAutomationId(_liquid, "liquid-glass"); AutomationProperties.SetName(_liquid, "液态玻璃");
+        _quality = new Slider { Minimum = 0, Maximum = 1, Value = _draft.GlassQuality, VerticalAlignment = VerticalAlignment.Center }; AutomationProperties.SetAutomationId(_quality, "glass-quality"); AutomationProperties.SetName(_quality, "质感");
         _quality.ValueChanged += (_, _) => { if (!_ready || _updating) return; _draft.GlassQuality = _quality.Value; MaterialChanged(); };
-        top.Children.Add(_quality);
-        var ends = new Grid { Margin = new Thickness(0, 2, 0, 4) }; var frost = Caption("磨砂", new Thickness()); var water = Caption("水光", new Thickness()); water.HorizontalAlignment = HorizontalAlignment.Right; ends.Children.Add(frost); ends.Children.Add(water); top.Children.Add(ends);
+        var qualityValue = new TextBlock(); _quality.ValueChanged += (_, _) => qualityValue.Text = _quality.Value < .34 ? "磨砂" : _quality.Value > .66 ? "水光" : "适中";
+        qualityValue.Text = _quality.Value < .34 ? "磨砂" : _quality.Value > .66 ? "水光" : "适中";
+        _quickSync.Add(() => _quality.Value = _draft.GlassQuality);
 
-        top.Children.Add(Rule());
-        top.Children.Add(Caption("程序坞", new Thickness(0, 12, 0, 2)));
-        top.Children.Add(MiniRange("圆角", "dock-corner", 0, 100, _draft.Appearance.CornerRadius, "0'%'", v => _draft.Appearance.CornerRadius = v));
-        top.Children.Add(MiniRange("大小", "dock-icon-size", 32, 72, _draft.IconSize, "0", v => _draft.IconSize = Math.Round(v)));
-        top.Children.Add(Rule());
-        foreach (var (title, summary, section) in new[] { ("高级调节", "折射、高光、暗角", 1), ("底板与颜色", "主题、透明度、底色", 0), ("边缘与阴影", "边框、阴影、运行点", 2) })
-            if (detailKey(section) is { } key) top.Children.Add(Compact(title, summary, "appearance-" + key, () => NavigateSettingsPage(key)));
-        top.Children.Add(Compact("图标与倒影", "尺寸、间距、倒影", "appearance-icons", () => NavigateSettingsPage("icons")));
+        // One table, two columns, every cell the same anatomy: label, control, value.
+        var table = new StackPanel();
+        void Pair(FrameworkElement left, FrameworkElement right)
+        {
+            if (table.Children.Count > 0) table.Children.Add(Hairline());
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); row.ColumnDefinitions.Add(new() { Width = new GridLength(41) }); row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+            row.Children.Add(left);
+            var divider = new Border { Width = 1, HorizontalAlignment = HorizontalAlignment.Center, SnapsToDevicePixels = true }; divider.SetResourceReference(Border.BackgroundProperty, "SettingsLine"); Grid.SetColumn(divider, 1); row.Children.Add(divider);
+            Grid.SetColumn(right, 2); row.Children.Add(right);
+            table.Children.Add(row);
+        }
+        Pair(Cell("材质", _material), Cell("位置", _position));
+        Pair(_qualityCell = Cell("质感", _quality, qualityValue), CornerCell());
+        Pair(Mirror("大小", "icon-size", "dock-icon-size", v => $"{v:0}"), Mirror("间距", "icon-spacing", "dock-spacing", v => $"{v:0}"));
+        Pair(Mirror("放大", "magnification", "dock-magnification", v => $"{v:0.00}×"), Switch("动画", "animations", "dock-animations", () => _draft.Animations));
+        Pair(Switch("自动隐藏", "auto-hide", "dock-auto-hide", () => _draft.AutoHide), Switch("最近应用", "recent-apps", "dock-recent", () => _draft.ShowRecentApps));
+        table.Children.Add(Hairline());
+        var advanced = Compact("高级设置", "材质、图标、动画与位置", "appearance-advanced", () => NavigateSettingsPage("dock-advanced"));
+        advanced.Height = 46; table.Children.Add(advanced);
+        var card = new SquircleBorder { CornerRadius = new CornerRadius(14), Exponent = 2.5, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(0, 16, 0, 0), Child = table, BorderThickness = new Thickness(1) };
+        card.SetResourceReference(Border.BorderBrushProperty, "SettingsGroupEdge");
+        card.SetResourceReference(Border.BackgroundProperty, "SettingsCard");
+        page.Children.Add(card);
 
-        RefreshTintChoices();
+        SyncDockInspector();
         _stage.SizeChanged += (_, _) => RefreshStageBackdrop();
         _stage.Loaded += (_, _) => RefreshStage();
         WallpaperFrost.Changed += RefreshStage; Closed += (_, _) => WallpaperFrost.Changed -= RefreshStage;
-        LocationChanged += (_, _) => { if (_ready) Dispatcher.BeginInvoke(RefreshStageBackdrop, DispatcherPriority.Background); };
-        // The page fills the pane (no outer scrolling): the stage keeps the whole desktop in view.
-        var scroll = new ScrollViewer { Content = page, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        var scroll = new ScrollViewer { Content = page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
         AutomationProperties.SetName(scroll, "外观与主题");
         return scroll;
     }
-    private static TextBlock Caption(string text, Thickness margin) { var t = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = margin }; t.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted"); return t; }
-    private static Border Rule() { var line = new Border { Height = 1, Margin = new Thickness(0, 10, 0, 0) }; line.SetResourceReference(Border.BackgroundProperty, "SettingsLine"); return line; }
+    private static Border Hairline() { var line = new Border { Height = 1, SnapsToDevicePixels = true }; line.SetResourceReference(Border.BackgroundProperty, "SettingsLine"); return line; }
+    // A cell: label (fixed column), the control, and an optional muted value on the right.
+    private static Grid Cell(string title, FrameworkElement control, TextBlock? value = null)
+    {
+        var grid = new Grid { Height = 46 };
+        grid.ColumnDefinitions.Add(new() { Width = new GridLength(64) }); grid.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); grid.ColumnDefinitions.Add(new() { Width = new GridLength(value is null ? 0 : 50) });
+        grid.Children.Add(new TextBlock { Text = title, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center });
+        control.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(control, 1); grid.Children.Add(control);
+        if (value is not null) { System.Windows.Documents.Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular); value.FontSize = 12.5; value.TextAlignment = TextAlignment.Right; value.VerticalAlignment = VerticalAlignment.Center; value.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted"); Grid.SetColumn(value, 2); grid.Children.Add(value); }
+        return grid;
+    }
+    // A slider that drives the detailed control with the same id, so both always agree and the value is saved once.
+    private FrameworkElement Mirror(string title, string source, string id, Func<double, string> format)
+    {
+        var detail = _ranges[source];
+        var slider = new Slider { Minimum = detail.Minimum, Maximum = detail.Maximum, TickFrequency = detail.TickFrequency, IsSnapToTickEnabled = true, Value = detail.Value };
+        AutomationProperties.SetAutomationId(slider, id); AutomationProperties.SetName(slider, title);
+        var value = new TextBlock { Text = format(slider.Value) };
+        slider.ValueChanged += (_, _) => { value.Text = format(slider.Value); if (!_ready || _updating) return; detail.Value = slider.Value; };
+        _quickSync.Add(() => slider.Value = detail.Value);
+        return Cell(title, slider, value);
+    }
+    // 圆角 writes the draft itself: the detailed slider would also turn a light or dark Dock into 自定义.
+    private FrameworkElement CornerCell()
+    {
+        var slider = new Slider { Minimum = 0, Maximum = 100, TickFrequency = 1, IsSnapToTickEnabled = true, Value = _draft.Appearance.CornerRadius };
+        AutomationProperties.SetAutomationId(slider, "dock-corner"); AutomationProperties.SetName(slider, "圆角");
+        var value = new TextBlock { Text = $"{slider.Value:0}%" };
+        slider.ValueChanged += (_, _) =>
+        {
+            value.Text = $"{slider.Value:0}%"; if (!_ready || _updating) return;
+            _draft.Appearance.CornerRadius = slider.Value; _updating = true; _ranges["corner-radius"].Value = slider.Value; _updating = false;
+            _glassOnlyPreview = false; QueuePreview(); RefreshStage();
+        };
+        _quickSync.Add(() => slider.Value = _draft.Appearance.CornerRadius);
+        return Cell("圆角", slider, value);
+    }
+    // A switch cell that flips the detailed switch with the same id.
+    private FrameworkElement Switch(string title, string source, string id, Func<bool> read)
+    {
+        var toggle = new CheckBox { Content = title, IsChecked = read(), Height = 46 };
+        AutomationProperties.SetAutomationId(toggle, id); AutomationProperties.SetName(toggle, title);
+        void Changed() { if (!_ready || _updating) return; if (Setting<CheckBox>(source) is { } detail) detail.IsChecked = toggle.IsChecked; }
+        toggle.Checked += (_, _) => Changed(); toggle.Unchecked += (_, _) => Changed();
+        _quickSync.Add(() => toggle.IsChecked = read());
+        return toggle;
+    }
+    private readonly Dictionary<string, FrameworkElement> _settingLookup = new();
+    private T? Setting<T>(string id) where T : FrameworkElement
+    {
+        if (_settingLookup.TryGetValue(id, out var known)) return known as T;
+        foreach (var root in _settingsPages.Values.Distinct())
+            foreach (var item in WalkSettings(root))
+                if (item is T found && AutomationProperties.GetAutomationId(found) == id) { _settingLookup[id] = found; return found; }
+        return null;
+    }
+    // A text link with a chevron, quiet until hovered.
+    private static Button QuietLink(string title, string id, Action action)
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 6) };
+        var text = new TextBlock { Text = title, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center }; text.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted"); content.Children.Add(text);
+        var chevron = new Path { Data = Geometry.Parse("M1,1 L5,5 L1,9"), StrokeThickness = 1.5, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, Width = 6, Height = 10, Margin = new Thickness(7, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        chevron.SetResourceReference(Shape.StrokeProperty, "SettingsMuted"); content.Children.Add(chevron);
+        var button = new Button { Content = content, Template = LinkTemplate(), Padding = new Thickness(0), Cursor = System.Windows.Input.Cursors.Hand };
+        AutomationProperties.SetAutomationId(button, id); AutomationProperties.SetName(button, title); button.Click += (_, _) => action(); return button;
+    }
+    private int MaterialIndex() => _draft.Theme switch { DockTheme.Glass => 0, DockTheme.Light => 1, DockTheme.Dark => 2, _ => -1 };
+    // 液态玻璃 derives the renderer values from 质感; 浅色 and 深色 are the plain themes.
+    private void MaterialPicked()
+    {
+        if (!_ready || _updating || _material.SelectedIndex < 0 || _material.SelectedIndex == MaterialIndex()) return;
+        if (_material.SelectedIndex == 0) { _updating = true; _liquid.IsChecked = true; _updating = false; _draft.LiquidGlass = true; MaterialChanged(); }
+        else _theme.SelectedIndex = _material.SelectedIndex == 1 ? (int)DockTheme.Light : (int)DockTheme.Dark;
+        SyncDockInspector(); RefreshStage();
+    }
+    // Brings the inspector in line with the draft (after the detailed pages or a material change touched it).
+    private void SyncDockInspector()
+    {
+        if (_material is null) return;
+        bool was = _updating; _updating = true;
+        try
+        {
+            _material.SelectedIndex = MaterialIndex(); _liquid.IsChecked = _draft.LiquidGlass;
+            foreach (var sync in _quickSync) sync();
+            _qualityCell.IsEnabled = Glass; _qualityCell.Opacity = Glass ? 1 : .45;
+        }
+        finally { _updating = was; }
+    }
     // One-line link: title, the summary quietly to the right, a chevron.
     private static FrameworkElement Compact(string title, string summary, string id, Action action)
     {
@@ -124,45 +210,12 @@ internal sealed partial class SettingsWindow
         slider.ValueChanged += (_, _) => { number.Text = slider.Value.ToString(format); if (!_ready || _updating) return; write(slider.Value); _glassOnlyPreview = false; QueuePreview(); RefreshStage(); };
         return grid;
     }
-    // A tint swatch: a glassy dot of the colour; the chosen one wears an accent ring. "自定义" opens a colour picker.
-    private FrameworkElement TintSwatch(string name, string? hex)
-    {
-        Brush fill;
-        if (hex is null) { var wheel = new LinearGradientBrush(new GradientStopCollection { new(Color.FromRgb(255, 107, 107), 0), new(Color.FromRgb(255, 217, 61), .25), new(Color.FromRgb(107, 203, 119), .5), new(Color.FromRgb(77, 150, 255), .75), new(Color.FromRgb(199, 125, 255), 1) }, 45); wheel.Freeze(); fill = wheel; }
-        else if (hex.Length == 0) fill = new LinearGradientBrush(Color.FromRgb(255, 255, 255), Color.FromRgb(233, 236, 241), 45);
-        else { var c = (Color)ColorConverter.ConvertFromString(hex); fill = new LinearGradientBrush(Color.FromArgb(255, (byte)Math.Min(255, c.R + 18), (byte)Math.Min(255, c.G + 18), (byte)Math.Min(255, c.B + 18)), c, 45); }
-        var dot = new Ellipse { Width = 24, Height = 24, Fill = fill, Stroke = new SolidColorBrush(Color.FromArgb(30, 0, 0, 0)), StrokeThickness = .75, Effect = new DropShadowEffect { BlurRadius = 3, ShadowDepth = 1, Direction = 270, Opacity = .15 } };
-        var ring = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(2), Child = dot };
-        var button = new Button { Content = ring, Style = (Style)FindResource("SettingsToolButton"), Width = 36, Height = 36, Margin = new Thickness(0, 0, 4, 0), ToolTip = name };
-        AutomationProperties.SetAutomationId(button, "glass-tint-" + (hex is null ? "custom" : hex.Length == 0 ? "none" : hex.TrimStart('#').ToLowerInvariant())); AutomationProperties.SetName(button, name);
-        _tintChoices.Add((ring, hex ?? "*"));
-        button.Click += (_, _) =>
-        {
-            string value = hex ?? "";
-            if (hex is null)
-            {
-                using var dialog = new Forms.ColorDialog { FullOpen = true };
-                if (dialog.ShowDialog() != Forms.DialogResult.OK) return;
-                value = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
-            }
-            _draft.GlassTintColor = value; RefreshTintChoices(); MaterialChanged();
-        };
-        return button;
-    }
-    private void RefreshTintChoices()
-    {
-        bool preset = GlassMaterial.Tints.Any(t => string.Equals(t.Hex, _draft.GlassTintColor, StringComparison.OrdinalIgnoreCase));
-        var accent = TryFindResource("SettingsAccent") as Brush ?? Brushes.DodgerBlue;
-        foreach (var (ring, hex) in _tintChoices)
-            ring.BorderBrush = (hex == "*" ? !preset : string.Equals(hex, _draft.GlassTintColor, StringComparison.OrdinalIgnoreCase)) ? accent : Brushes.Transparent;
-    }
     // Liquid/frosted, 质感 or tint changed: derive the renderer values, preview the Dock, restyle this window too.
     private void MaterialChanged()
     {
         if (!_ready || _updating) return;
         _draft.LiquidGlass = _liquid.IsChecked == true; GlassMaterial.Apply(_draft);
-        RefreshAppearanceControls(); _glassOnlyPreview = true; QueuePreview();
-        ApplySettingsPalette(_ui); RefreshStage();
+        RefreshAppearanceControls(); _glassOnlyPreview = true; QueuePreview(); RefreshStage();
     }
 
     // ---- stage ----
@@ -197,7 +250,9 @@ internal sealed partial class SettingsWindow
         if (!_ready || !_stage.IsLoaded) return;
         var handle = new WindowInteropHelper(this).Handle;
         var frost = handle == 0 ? null : WallpaperFrost.Get(handle);
-        _stageWall.Source = frost?.Clear ?? (ImageSource)_wallpaper;
+        // The desktop picture itself when it can be read, screen-aligned; the bundled picture otherwise.
+        _stageBrush.ImageSource = frost?.Sharp ?? (ImageSource)_wallpaper; _stageCover = Rect.Empty; // a still picture: the whole desktop, centred
+        RenderOptions.SetBitmapScalingMode(_stageBrush, BitmapScalingMode.HighQuality); _stageWall.Fill = _stageBrush;
         var p = new Palette(_draft); bool glass = Glass; var tint = GlassTint.Resolve(_draft);
         foreach (var surface in new[] { _stageDock, _stageCenter })
         {
@@ -215,14 +270,36 @@ internal sealed partial class SettingsWindow
         _stageDock.Width = Math.Max(140, items.Length * 52 + 16); _stageDock.Height = 66; _stageDock.Margin = new Thickness(0, 0, 0, 22); _stageIcons.Margin = new Thickness(0, 0, 0, 30);
         Dispatcher.BeginInvoke(RefreshStageBackdrop, DispatcherPriority.Render);
     }
-    // Both glass objects refract the stage picture: render it once at the stage's pixel size, screen-aligned.
+    // Maps the stage's screen rectangle into the picture, then gives each glass object the piece of the picture
+    // behind it (padded so the lens can bend light in from beyond its edge) at its own pixel size.
     private void RefreshStageBackdrop()
     {
-        if (!_ready || !_stage.IsLoaded || _stage.ActualWidth <= 0 || _stage.ActualHeight <= 0 || _stageWall.Source is null) return;
-        var dpi = VisualTreeHelper.GetDpi(_stage); int w = Math.Max(1, (int)Math.Ceiling(_stage.ActualWidth * dpi.DpiScaleX)), h = Math.Max(1, (int)Math.Ceiling(_stage.ActualHeight * dpi.DpiScaleY));
-        var visual = new DrawingVisual(); using (var dc = visual.RenderOpen()) dc.DrawRectangle(new ImageBrush(_stageWall.Source) { Stretch = Stretch.UniformToFill }, null, new Rect(0, 0, _stage.ActualWidth, _stage.ActualHeight));
-        var bitmap = new RenderTargetBitmap(w, h, 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32); bitmap.Render(visual); bitmap.Freeze();
-        var point = _stage.PointToScreen(new Point());
-        foreach (var surface in new[] { _stageDock, _stageCenter }) { surface.BackdropScreenBounds = new Rect(point.X, point.Y, w, h); surface.Backdrop = bitmap; }
+        if (!_ready || !_stage.IsLoaded || _stage.ActualWidth <= 0 || _stage.ActualHeight <= 0 || _stageBrush.ImageSource is not BitmapSource picture || PresentationSource.FromVisual(_stage) is null) return;
+        var origin = _stage.PointToScreen(new Point()); var far = _stage.PointToScreen(new Point(_stage.ActualWidth, _stage.ActualHeight));
+        Rect Map(Point a, Point b) => _stageCover.IsEmpty
+            ? Cover(picture, b.X - a.X, b.Y - a.Y)
+            : new Rect((a.X - _stageCover.X) / _stageCover.Width * picture.PixelWidth, (a.Y - _stageCover.Y) / _stageCover.Height * picture.PixelHeight,
+                Math.Max(1, (b.X - a.X) / _stageCover.Width * picture.PixelWidth), Math.Max(1, (b.Y - a.Y) / _stageCover.Height * picture.PixelHeight));
+        _stageBrush.Viewbox = Map(origin, far);
+        var dpi = VisualTreeHelper.GetDpi(_stage); int pad = (int)Math.Ceiling(24 * dpi.DpiScaleX);
+        foreach (var surface in new[] { _stageDock, _stageCenter })
+        {
+            if (surface.ActualWidth <= 0 || PresentationSource.FromVisual(surface) is null) continue;
+            var a = surface.PointToScreen(new Point()); var b = surface.PointToScreen(new Point(surface.ActualWidth, surface.ActualHeight));
+            a.Offset(-pad, -pad); b.Offset(pad, pad);
+            int w = Math.Max(1, (int)Math.Ceiling(b.X - a.X)), h = Math.Max(1, (int)Math.Ceiling(b.Y - a.Y));
+            var brush = new ImageBrush(picture) { ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill };
+            if (_stageCover.IsEmpty) { var whole = Map(origin, far); brush.Viewbox = new Rect(whole.X + (a.X - origin.X) / (far.X - origin.X) * whole.Width, whole.Y + (a.Y - origin.Y) / (far.Y - origin.Y) * whole.Height, whole.Width * w / (far.X - origin.X), whole.Height * h / (far.Y - origin.Y)); }
+            else brush.Viewbox = Map(a, b);
+            var visual = new DrawingVisual(); using (var dc = visual.RenderOpen()) dc.DrawRectangle(brush, null, new Rect(0, 0, w, h));
+            var bitmap = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32); bitmap.Render(visual); bitmap.Freeze();
+            surface.BackdropScreenBounds = new Rect(a.X, a.Y, w, h); surface.Backdrop = bitmap;
+        }
+    }
+    // The bundled picture, cropped to cover a w×h area (UniformToFill), in its own pixels.
+    private static Rect Cover(BitmapSource picture, double w, double h)
+    {
+        double scale = Math.Max(w / picture.PixelWidth, h / picture.PixelHeight), cw = w / scale, ch = h / scale;
+        return new Rect((picture.PixelWidth - cw) / 2, (picture.PixelHeight - ch) / 2, cw, ch);
     }
 }

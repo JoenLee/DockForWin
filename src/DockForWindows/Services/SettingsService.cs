@@ -112,6 +112,8 @@ public sealed class SettingsService
     public static DockSettings CreateDefaults()
     {
         var settings = new DockSettings();
+        // A fresh profile starts in the liquid glass the settings window offers first, not the old flat theme.
+        Views.GlassMaterial.Apply(settings);
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         settings.Pins.Add(new PinnedItem { Name = "文件资源管理器", Target = Path.Combine(windows, "explorer.exe"), ExecutablePath = Path.Combine(windows, "explorer.exe") });
         var notepad = Path.Combine(windows, "System32", "notepad.exe");

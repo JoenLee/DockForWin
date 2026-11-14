@@ -38,12 +38,19 @@ internal sealed partial class WidgetGalleryPage
     }
     private void BuildAdditionalCategories(StackPanel body)
     {
-        var navigator=new WrapPanel{Margin=new Thickness(0,0,0,12)};var search=new TextBox{MinWidth=180,MaxLength=100,ToolTip="搜索小组件名称",Margin=new Thickness(0,0,10,7)};AutomationProperties.SetAutomationId(search,"widget-template-search");navigator.Children.Add(search);body.Children.Insert(2,navigator);
+        var navigator=new WrapPanel{Margin=new Thickness(0,0,0,12)};var search=new TextBox{MinWidth=180,MaxLength=100,ToolTip="搜索小组件名称",Margin=new Thickness(0,0,10,7)};AutomationProperties.SetAutomationId(search,"widget-template-search");AutomationProperties.SetName(search,"搜索模板");
+        // A magnifier and a placeholder until something is typed.
+        search.Padding=new Thickness(30,2,9,2);var searchHost=new Grid{Margin=search.Margin};search.Margin=new Thickness(0);searchHost.Children.Add(search);
+        var glass=new System.Windows.Shapes.Path{Data=System.Windows.Media.Geometry.Parse("M6,1.2 A4.8,4.8 0 1 1 5.99,1.2 Z M9.6,9.6 L13,13"),StrokeThickness=1.5,StrokeStartLineCap=System.Windows.Media.PenLineCap.Round,StrokeEndLineCap=System.Windows.Media.PenLineCap.Round,Width=14,Height=14,Stretch=System.Windows.Media.Stretch.None,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(11,0,0,0),IsHitTestVisible=false};
+        glass.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty,"SettingsTertiary");searchHost.Children.Add(glass);
+        var hint=new TextBlock{Text="搜索模板",FontSize=13,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(31,0,0,0),IsHitTestVisible=false};hint.SetResourceReference(TextBlock.ForegroundProperty,"SettingsTertiary");searchHost.Children.Add(hint);
+        search.TextChanged+=(_,_)=>hint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;
+        navigator.Children.Add(searchHost);body.Children.Insert(0,navigator);
         var sections=new Dictionary<string,FrameworkElement>{{"weather",_weatherSection},{"calendar",_calendarSection}};
         foreach(var kind in new[]{WidgetKind.Clock,WidgetKind.Reminders,WidgetKind.Notes,WidgetKind.Music}){
             string key=kind.ToString().ToLowerInvariant();var carousel=new WidgetCarousel(WidgetRegistry.Definitions.Where(d=>d.Kind==kind).ToArray(),_options.Selections.GetValueOrDefault(key),_options.Exponent);
             _extraCarousels[key]=carousel;AutomationProperties.SetAutomationId(carousel,key+"-carousel");carousel.SelectionChanged+=index=>_options.Selections[key]=index;
-            var (surface,section)=Section(WidgetSizes.Category(kind),kind.ToString(),"Brightness");_extraSections[key]=surface;sections[key]=surface;body.Children.Add(surface);
+            var (surface,section)=Section(WidgetSizes.Category(kind),key);_extraSections[key]=surface;sections[key]=surface;body.Children.Add(surface);
             section.Children.Add(TemplateHeading(carousel));section.Children.Add(carousel);section.Children.Add(TemplateControls(carousel,key));AddPlacementButton(section,key);section.Children.Add(BuildColorEditor(carousel,key));
             if(kind==WidgetKind.Reminders){section.Children.Add(ActionButton("＋ 添加提醒",()=>WidgetDataEditor.Task(_options,null,copy=>{_options.Tasks=copy.Tasks;RefreshExtras(kind);return true;}),"widget-task-add"));section.Children.Add(Note("组件预览不会改变任务；添加与编辑保留在设置草稿，保存后生效。"));
                 var manage=new Expander{Header="管理待办",Margin=new Thickness(0,10,0,0)};section.Children.Add(manage);manage.Expanded+=(_,_)=>{var list=new StackPanel();foreach(var t in _options.Tasks.ToArray()){

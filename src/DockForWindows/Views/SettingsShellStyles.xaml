@@ -61,7 +61,6 @@
   </Style>
 
   <Style TargetType="ListBox"><Setter Property="FocusVisualStyle" Value="{x:Null}"/></Style>
-  <Style TargetType="Expander"><Setter Property="FocusVisualStyle" Value="{x:Null}"/></Style>
   <Style TargetType="ToggleButton"><Setter Property="FocusVisualStyle" Value="{x:Null}"/></Style>
   <Style TargetType="RepeatButton"><Setter Property="FocusVisualStyle" Value="{x:Null}"/></Style>
   <Style TargetType="Thumb"><Setter Property="FocusVisualStyle" Value="{x:Null}"/></Style>
@@ -217,6 +216,76 @@
     </Setter>
   </Style>
 
+  <!-- Overlay scrolling: the bar floats over the right edge of the content instead of taking a column, so a page
+       never shifts sideways when it becomes long enough to scroll. It shows while the pointer is over the page. -->
+  <Style TargetType="ScrollViewer">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollViewer">
+          <Grid Background="{TemplateBinding Background}">
+            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" CanContentScroll="{TemplateBinding CanContentScroll}" CanHorizontallyScroll="False" CanVerticallyScroll="False" Margin="{TemplateBinding Padding}" ContentTemplate="{TemplateBinding ContentTemplate}" Content="{TemplateBinding Content}"/>
+            <ScrollBar x:Name="PART_VerticalScrollBar" HorizontalAlignment="Right" Margin="0,0,2,0" Orientation="Vertical" Cursor="Arrow" Opacity="0"
+                       Maximum="{TemplateBinding ScrollableHeight}" Minimum="0" Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                       ViewportSize="{TemplateBinding ViewportHeight}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+            <ScrollBar x:Name="PART_HorizontalScrollBar" Visibility="Collapsed" Orientation="Horizontal" Maximum="{TemplateBinding ScrollableWidth}" ViewportSize="{TemplateBinding ViewportWidth}"
+                       Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="PART_VerticalScrollBar" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+              <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="PART_VerticalScrollBar" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.4"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Disclosure: the title in body text with a thin chevron that turns as the section opens. -->
+  <Style x:Key="SettingsExpander" TargetType="Expander">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Foreground" Value="{DynamicResource SettingsInk}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Expander">
+          <StackPanel>
+            <ToggleButton x:Name="HeaderSite" IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" Focusable="True" Cursor="Hand" HorizontalAlignment="Left" Foreground="{TemplateBinding Foreground}"
+                          AutomationProperties.Name="{Binding Header, RelativeSource={RelativeSource TemplatedParent}}">
+              <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                  <Border x:Name="Wash" Background="Transparent" CornerRadius="7" Padding="6,5,8,5" Margin="-6,0,0,0">
+                    <StackPanel Orientation="Horizontal">
+                      <Path x:Name="Chevron" Data="M1,1 L5,5 L1,9" Stroke="{DynamicResource SettingsMuted}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                            Width="6" Height="10" Stretch="None" VerticalAlignment="Center" Margin="2,0,9,0" RenderTransformOrigin=".4,.5">
+                        <Path.RenderTransform><RotateTransform x:Name="Turn" Angle="0"/></Path.RenderTransform>
+                      </Path>
+                      <ContentPresenter VerticalAlignment="Center" TextElement.FontSize="13" TextElement.FontWeight="Medium"/>
+                    </StackPanel>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Wash" Property="Background" Value="{DynamicResource SettingsHover}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Wash" Property="Background" Value="{DynamicResource SettingsHover}"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True">
+                      <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Turn" Storyboard.TargetProperty="Angle" To="90" Duration="0:0:0.18"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                      <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Turn" Storyboard.TargetProperty="Angle" To="0" Duration="0:0:0.18"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </ToggleButton.Template>
+              <ContentPresenter Content="{Binding Header, RelativeSource={RelativeSource TemplatedParent}}"/>
+            </ToggleButton>
+            <ContentPresenter x:Name="ExpandSite" Visibility="Collapsed" Margin="0,6,0,0"/>
+          </StackPanel>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsExpanded" Value="True"><Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="Expander" BasedOn="{StaticResource SettingsExpander}"/>
+
   <!-- Window controls: 12 px traffic lights; glyphs appear when the pointer is over the group. -->
   <Style x:Key="SettingsTrafficButton" TargetType="Button">
     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -364,11 +433,12 @@
           <Setter Property="Template">
             <Setter.Value>
               <ControlTemplate TargetType="ListBoxItem">
-                <Border x:Name="Segment" CornerRadius="13" Background="Transparent">
+                <Border x:Name="Segment" CornerRadius="8" Background="Transparent">
                   <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,4"/>
                 </Border>
                 <ControlTemplate.Triggers>
-                  <Trigger Property="IsSelected" Value="False"><Setter Property="Opacity" Value=".7"/></Trigger>
+                  <Trigger Property="IsSelected" Value="False"><Setter Property="Opacity" Value=".75"/></Trigger>
+                  <Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="{DynamicResource SettingsOnAccent}"/></Trigger>
                   <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="IsSelected" Value="False"/></MultiTrigger.Conditions><Setter Property="Opacity" Value="1"/></MultiTrigger>
                 </ControlTemplate.Triggers>
               </ControlTemplate>
@@ -380,11 +450,11 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="local:SettingsSegmentedControl">
-          <Border Background="{DynamicResource SettingsQuiet}" CornerRadius="15" Padding="2">
+          <Border Background="{DynamicResource SettingsQuiet}" CornerRadius="10" Padding="2">
             <Grid>
-              <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="13" Background="{DynamicResource SettingsIndicator}" BorderBrush="#0A000000" BorderThickness=".5" IsHitTestVisible="False">
+              <!-- Flat: the chosen segment is a solid accent pill, white text, no shadow. -->
+              <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="8" Background="{DynamicResource SettingsAccent}" IsHitTestVisible="False">
                 <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
-                <Border.Effect><DropShadowEffect BlurRadius="6" ShadowDepth="1.2" Direction="270" Color="{DynamicResource SettingsShadowColor}" Opacity="{DynamicResource SettingsControlShadowOpacity}"/></Border.Effect>
               </Border>
               <ItemsPresenter/>
             </Grid>

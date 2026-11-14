@@ -21,11 +21,11 @@ internal sealed class GlassPane : FrameworkElement
     public static readonly DependencyProperty ClarityProperty = Register(nameof(Clarity), 0d);
     public static readonly DependencyProperty RefractionProperty = Register(nameof(Refraction), .7);
     public static readonly DependencyProperty BevelProperty = Register(nameof(Bevel), 1d);
-    public static readonly DependencyProperty VeilProperty = DependencyProperty.Register(nameof(Veil), typeof(Color), typeof(GlassPane), new FrameworkPropertyMetadata(Color.FromArgb(120, 250, 250, 252), FrameworkPropertyMetadataOptions.AffectsRender, (o, _) => ((GlassPane)o).Refresh()));
+    public static readonly DependencyProperty VeilProperty = DependencyProperty.Register(nameof(Veil), typeof(Color), typeof(GlassPane), new FrameworkPropertyMetadata(Color.FromArgb(120, 250, 250, 252), FrameworkPropertyMetadataOptions.AffectsRender, (o, _) => ((GlassPane)o).Restyle()));
     // The luminance text on this pane needs underneath it (0..1); the veil is thickened until the pane reaches it.
     public static readonly DependencyProperty TargetLuminanceProperty = Register(nameof(TargetLuminance), -1d);
-    public static readonly DependencyProperty DarkProperty = DependencyProperty.Register(nameof(Dark), typeof(bool), typeof(GlassPane), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender, (o, _) => ((GlassPane)o).Refresh()));
-    private static DependencyProperty Register(string name, double value) => DependencyProperty.Register(name, typeof(double), typeof(GlassPane), new FrameworkPropertyMetadata(value, FrameworkPropertyMetadataOptions.AffectsRender, (o, _) => ((GlassPane)o).Refresh()));
+    public static readonly DependencyProperty DarkProperty = DependencyProperty.Register(nameof(Dark), typeof(bool), typeof(GlassPane), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender, (o, _) => ((GlassPane)o).Restyle()));
+    private static DependencyProperty Register(string name, double value) => DependencyProperty.Register(name, typeof(double), typeof(GlassPane), new FrameworkPropertyMetadata(value, FrameworkPropertyMetadataOptions.AffectsRender, (o, _) => ((GlassPane)o).Restyle()));
     public double CornerRadius { get => (double)GetValue(CornerRadiusProperty); set => SetValue(CornerRadiusProperty, value); }
     public double Clarity { get => (double)GetValue(ClarityProperty); set => SetValue(ClarityProperty, value); }
     public double Refraction { get => (double)GetValue(RefractionProperty); set => SetValue(RefractionProperty, value); }
@@ -39,13 +39,15 @@ internal sealed class GlassPane : FrameworkElement
     private readonly ImageBrush _clearBrush = new() { ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill };
     private readonly LiquidGlassEffect? _lens;
     private readonly Edge _edge;
+    // Prototype: the system draws the material behind the window; the pane adds only its veil and rim.
+    public bool Pictureless { get; set; }
     private Window? _window;
     private Point _origin = new(double.NaN, double.NaN);
     private Size _clipSize; private double _clipRadius = -1;
     public GlassPane()
     {
         IsHitTestVisible = false; _edge = new Edge(this);
-        RenderOptions.SetBitmapScalingMode(_frostBrush, BitmapScalingMode.Linear); RenderOptions.SetBitmapScalingMode(_clearBrush, BitmapScalingMode.HighQuality);
+        RenderOptions.SetBitmapScalingMode(_frostBrush, BitmapScalingMode.Linear); RenderOptions.SetBitmapScalingMode(_clearBrush, BitmapScalingMode.Linear);
         _frost.Fill = _frostBrush; _clear.Fill = _clearBrush;
         if ((RenderCapability.Tier >> 16) >= 2) { _lens = new LiquidGlassEffect(); _clear.Effect = _lens; }
         foreach (var child in new UIElement[] { _frost, _clear, _veil, _edge }) AddVisualChild(child);
@@ -76,6 +78,8 @@ internal sealed class GlassPane : FrameworkElement
         _window = null; WallpaperFrost.Changed -= Refresh; LayoutUpdated -= Relaid;
     }
     private void Moved(object? sender, EventArgs args) => Refresh();
+    // Material changes redraw the rim too; moving the window only remaps the pictures.
+    private void Restyle() { Refresh(); _edge.InvalidateVisual(); }
     private void Relaid(object? sender, EventArgs args)
     {
         if (PresentationSource.FromVisual(this) is not null && PointToScreen(new Point()) != _origin) Refresh();
@@ -86,12 +90,13 @@ internal sealed class GlassPane : FrameworkElement
     {
         var size = RenderSize;
         if (size.Width <= 0 || size.Height <= 0 || PresentationSource.FromVisual(this) is not HwndSource source) return;
-        var frost = WallpaperFrost.Get(source.Handle);
+        var frost = Pictureless ? null : WallpaperFrost.Get(source.Handle);
         _origin = PointToScreen(new Point()); var far = PointToScreen(new Point(size.Width, size.Height));
         double clarity = Math.Clamp(Clarity, 0, 1);
         _clear.Opacity = clarity; _clear.Visibility = clarity > .001 && frost is not null ? Visibility.Visible : Visibility.Collapsed;
         double luminance = .5;
-        if (frost is null) { _frost.Fill = WallpaperFrost.Placeholder(Dark); }
+        if (Pictureless) { _frost.Fill = null; _clear.Visibility = Visibility.Collapsed; }
+        else if (frost is null) { _frost.Fill = WallpaperFrost.Placeholder(Dark); }
         else
         {
             var cover = frost.Cover; var picture = Dark ? frost.Dark : frost.Light;
@@ -122,7 +127,6 @@ internal sealed class GlassPane : FrameworkElement
             veil = Color.FromArgb((byte)Math.Round(a * 255), veil.R, veil.G, veil.B);
         }
         if (_veil.Fill is not SolidColorBrush current || current.Color != veil) { var brush = new SolidColorBrush(veil); brush.Freeze(); _veil.Fill = brush; }
-        _edge.InvalidateVisual();
     }
 
     // The rim: a crisp line of light along the top, a soft inner band that fades into the glass (lighter at the top
