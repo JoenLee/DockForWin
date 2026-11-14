@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -52,7 +52,7 @@ public sealed class ControlModuleLayout
 public enum ControlCenterColorMode { System, Light, Dark }
 public enum ControlCenterMaterialMode { LiquidGlass, ClassicBlur }
 public sealed class ControlCenterLayoutPage
-{public string Id{get;set;}="main";public string Name{get;set;}="控制中心";public ControlCenterLayoutPage Copy()=>(ControlCenterLayoutPage)MemberwiseClone();}
+{public string Id{get;set;}="main";public string Name{get;set;}=LocalizedText.Get("控制中心");public ControlCenterLayoutPage Copy()=>(ControlCenterLayoutPage)MemberwiseClone();}
 public sealed class ControlCenterOptions
 {
     public ControlCenterGeometry Geometry {get;set;}=new();
@@ -81,7 +81,7 @@ public sealed class ControlCenterOptions
         if(!Enum.IsDefined(MaterialMode))MaterialMode=ControlCenterMaterialMode.LiquidGlass;
         if(LayoutVersion<2){if(Modules is null||Modules.Count==0)Modules=Defaults();LayoutVersion=2;}
         if(LayoutVersion<3){Geometry.MediaRoundness=Geometry.SquareRoundness;Geometry.DetailRoundness=Math.Clamp(Geometry.DetailRoundness/Math.Max(1,(Geometry.PanelWidth-36)/2)*100,0,100);LayoutVersion=3;}
-        Pages??=new();Pages=Pages.Where(p=>p is not null&&!string.IsNullOrWhiteSpace(p.Id)).DistinctBy(p=>p.Id).Take(12).ToList();if(!Pages.Any(p=>p.Id=="main"))Pages.Insert(0,new());foreach(var p in Pages)p.Name=Clean(p.Name,"控制中心");if(!Pages.Any(p=>p.Id==ActivePageId))ActivePageId="main";if(!Enum.IsDefined(ColorMode))ColorMode=ControlCenterColorMode.System;
+        Pages??=new();Pages=Pages.Where(p=>p is not null&&!string.IsNullOrWhiteSpace(p.Id)).DistinctBy(p=>p.Id).Take(12).ToList();if(!Pages.Any(p=>p.Id=="main"))Pages.Insert(0,new());foreach(var p in Pages)p.Name=Clean(p.Name,LocalizedText.Get("控制中心"));if(!Pages.Any(p=>p.Id==ActivePageId))ActivePageId="main";if(!Enum.IsDefined(ColorMode))ColorMode=ControlCenterColorMode.System;
         Modules??=Defaults();var seen=new HashSet<ControlModule>();
         Modules=Modules.Where(m=>m is not null&&Enum.IsDefined(m.Module)&&seen.Add(m.Module)).ToList();
         foreach(var kind in Enum.GetValues<ControlModule>())if(seen.Add(kind))Modules.Add(new(){Module=kind,Visible=false});

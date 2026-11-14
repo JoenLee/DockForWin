@@ -48,7 +48,7 @@ internal sealed class DockTile : Border
         var image = new Image { Source = IconPresentation.Normalize(item.Icon,item.Pin.Kind,_darkIconPlate,PreservePlate(item)), Width = icon, Height = icon, Stretch = Stretch.Uniform, RenderTransform = _bounce, IsHitTestVisible = false };
         _image = image;
         AutomationProperties.SetAutomationId(image, "dock-icon");
-        AutomationProperties.SetName(image, item.Name + "图标");
+        AutomationProperties.SetName(image, item.Name + LocalizedText.Get("图标"));
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
         Canvas.SetLeft(image, 6); Canvas.SetTop(image, 3); canvas.Children.Add(image);
         _originalIndicatorColor = palette.Indicator is SolidColorBrush indicator ? indicator.Color : Colors.White;
@@ -61,7 +61,7 @@ internal sealed class DockTile : Border
             var reflected = new Image { Source = image.Source, Width = icon, Height = icon, Stretch = Stretch.Uniform, RenderTransformOrigin = new Point(.5, .5), IsHitTestVisible = false };
             _reflectionImage = reflected;
             AutomationProperties.SetAutomationId(reflected, "dock-reflection");
-            AutomationProperties.SetName(reflected, item.Name + "倒影");
+            AutomationProperties.SetName(reflected, item.Name + LocalizedText.Get("倒影"));
             var transforms = new TransformGroup(); transforms.Children.Add(new ScaleTransform(1, -1)); transforms.Children.Add(_mirrorBounce); reflected.RenderTransform = transforms;
             RenderOptions.SetBitmapScalingMode(reflected, BitmapScalingMode.HighQuality);
             var reflectedCanvas = new Canvas { Width = icon, Height = icon, IsHitTestVisible = false };
@@ -94,7 +94,7 @@ internal sealed class DockTile : Border
     {
         _dot.Visibility = Item.IsRunning||Item.NeedsAttention ? Visibility.Visible : Visibility.Hidden;
         UpdateAttention();
-        ToolTip = Item.Name + (Item.IsRunning ? $" · {Item.Windows.Count} 个窗口" : "") + (!Item.IsPinned ? Item.IsRunning ? " · 未固定" : " · 最近使用" : "");
+        ToolTip = Item.Name + (Item.IsRunning ? LocalizedText.Format($" · {Item.Windows.Count} 个窗口") : "") + (!Item.IsPinned ? Item.IsRunning ? LocalizedText.Get(" · 未固定") : LocalizedText.Get(" · 最近使用") : "");
     }
     private void UpdateAttention()
     {

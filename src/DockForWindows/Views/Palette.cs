@@ -48,7 +48,7 @@ internal sealed class Palette
         if (SystemParameters.IsRemoteSession) transparency = false;
         var visuals = ThemeService.Resolve(settings, systemDark, transparency);
         Dark = settings.InterfaceTheme switch { InterfaceTheme.Dark => true, InterfaceTheme.Light => false, _ => systemDark };
-        Interface = InterfaceStyles.Resolve(settings.InterfaceStyle,Dark);
+        Interface = InterfaceStyles.Resolve(settings.InterfaceStyle,Dark) with{Accent=settings.InterfaceAccent,Selection=settings.InterfaceAccent};
         Accent = SystemParameters.HighContrast ? SystemColors.HighlightBrush : Brush(Interface.Accent);
         CornerRadius = visuals.CornerRadius; BorderThickness = visuals.BorderThickness;
         ShadowEnabled = visuals.ShadowEnabled; ShadowOpacity = visuals.ShadowOpacity; ShadowBlur = visuals.ShadowBlur;

@@ -176,7 +176,7 @@
             </Border>
           </Grid>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Ring" Property="Opacity" Value="1"/></Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Ring" Property="Opacity" Value="0"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".4"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -249,11 +249,11 @@
       <Setter.Value>
         <ControlTemplate TargetType="Expander">
           <StackPanel>
-            <ToggleButton x:Name="HeaderSite" IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" Focusable="True" Cursor="Hand" HorizontalAlignment="Left" Foreground="{TemplateBinding Foreground}"
+            <ToggleButton x:Name="HeaderSite" IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" Focusable="True" Cursor="Hand" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Foreground="{TemplateBinding Foreground}"
                           AutomationProperties.Name="{Binding Header, RelativeSource={RelativeSource TemplatedParent}}">
               <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
-                  <Border x:Name="Wash" Background="Transparent" CornerRadius="7" Padding="6,5,8,5" Margin="-6,0,0,0">
+                  <Border x:Name="Wash" Background="Transparent" CornerRadius="7" Padding="0,5,0,5">
                     <StackPanel Orientation="Horizontal">
                       <Path x:Name="Chevron" Data="M1,1 L5,5 L1,9" Stroke="{DynamicResource SettingsMuted}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                             Width="6" Height="10" Stretch="None" VerticalAlignment="Center" Margin="2,0,9,0" RenderTransformOrigin=".4,.5">
@@ -289,16 +289,16 @@
   <!-- Window controls: 12 px traffic lights; glyphs appear when the pointer is over the group. -->
   <Style x:Key="SettingsTrafficButton" TargetType="Button">
     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-    <Setter Property="Width" Value="20"/>
-    <Setter Property="Height" Value="20"/>
+    <Setter Property="Width" Value="28"/>
+    <Setter Property="Height" Value="28"/>
     <Setter Property="MinHeight" Value="0"/>
     <Setter Property="Padding" Value="0"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
           <Grid Background="Transparent">
-            <Ellipse x:Name="Light" Width="12.5" Height="12.5" Fill="{TemplateBinding Background}" Stroke="{TemplateBinding BorderBrush}" StrokeThickness=".6"/>
-            <ContentPresenter x:Name="Glyph" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0"/>
+            <Ellipse x:Name="Light" Width="18" Height="18" Fill="{TemplateBinding Background}"><Ellipse.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity=".16"/></Ellipse.Effect></Ellipse>
+            <ContentPresenter x:Name="Glyph" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="1"/>
           </Grid>
           <ControlTemplate.Triggers>
             <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=StackPanel}}" Value="True"><Setter TargetName="Glyph" Property="Opacity" Value="1"/></DataTrigger>
@@ -385,6 +385,7 @@
   <Style TargetType="CheckBox">
     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
     <Setter Property="local:SettingsSwitchMotion.Enabled" Value="True"/>
+    <Setter Property="local:SettingsSwitchMotion.Accent" Value="{DynamicResource SettingsAccent}"/>
     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
     <Setter Property="Foreground" Value="{DynamicResource SettingsInk}"/>
     <Setter Property="Template">
@@ -395,7 +396,7 @@
             <ContentPresenter Margin="0,10,16,10" VerticalAlignment="Center">
               <ContentPresenter.ContentTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="13.5"/></DataTemplate></ContentPresenter.ContentTemplate>
             </ContentPresenter>
-            <Grid Grid.Column="1" Width="44" Height="24" VerticalAlignment="Center">
+            <Grid Grid.Column="1" Width="44" Height="24" Margin="6,0,6,0" VerticalAlignment="Center">
               <Border x:Name="Ring" CornerRadius="15" Margin="-3" BorderBrush="{DynamicResource SettingsFocusRing}" BorderThickness="3" Opacity="0" IsHitTestVisible="False"/>
               <Border x:Name="SwitchTrack" Width="44" CornerRadius="12" Background="{DynamicResource SettingsSwitchOff}"/>
               <Border x:Name="SwitchKnob" Width="27" Height="20" Margin="2,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="10" Background="{DynamicResource SettingsKnob}" BorderBrush="#0D000000" BorderThickness=".5" RenderTransformOrigin=".5,.5">
@@ -541,5 +542,47 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+  </Style>
+
+  <Style x:Key="SettingsFlatPrimaryButton" TargetType="Button">
+    <Setter Property="Background" Value="{DynamicResource SettingsPrimaryTint}"/><Setter Property="Foreground" Value="{DynamicResource SettingsAccent}"/>
+    <Setter Property="MinHeight" Value="32"/><Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+      <Border x:Name="Face" CornerRadius="8" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Face" Property="Background" Value="{DynamicResource SettingsSelection}"/></Trigger>
+        <Trigger Property="IsPressed" Value="True"><Setter TargetName="Face" Property="Background" Value="{DynamicResource SettingsPressed}"/></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".45"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="SettingsCircleButton" TargetType="Button" BasedOn="{StaticResource SettingsToolButton}">
+    <Setter Property="Width" Value="32"/><Setter Property="Height" Value="32"/>
+    <Setter Property="Background" Value="{DynamicResource SettingsControlFill}"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+      <Border x:Name="Face" CornerRadius="16" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource SettingsControlStroke}" BorderThickness="1"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Face" Property="Background" Value="{DynamicResource SettingsHover}"/></Trigger>
+        <Trigger Property="IsPressed" Value="True"><Setter TargetName="Face" Property="Background" Value="{DynamicResource SettingsPressed}"/></Trigger>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="SettingsTextActionButton" TargetType="Button">
+    <Setter Property="Foreground" Value="{DynamicResource SettingsAccent}"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="Transparent" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></ControlTemplate></Setter.Value></Setter>
+    <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.7"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value="0.5"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35"/></Trigger></Style.Triggers>
+  </Style>
+  <local:SettingsScrollViewportConverter x:Key="InspectorScrollViewport"/>
+  <Style x:Key="SettingsInspectorScrollBar" TargetType="ScrollBar" BasedOn="{StaticResource {x:Type ScrollBar}}">
+    <Setter Property="Width" Value="10"/><Setter Property="MinWidth" Value="10"/>
+    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar"><Grid Background="Transparent" Margin="0,4">
+      <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}">
+        <Track.ViewportSize><MultiBinding Converter="{StaticResource InspectorScrollViewport}"><Binding Path="ViewportSize" RelativeSource="{RelativeSource TemplatedParent}"/><Binding Path="Maximum" RelativeSource="{RelativeSource TemplatedParent}"/><Binding Path="ActualHeight" RelativeSource="{RelativeSource Self}"/></MultiBinding></Track.ViewportSize>
+        <Track.DecreaseRepeatButton><RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Focusable="False"><RepeatButton.Template><ControlTemplate><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+        <Track.IncreaseRepeatButton><RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Focusable="False"><RepeatButton.Template><ControlTemplate><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+        <Track.Thumb><Thumb MinHeight="22"><Thumb.Template><ControlTemplate TargetType="Thumb"><Border x:Name="Grip" Width="3" CornerRadius="1.5" HorizontalAlignment="Center" Opacity=".65" Background="{DynamicResource SettingsScrollThumb}"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Grip" Property="Width" Value="4"/><Setter TargetName="Grip" Property="Opacity" Value="1"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Width" Value="4"/><Setter TargetName="Grip" Property="Opacity" Value="1"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+      </Track>
+    </Grid></ControlTemplate></Setter.Value></Setter>
   </Style>
 </ResourceDictionary>

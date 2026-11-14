@@ -41,31 +41,31 @@ public static class DisplayControlService
     {
         var p=ModeBuffer();try{
             if(!EnumDisplaySettingsEx(device,-1,p,0))throw new Win32Exception(Marshal.GetLastWin32Error());Marshal.WriteInt32(p,72,Marshal.ReadInt32(p,72)|0x400000);Marshal.WriteInt32(p,184,rate);
-            int test=ChangeDisplaySettingsEx(device,p,0,2,0);if(test!=0)throw new InvalidOperationException($"显示器拒绝此刷新率（{test}）。");int result=ChangeDisplaySettingsEx(device,p,0,1,0);if(result!=0)throw new InvalidOperationException($"未能切换刷新率（{result}）。");
+            int test=ChangeDisplaySettingsEx(device,p,0,2,0);if(test!=0)throw new InvalidOperationException(LocalizedText.Format($"显示器拒绝此刷新率（{test}）。"));int result=ChangeDisplaySettingsEx(device,p,0,1,0);if(result!=0)throw new InvalidOperationException(LocalizedText.Format($"未能切换刷新率（{result}）。"));
         }finally{Marshal.FreeHGlobal(p);}
     }
     public sealed class RateTrial:IDisposable
     {
         private readonly object _sync=new();private readonly string _device;private readonly int _original;private readonly Timer _timer;private bool _finished;public DateTimeOffset Deadline{get;}=DateTimeOffset.UtcNow.AddSeconds(15);public Exception? RestoreError{get;private set;}
-        internal RateTrial(string device,int rate){_device=device;_original=ReadRefreshRate(device);if(!RefreshRates(device).Contains(rate))throw new InvalidOperationException("该显示器未报告支持此刷新率。");SetRate(device,rate);_timer=new Timer(_=>Dispose(),null,TimeSpan.FromSeconds(15),Timeout.InfiniteTimeSpan);}
-        public void Confirm(){lock(_sync){if(_finished)throw new InvalidOperationException("显示设置已恢复，请重新选择。");_finished=true;_timer.Dispose();}}
+        internal RateTrial(string device,int rate){_device=device;_original=ReadRefreshRate(device);if(!RefreshRates(device).Contains(rate))throw new InvalidOperationException(LocalizedText.Get("该显示器未报告支持此刷新率。"));SetRate(device,rate);_timer=new Timer(_=>Dispose(),null,TimeSpan.FromSeconds(15),Timeout.InfiniteTimeSpan);}
+        public void Confirm(){lock(_sync){if(_finished)throw new InvalidOperationException(LocalizedText.Get("显示设置已恢复，请重新选择。"));_finished=true;_timer.Dispose();}}
         public void Dispose(){lock(_sync){if(_finished)return;_finished=true;_timer.Dispose();try{SetRate(_device,_original);}catch(Exception ex){RestoreError=ex;}}}
     }
     public static RateTrial TryRefreshRate(string device,int rate)=>new(device,rate);
     private static Target FindTarget(string device)
     {
         for(int attempt=0;attempt<3;attempt++){
-            int error=GetDisplayConfigBufferSizes(2,out uint count,out uint modeCount);if(error!=0)throw new Win32Exception(error);if(count>128||modeCount>512)throw new InvalidOperationException("显示器配置过大。");var paths=new Path[Math.Max(1,count)];nint modes=Marshal.AllocHGlobal(checked((int)Math.Max(1,modeCount)*64));
+            int error=GetDisplayConfigBufferSizes(2,out uint count,out uint modeCount);if(error!=0)throw new Win32Exception(error);if(count>128||modeCount>512)throw new InvalidOperationException(LocalizedText.Get("显示器配置过大。"));var paths=new Path[Math.Max(1,count)];nint modes=Marshal.AllocHGlobal(checked((int)Math.Max(1,modeCount)*64));
             try{error=QueryDisplayConfig(2,ref count,paths,ref modeCount,modes,0);if(error==122)continue;if(error!=0)throw new Win32Exception(error);
                 for(int i=0;i<count;i++){var item=paths[i];var source=new SourceName{Header=new Header{Type=1,Size=(uint)Marshal.SizeOf<SourceName>(),Adapter=item.Source.Adapter,Id=item.Source.Id},Name=""};if(GetSourceName(ref source)==0&&source.Name.Equals(device,StringComparison.OrdinalIgnoreCase))return item.Target;}
             }finally{Marshal.FreeHGlobal(modes);}
         }
-        throw new InvalidOperationException("未找到活动显示器。");
+        throw new InvalidOperationException(LocalizedText.Get("未找到活动显示器。"));
     }
     private static ColorInfo ReadColor(Target target)
-    {var info=new ColorInfo{Header=new Header{Type=15,Size=(uint)Marshal.SizeOf<ColorInfo>(),Adapter=target.Adapter,Id=target.Id}};int error=GetColor(ref info);if(error!=0)throw new Win32Exception(error,"此系统未提供可区分 HDR 与广色域的控制接口。");return info;}
+    {var info=new ColorInfo{Header=new Header{Type=15,Size=(uint)Marshal.SizeOf<ColorInfo>(),Adapter=target.Adapter,Id=target.Id}};int error=GetColor(ref info);if(error!=0)throw new Win32Exception(error,LocalizedText.Get("此系统未提供可区分 HDR 与广色域的控制接口。"));return info;}
     public static DisplayHdrState ReadHdr(string device)
-    {try{var color=ReadColor(FindTarget(device));bool supported=(color.Flags&16)!=0,limited=(color.Flags&8)!=0;return new(supported,(color.Flags&32)!=0,color.ActiveMode==2,limited,!supported?"此显示器不支持 HDR。":limited?"HDR 受系统策略限制。":null);}catch(Exception ex){return new(false,false,false,false,ex.Message);}}
+    {try{var color=ReadColor(FindTarget(device));bool supported=(color.Flags&16)!=0,limited=(color.Flags&8)!=0;return new(supported,(color.Flags&32)!=0,color.ActiveMode==2,limited,!supported?LocalizedText.Get("此显示器不支持 HDR。"):limited?LocalizedText.Get("HDR 受系统策略限制。"):null);}catch(Exception ex){return new(false,false,false,false,ex.Message);}}
     public static void SetHdr(string device,bool enabled)
-    {var target=FindTarget(device);var info=ReadColor(target);if((info.Flags&16)==0||(info.Flags&8)!=0)throw new InvalidOperationException("显示器不支持 HDR，或被系统策略限制。");var state=new ColorState{Header=new Header{Type=16,Size=(uint)Marshal.SizeOf<ColorState>(),Adapter=target.Adapter,Id=target.Id},Flags=enabled?1u:0u};int error=SetColor(ref state);if(error!=0)throw new Win32Exception(error);}
+    {var target=FindTarget(device);var info=ReadColor(target);if((info.Flags&16)==0||(info.Flags&8)!=0)throw new InvalidOperationException(LocalizedText.Get("显示器不支持 HDR，或被系统策略限制。"));var state=new ColorState{Header=new Header{Type=16,Size=(uint)Marshal.SizeOf<ColorState>(),Adapter=target.Adapter,Id=target.Id},Flags=enabled?1u:0u};int error=SetColor(ref state);if(error!=0)throw new Win32Exception(error);}
 }

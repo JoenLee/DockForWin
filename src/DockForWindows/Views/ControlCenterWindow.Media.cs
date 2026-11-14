@@ -26,12 +26,12 @@ public sealed partial class ControlCenterWindow
     {
         if(_mediaReading||_closing)return;_mediaReading=true;
         try{
-            _mediaState=await _media.Read();_mediaObservedAt=_runtime.Elapsed.TotalSeconds;if(_closing)return;Status(ControlModule.Media,_mediaState is null?"未在播放":_mediaState.Title+(string.IsNullOrWhiteSpace(_mediaState.Artist)?"":"\n"+_mediaState.Artist));UpdateMediaArtwork();
+            _mediaState=await _media.Read();_mediaObservedAt=_runtime.Elapsed.TotalSeconds;if(_closing)return;Status(ControlModule.Media,_mediaState is null?LocalizedText.Get("未在播放"):_mediaState.Title+(string.IsNullOrWhiteSpace(_mediaState.Artist)?"":"\n"+_mediaState.Artist));UpdateMediaArtwork();
             if(_play is not null&&_previous is not null&&_next is not null){SetIcon(_play,_mediaState?.Playing==true?"Pause":"Play");_play.IsEnabled=_mediaState?.CanPlay==true;_previous.IsEnabled=_mediaState?.CanPrevious==true;_next.IsEnabled=_mediaState?.CanNext==true;}
             if(_detailPlay is not null){SetIcon(_detailPlay,_mediaState?.Playing==true?"Pause":"Play");_detailPlay.IsEnabled=_mediaState?.CanPlay==true;_detailPrevious!.IsEnabled=_mediaState?.CanPrevious==true;_detailNext!.IsEnabled=_mediaState?.CanNext==true;}
             UpdateCardMedia();UpdateMediaDetails();
             if(_mediaProgress is not null&&_mediaState is null)_mediaProgress.IsEnabled=false;
-        }catch(Exception ex){if(!_closing)_log?.Invoke("读取媒体进度",ex);}
+        }catch(Exception ex){if(!_closing)_log?.Invoke(LocalizedText.Get("读取媒体进度"),ex);}
         finally{_mediaReading=false;}
     }
 

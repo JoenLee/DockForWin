@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -106,7 +106,7 @@ public sealed partial class ControlCenterWindow
             try{ApplySample(outcome);_displayedSample?.Dispose();_displayedSample=outcome;}
             catch{outcome.Dispose();throw;}
         }
-        catch(Exception ex){if(_runtime.Elapsed.TotalSeconds-_lastCaptureError>5){_lastCaptureError=_runtime.Elapsed.TotalSeconds;_log?.Invoke("控制中心背景采样",ex);}}
+        catch(Exception ex){if(_runtime.Elapsed.TotalSeconds-_lastCaptureError>5){_lastCaptureError=_runtime.Elapsed.TotalSeconds;_log?.Invoke(LocalizedText.Get("控制中心背景采样"),ex);}}
         finally{_busy=false;if(_closing)_capture.Dispose();}
     }
     // One full-resolution live texture is shared by all plates. Their existing shader maps

@@ -19,11 +19,11 @@ internal sealed class OverflowCanvas:Canvas {protected override Geometry? GetLay
 public sealed partial class ControlCenterWindow
 {
     private readonly List<(Button Button,Func<string> Text)> _deviceRows=new();
-    private static string NetworkText(WifiNetwork n)=>$"{(n.Connected?"✓ ":"")}{n.Name}{(n.Secure?"  锁定":"")}";
-    private static string BluetoothText(BluetoothPeer p)=>$"{p.Name} · {(p.Connected?"已连接":p.Paired?"已配对":"可配对")}";
+    private static string NetworkText(WifiNetwork n)=>$"{(n.Connected?"✓ ":"")}{n.Name}{(n.Secure?LocalizedText.Get("  锁定"):"")}";
+    private static string BluetoothText(BluetoothPeer p)=>$"{p.Name} · {(p.Connected?LocalizedText.Get("已连接"):p.Paired?LocalizedText.Get("已配对"):LocalizedText.Get("可配对"))}";
     private void UpdateDeviceLabels()
     {
-        foreach(var row in _deviceRows){var text=row.Button.Content as TextBlock;if(row.Button.Content is Grid grid){text=grid.Children.OfType<TextBlock>().FirstOrDefault();if(row.Button.Tag is Func<WifiNetwork> read&&grid.Children.OfType<ControlCenterIcon>().FirstOrDefault() is {} icon){var network=read();icon.SignalStrength=(int)Math.Min(100u,network.Signal);System.Windows.Automation.AutomationProperties.SetHelpText(row.Button,$"信号强度 {network.Signal}%");}}if(text is null)continue;row.Button.IsEnabled=_openKind==ControlModule.Wifi?_connectivity.State(RadioKind.WiFi)==RadioState.On:_connectivity.State(RadioKind.Bluetooth)==RadioState.On;string value=row.Text();if(text.Text!=value)text.Text=value;}
+        foreach(var row in _deviceRows){var text=row.Button.Content as TextBlock;if(row.Button.Content is Grid grid){text=grid.Children.OfType<TextBlock>().FirstOrDefault();if(row.Button.Tag is Func<WifiNetwork> read&&grid.Children.OfType<ControlCenterIcon>().FirstOrDefault() is {} icon){var network=read();icon.SignalStrength=(int)Math.Min(100u,network.Signal);System.Windows.Automation.AutomationProperties.SetHelpText(row.Button,LocalizedText.Format($"信号强度 {network.Signal}%"));}}if(text is null)continue;row.Button.IsEnabled=_openKind==ControlModule.Wifi?_connectivity.State(RadioKind.WiFi)==RadioState.On:_connectivity.State(RadioKind.Bluetooth)==RadioState.On;string value=row.Text();if(text.Text!=value)text.Text=value;}
         if(_detailVisible&&_openKind==ControlModule.Bluetooth&&_page==ControlPage.Module){if(_connectivity.State(RadioKind.Bluetooth)==RadioState.On)_connectivity.StartBluetoothDiscovery();else _connectivity.StopBluetoothDiscovery();}
     }
     private sealed class SafetyVisual

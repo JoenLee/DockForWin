@@ -1,4 +1,4 @@
-# DockForWindows（DockForWin）
+# DockForWindows · 开发预览 0.6.0
 
 Windows 上的 macOS 风格程序坞，带液态玻璃控制中心和桌面小组件。C# / WPF / .NET 10，开发预览 0.6.0，最低支持 Windows 10 2004。
 

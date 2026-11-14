@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -47,15 +47,15 @@ public sealed partial class ControlCenterWindow
                 c.Root.ContextMenu=new ContextMenu();c.Root.ContextMenuOpening+=(_,e)=>{if(!_editing)e.Handled=true;};
                 foreach(var shape in ControlCenterLayout.Shapes(c.Kind))
                 {var chosen=shape;var item=new MenuItem{Header=ControlCenterCatalog.ShapeName(shape)};item.Click+=(_,_)=>{var current=_options.Modules.Single(m=>m.Module==c.Kind);current.SetShape(chosen);BindCard(c,current);LayoutCards(true);PersistLayout();};c.Root.ContextMenu.Items.Add(item);}
-                AddCardManagement(c,layout);c.Root.ContextMenu.Items.Add(new Separator());var remove=new MenuItem{Header="移除此控件"};remove.Click+=(_,_)=>{_options.Modules.Single(m=>m.Module==c.Kind).Visible=false;SyncCards(true);PersistLayout();};c.Root.ContextMenu.Items.Add(remove);
+                AddCardManagement(c,layout);c.Root.ContextMenu.Items.Add(new Separator());var remove=new MenuItem{Header=LocalizedText.Get("移除此控件")};remove.Click+=(_,_)=>{_options.Modules.Single(m=>m.Module==c.Kind).Visible=false;SyncCards(true);PersistLayout();};c.Root.ContextMenu.Items.Add(remove);
                 AutomationProperties.SetAutomationId(c.Root,"control-card-"+c.Kind);_cards.Children.Add(c.Root);BindCard(c,layout);if(animate&&Animate&&_ready){ControlMotion.To(c.Root,OpacityProperty,1,0);c.Scale.ScaleX=c.Scale.ScaleY=.78;Scale(c.Scale,1,380);}
             }
             else if(card.Shape!=layout.EffectiveShape)BindCard(card,layout);
             if(card.Grip is not null)card.Grip.Visibility=_editing?Visibility.Visible:Visibility.Collapsed;if(card.EditBadge is not null)card.EditBadge.Visibility=_editing?Visibility.Visible:Visibility.Collapsed;
         }
         if(!_cards.Children.Contains(_edit))_cards.Children.Add(_edit);if(!_cards.Children.Contains(_add))_cards.Children.Add(_add);
-        _edit.Content=new TextBlock{Text=_editing?"完成排列":"编辑控制"};_edit.Width=120;_add.Width=90;_add.Visibility=_editing?Visibility.Visible:Visibility.Collapsed;
-        _edit.ToolTip="拖动卡片排列；拖动右下角吸附预设规格；右键选择形状或移除。";LayoutCards(animate);
+        _edit.Content=new TextBlock{Text=_editing?LocalizedText.Get("完成排列"):LocalizedText.Get("编辑控制")};_edit.Width=120;_add.Width=90;_add.Visibility=_editing?Visibility.Visible:Visibility.Collapsed;
+        _edit.ToolTip=LocalizedText.Get("拖动卡片排列；拖动右下角吸附预设规格；右键选择形状或移除。");LayoutCards(animate);
         if(_ready){Dispatcher.BeginInvoke(RefreshChrome);if(!_applyingPreview)_ = PollSystem();}
     }
     private static bool IsGrip(DependencyObject? source)
@@ -73,7 +73,7 @@ public sealed partial class ControlCenterWindow
         double zoom=_options.Geometry.ComponentScale; double insetX=(c.Shape==ControlCardShape.Circle?5:Math.Clamp(_options.Geometry.CardPadding,18,22))*zoom,insetY=(c.Shape==ControlCardShape.Circle?4:9)*zoom;
         if(c.Kind==ControlModule.Media){insetX=insetY=PlayerPadding(c.Shape)*zoom;}
         c.Body.Margin=new Thickness(insetX,insetY,insetX,insetY);c.Body.ClipToBounds=true;c.Surface.CornerExponent=c.Shape==ControlCardShape.Circle||c.Kind==ControlModule.Media?0:c.Shape==ControlCardShape.Capsule||c.Kind is ControlModule.Volume or ControlModule.Brightness?1.5:0;
-        c.Status=new TextBlock{Text=string.IsNullOrEmpty(previous)?"正在读取":previous,FontSize=c.Shape==ControlCardShape.Circle?10:11,Opacity=.78,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center};
+        c.Status=new TextBlock{Text=string.IsNullOrEmpty(previous)?LocalizedText.Get("正在读取"):previous,FontSize=c.Shape==ControlCardShape.Circle?10:11,Opacity=.78,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center};
         Action primary=()=>PrimaryAction(c.Kind);
         var icon=ActionButton(ModuleGlyph(c.Kind),ModuleName(c.Kind),primary,Math.Max(20,_options.Geometry.IconSize));
         c.Primary=icon;
@@ -84,7 +84,7 @@ public sealed partial class ControlCenterWindow
             icon.Width=icon.Height=Math.Max(_options.Geometry.IconSize,22);
             var group=new StackPanel{HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};icon.HorizontalAlignment=HorizontalAlignment.Center;
             group.Children.Add(icon);c.Status.Visibility=Visibility.Collapsed;c.Body.Children.Add(group);
-            if(c.Kind==ControlModule.Media){_play=_previous=_next=null;c.Status.Text="播放";}
+            if(c.Kind==ControlModule.Media){_play=_previous=_next=null;c.Status.Text=LocalizedText.Get("播放");}
         }
         else if(c.Kind is ControlModule.Brightness or ControlModule.Volume)
         {
@@ -125,7 +125,7 @@ public sealed partial class ControlCenterWindow
         }
         var grip=new Thumb{Width=27,Height=27,HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Bottom,Margin=new Thickness(0,0,1*zoom,1*zoom),LayoutTransform=new ScaleTransform(zoom,zoom),Cursor=Cursors.SizeNWSE,Visibility=_editing?Visibility.Visible:Visibility.Collapsed};
         var gripHit=new FrameworkElementFactory(typeof(Grid));gripHit.SetValue(Grid.BackgroundProperty,Brushes.Transparent);var path=new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));path.SetValue(System.Windows.Shapes.Path.DataProperty,Geometry.Parse("M 4,23 C 14,23 23,14 23,4"));path.SetValue(System.Windows.Shapes.Path.StrokeProperty,Palette.Brush("#CFFFFFFF"));path.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty,5d);path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty,PenLineCap.Round);path.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty,PenLineCap.Round);path.SetValue(OpacityProperty,.8);gripHit.AppendChild(path);grip.Template=new ControlTemplate(typeof(Thumb)){VisualTree=gripHit};
-        AutomationProperties.SetAutomationId(grip,"resize-"+c.Kind);AutomationProperties.SetName(grip,"调整"+ControlCenterCatalog.Name(c.Kind)+"形状");
+        AutomationProperties.SetAutomationId(grip,"resize-"+c.Kind);AutomationProperties.SetName(grip,LocalizedText.Get("调整")+ControlCenterCatalog.Name(c.Kind)+LocalizedText.Get("形状"));
         Point resizePointer=new();double resizeScale=1;
         grip.DragStarted+=(_,_)=>{EndDrag();_resizing=true;_resizeStart=ControlCenterLayout.Size(layout.EffectiveShape,_options.Geometry,layout.Module);var pointer=System.Windows.Forms.Cursor.Position;resizePointer=new Point(pointer.X,pointer.Y);resizeScale=VisualTreeHelper.GetDpi(this).DpiScaleX*_fit.ScaleX;Panel.SetZIndex(c.Root,5);};
         grip.DragDelta+=(_,e)=>{var pointer=System.Windows.Forms.Cursor.Position;_resizeDelta=(new Point(pointer.X,pointer.Y)-resizePointer)/resizeScale;var requested=new Size(Math.Max(1,_resizeStart.Width+_resizeDelta.X),Math.Max(1,_resizeStart.Height+_resizeDelta.Y));var shape=ControlCenterLayout.Snap(requested,_options.Geometry,layout.EffectiveShape,layout.Module);if(shape!=layout.EffectiveShape){layout.SetShape(shape); // Keep the captured grip alive during resize.
@@ -152,7 +152,7 @@ public sealed partial class ControlCenterWindow
         holder.PreviewMouseLeftButtonUp+=(_,_)=>{if(Animate)Release();};
         card.Holder=holder;holder.MouseEnter+=(_,_)=>{holder.Opacity=.88;if(Animate&&icon.Content is ControlCenterIcon mark)mark.Feedback(true);};holder.MouseLeave+=(_,_)=>{holder.Opacity=1;if(Animate)Release();};return holder;
     }
-    private void ToggleModule(ControlModule kind)=>Run(()=>Execute(kind,"正在切换…",async()=>{
+    private void ToggleModule(ControlModule kind)=>Run(()=>Execute(kind,LocalizedText.Get("正在切换…"),async()=>{
         switch(kind){
             case ControlModule.Wifi:await ToggleRadio(RadioKind.WiFi);break;
             case ControlModule.Bluetooth:await ToggleRadio(RadioKind.Bluetooth);break;

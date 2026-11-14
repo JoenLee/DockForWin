@@ -20,7 +20,7 @@ public sealed class LaunchService
     {
         path = Path.GetFullPath(path);
         if (Directory.Exists(path)) return new() { Name = Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } name ? name : path, Target = path, Kind = ItemKind.Folder };
-        if (!File.Exists(path)) throw new FileNotFoundException("找不到这个文件。", path);
+        if (!File.Exists(path)) throw new FileNotFoundException(LocalizedText.Get("找不到这个文件。"), path);
         string extension = Path.GetExtension(path);
         bool executable = extension.Equals(".exe", StringComparison.OrdinalIgnoreCase);
         var pin = new PinnedItem { Name = executable ? Path.GetFileNameWithoutExtension(path) : Path.GetFileName(path), Target = path, ExecutablePath = executable ? path : "", Kind = executable ? ItemKind.Application : ItemKind.Document, WorkingDirectory = Path.GetDirectoryName(path) ?? "" };
@@ -118,7 +118,7 @@ public sealed class LaunchService
     public static bool CanCreateNewWindow(PinnedItem pin)=>pin.Kind==ItemKind.Application&&NewWindowArguments(pin) is not null;
     public void LaunchNewWindow(PinnedItem pin)
     {
-        if(!CanCreateNewWindow(pin))throw new InvalidOperationException("此应用未提供已确认的新建窗口命令。");
+        if(!CanCreateNewWindow(pin))throw new InvalidOperationException(LocalizedText.Get("此应用未提供已确认的新建窗口命令。"));
         var copy=pin.Copy();copy.ManagedShortcut="";copy.Target=copy.ExecutablePath.Length>0?copy.ExecutablePath:copy.Target;
         copy.Arguments=(copy.Arguments+" "+NewWindowArguments(copy)).Trim();Launch(copy);
     }
@@ -134,7 +134,7 @@ public sealed class LaunchService
             Process.Start(new ProcessStartInfo("explorer.exe", pin.Target) { UseShellExecute = true }); return;
         }
         string target = File.Exists(pin.Target) || Directory.Exists(pin.Target) ? pin.Target : pin.ExecutablePath;
-        if (!File.Exists(target) && !Directory.Exists(target)) throw new FileNotFoundException("应用已移动或卸载，请从安装目录或开始菜单重新添加。", target);
+        if (!File.Exists(target) && !Directory.Exists(target)) throw new FileNotFoundException(LocalizedText.Get("应用已移动或卸载，请从安装目录或开始菜单重新添加。"), target);
         var info = new ProcessStartInfo(target) { UseShellExecute = true, Arguments = pin.Arguments };
         if (!string.IsNullOrEmpty(pin.WorkingDirectory) && Directory.Exists(pin.WorkingDirectory)) info.WorkingDirectory = pin.WorkingDirectory;
         Process.Start(info);

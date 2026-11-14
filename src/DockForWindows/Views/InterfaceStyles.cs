@@ -8,7 +8,7 @@ public sealed record InterfaceColors(string Background,string Sidebar,string Car
 
 public static class InterfaceStyles
 {
-    public static string[] Names { get; }={"系统"};
+    public static string[] Names =>new[]{LocalizedText.Get("系统")};
     // Legacy enum values remain readable; every window palette resolves to the design system's
     // Porcelain (light) or Graphite (dark) palette with the system blue accent.
     public static InterfaceColors Resolve(InterfaceStyle style,bool dark)=>dark

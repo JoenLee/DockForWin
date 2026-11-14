@@ -15,7 +15,7 @@ public enum ItemKind { Application, Folder, RecycleBin, Document }
 public sealed class PinnedItem
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = "应用";
+    public string Name { get; set; } = LocalizedText.Get("应用");
     public string Target { get; set; } = "";
     public string ExecutablePath { get; set; } = "";
     public ItemKind Kind { get; set; }
@@ -34,6 +34,8 @@ public sealed class DockSettings
     public DockEdge Edge { get; set; } = DockEdge.Bottom;
     public DockTheme Theme { get; set; } = DockTheme.System;
     public InterfaceTheme InterfaceTheme { get; set; } = InterfaceTheme.System;
+    public string InterfaceAccent { get; set; } = SettingsAccentPresets.Default;
+    public string Language { get; set; } = "zh-CN";
     public InterfaceStyle InterfaceStyle { get; set; } = InterfaceStyle.Mono;
     public bool HideWhenFullscreen { get; set; } = true;
     public ThemeAppearance Appearance { get; set; } = new();
@@ -89,6 +91,8 @@ public sealed class DockSettings
         if (!Enum.IsDefined(Edge)) Edge = DockEdge.Bottom;
         if (!Enum.IsDefined(Theme)) Theme = DockTheme.System;
         if (!Enum.IsDefined(InterfaceTheme)) InterfaceTheme = InterfaceTheme.System;
+        InterfaceAccent = SettingsAccentPresets.Normalize(InterfaceAccent);
+        Language = Language == "en-US" ? "en-US" : "zh-CN";
         InterfaceStyle = InterfaceStyle.Mono; // Migrate legacy window palettes without changing the Dock material.
         Appearance ??= new();
         Appearance.Normalize();
@@ -126,7 +130,7 @@ public sealed class DockSettings
                 pin.Id = Guid.NewGuid().ToString("N");
                 ids.Add(pin.Id);
             }
-            if (string.IsNullOrWhiteSpace(pin.Name)) pin.Name = "应用";
+            if (string.IsNullOrWhiteSpace(pin.Name)) pin.Name = LocalizedText.Get("应用");
             pin.ExecutablePath ??= "";
             pin.Arguments ??= ""; pin.WorkingDirectory ??= ""; pin.SourceShortcut ??= "";
             pin.ManagedShortcut ??= ""; pin.IconLocation ??= ""; pin.AppUserModelId ??= "";
@@ -147,7 +151,7 @@ public sealed class DockSettings
     public void ApplyPreferences(DockSettings source)
     {
         Edge = source.Edge; Theme = source.Theme; Appearance = source.Appearance.Copy();
-        InterfaceTheme = source.InterfaceTheme;
+        InterfaceTheme = source.InterfaceTheme; InterfaceAccent = source.InterfaceAccent; Language = source.Language;
         InterfaceStyle = source.InterfaceStyle;
         HideWhenFullscreen = source.HideWhenFullscreen;
         GlassIntensity = source.GlassIntensity;

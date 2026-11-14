@@ -34,11 +34,11 @@ public sealed class ConnectivityService : IControlCenterConnectivity
     public RadioState? State(RadioKind kind)=>_radios.FirstOrDefault(r=>r.Kind==kind)?.State;
     public async Task SetRadio(RadioKind kind,bool enabled)
     {
-        if(await Radio.RequestAccessAsync()!=RadioAccessStatus.Allowed)throw new UnauthorizedAccessException("Windows 未允许控制此无线设备，请检查隐私权限或硬件开关。");
-        var radios=_radios.Where(r=>r.Kind==kind).ToArray();if(radios.Length==0)throw new InvalidOperationException("未检测到此无线设备。");
-        foreach(var radio in radios)if(await radio.SetStateAsync(enabled?RadioState.On:RadioState.Off)!=RadioAccessStatus.Allowed)throw new UnauthorizedAccessException("系统策略拒绝修改无线设备状态。");
+        if(await Radio.RequestAccessAsync()!=RadioAccessStatus.Allowed)throw new UnauthorizedAccessException(LocalizedText.Get("Windows 未允许控制此无线设备，请检查隐私权限或硬件开关。"));
+        var radios=_radios.Where(r=>r.Kind==kind).ToArray();if(radios.Length==0)throw new InvalidOperationException(LocalizedText.Get("未检测到此无线设备。"));
+        foreach(var radio in radios)if(await radio.SetStateAsync(enabled?RadioState.On:RadioState.Off)!=RadioAccessStatus.Allowed)throw new UnauthorizedAccessException(LocalizedText.Get("系统策略拒绝修改无线设备状态。"));
         for(int i=0;i<30&&radios.Any(r=>r.State!=(enabled?RadioState.On:RadioState.Off));i++)await Task.Delay(100);
-        if(radios.Any(r=>r.State!=(enabled?RadioState.On:RadioState.Off)))throw new InvalidOperationException("无线设备未确认切换，可能被硬件开关或系统策略限制。");
+        if(radios.Any(r=>r.State!=(enabled?RadioState.On:RadioState.Off)))throw new InvalidOperationException(LocalizedText.Get("无线设备未确认切换，可能被硬件开关或系统策略限制。"));
         Changed?.Invoke();
     }
     public async Task<IReadOnlyList<BluetoothPeer>> PairedDevices()
@@ -48,7 +48,7 @@ public sealed class ConnectivityService : IControlCenterConnectivity
     }
     Task<IReadOnlyList<WifiNetwork>> IControlCenterConnectivity.ReadNetworks(bool scan)=>Task.Run(()=>Networks(scan));
     public bool CanListNetworks=>WifiLocationConsent.AllowsNetworkList();
-    public const string LocationRequiredMessage="读取附近 Wi-Fi 需要 Windows 位置权限，可在系统隐私设置中允许。";
+    public static string LocationRequiredMessage=>LocalizedText.Get("读取附近 Wi-Fi 需要 Windows 位置权限，可在系统隐私设置中允许。");
     async Task IControlCenterConnectivity.Connect(WifiNetwork network,string? password,CancellationToken cancellation)
     {
         await Task.Run(()=>{if(password is null)Connect(network);else ConnectNew(network,password);},cancellation);
@@ -58,7 +58,7 @@ public sealed class ConnectivityService : IControlCenterConnectivity
     {
         await Task.Run(()=>Disconnect(network),cancellation);
         for(int i=0;i<20;i++){cancellation.ThrowIfCancellationRequested();if(!(await Task.Run(()=>Networks(),cancellation)).Any(n=>n.Adapter==network.Adapter&&n.Name==network.Name&&n.Connected))return;await Task.Delay(300,cancellation);}
-        throw new InvalidOperationException("系统尚未确认断开网络。");
+        throw new InvalidOperationException(LocalizedText.Get("系统尚未确认断开网络。"));
     }
     public IReadOnlyList<BluetoothPeer> BluetoothDevices
     {
@@ -90,17 +90,17 @@ public sealed class ConnectivityService : IControlCenterConnectivity
     public async Task PairBluetooth(BluetoothPeer peer)
     {
         var info=await DeviceInformation.CreateFromIdAsync(peer.Id,null,DeviceInformationKind.AssociationEndpoint);
-        if(info is null)throw new InvalidOperationException("设备已不在附近，请重新扫描。");
+        if(info is null)throw new InvalidOperationException(LocalizedText.Get("设备已不在附近，请重新扫描。"));
         var result=await info.Pairing.PairAsync();
-        if(result.Status is not (DevicePairingResultStatus.Paired or DevicePairingResultStatus.AlreadyPaired))throw new InvalidOperationException($"蓝牙配对未完成：{result.Status}");
+        if(result.Status is not (DevicePairingResultStatus.Paired or DevicePairingResultStatus.AlreadyPaired))throw new InvalidOperationException(LocalizedText.Format($"蓝牙配对未完成：{result.Status}"));
         Changed?.Invoke();
     }
     public async Task ForgetBluetooth(BluetoothPeer peer)
     {
         var info=await DeviceInformation.CreateFromIdAsync(peer.Id,null,DeviceInformationKind.AssociationEndpoint);
-        if(info is null)throw new InvalidOperationException("未找到此设备。");
+        if(info is null)throw new InvalidOperationException(LocalizedText.Get("未找到此设备。"));
         var result=await info.Pairing.UnpairAsync();
-        if(result.Status is not (DeviceUnpairingResultStatus.Unpaired or DeviceUnpairingResultStatus.AlreadyUnpaired))throw new InvalidOperationException($"取消配对未完成：{result.Status}");
+        if(result.Status is not (DeviceUnpairingResultStatus.Unpaired or DeviceUnpairingResultStatus.AlreadyUnpaired))throw new InvalidOperationException(LocalizedText.Format($"取消配对未完成：{result.Status}"));
         Changed?.Invoke();
     }
     public void Dispose(){_disposed=true;StopBluetoothDiscovery();foreach(var r in _radios)r.StateChanged-=RadioChanged;_radios=Array.Empty<Radio>();}
@@ -140,15 +140,15 @@ public sealed class ConnectivityService : IControlCenterConnectivity
     });
     public static void Connect(WifiNetwork network)=>Wlan(handle=>
     {
-        if(string.IsNullOrEmpty(network.Profile))throw new InvalidOperationException("此网络尚未保存凭据，请先通过 Windows Wi-Fi 面板连接一次。");
+        if(string.IsNullOrEmpty(network.Profile))throw new InvalidOperationException(LocalizedText.Get("此网络尚未保存凭据，请先通过 Windows Wi-Fi 面板连接一次。"));
         var id=network.Adapter;var p=new Connection{Mode=0,Profile=network.Profile,BssType=1};Check(WlanConnect(handle,ref id,ref p,0));return true;
     });
     public static void Disconnect(WifiNetwork network)=>Wlan(handle=>{var id=network.Adapter;Check(WlanDisconnect(handle,ref id,0));return true;});
     public static bool SupportsPassword(WifiNetwork n)=>!n.Secure||n.Authentication is 4 or 7 or 9;
     public static void ConnectNew(WifiNetwork network,string password)
     {
-        if(!SupportsPassword(network))throw new NotSupportedException("企业认证或此加密类型需要 Windows 原生网络面板。");
-        if(network.Secure&&(password.Length<8||password.Length>63))throw new ArgumentException("无线密码应为 8–63 个字符。");
+        if(!SupportsPassword(network))throw new NotSupportedException(LocalizedText.Get("企业认证或此加密类型需要 Windows 原生网络面板。"));
+        if(network.Secure&&(password.Length<8||password.Length>63))throw new ArgumentException(LocalizedText.Get("无线密码应为 8–63 个字符。"));
         string Escape(string value)=>System.Security.SecurityElement.Escape(value)??"";
         string auth=!network.Secure?"open":network.Authentication==9?"WPA3SAE":network.Authentication==4?"WPAPSK":"WPA2PSK";
         string cipher=!network.Secure?"none":network.Cipher==2?"TKIP":"AES";
@@ -159,6 +159,6 @@ public sealed class ConnectivityService : IControlCenterConnectivity
     public static async Task WaitForConnection(WifiNetwork network,CancellationToken cancellation=default)
     {
         for(int i=0;i<20;i++){await Task.Delay(600,cancellation);var current=await Task.Run(()=>Networks(),cancellation);if(current.Any(n=>n.Adapter==network.Adapter&&n.Name==network.Name&&n.Connected))return;}
-        throw new InvalidOperationException("未能连接此网络，请检查密码、信号或网络认证要求。");
+        throw new InvalidOperationException(LocalizedText.Get("未能连接此网络，请检查密码、信号或网络认证要求。"));
     }
 }

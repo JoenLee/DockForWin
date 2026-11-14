@@ -18,7 +18,7 @@ public sealed class AwakeService:IDisposable
     public void Start(TimeSpan? duration,bool displayOn=false)
     {
         if(duration is {} t&&(t<=TimeSpan.Zero||t>TimeSpan.FromDays(1)))throw new ArgumentOutOfRangeException(nameof(duration));
-        lock(_sync){Stop();nint text=Marshal.StringToHGlobalUni("DockForWindows 临时保持唤醒");SafeFileHandle? request=null;
+        lock(_sync){Stop();nint text=Marshal.StringToHGlobalUni(LocalizedText.Get("DockForWindows 临时保持唤醒"));SafeFileHandle? request=null;
             try{var reason=new Reason{Flags=1,Text=text};request=PowerCreateRequest(ref reason);if(request.IsInvalid)throw new Win32Exception(Marshal.GetLastWin32Error());if(!PowerSetRequest(request,1))throw new Win32Exception(Marshal.GetLastWin32Error());if(displayOn&&!PowerSetRequest(request,0))throw new Win32Exception(Marshal.GetLastWin32Error());_request=request;request=null;_display=displayOn;Until=duration is {} interval?DateTimeOffset.UtcNow+interval:null;long generation=_generation;if(duration.HasValue)_timer=new Timer(_=>{lock(_sync){if(generation==_generation)Stop();}},null,duration.Value,Timeout.InfiniteTimeSpan);}
             finally{request?.Dispose();Marshal.FreeHGlobal(text);}}
     }

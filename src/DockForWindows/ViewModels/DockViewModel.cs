@@ -25,7 +25,7 @@ public sealed class DockViewModel
     {
         Settings = settings; _store = store; _icons = icons;
         foreach (var pin in settings.Pins) Items.Add(new DockItem(pin));
-        if (!Items.Any(i => i.Pin.Kind == ItemKind.RecycleBin)) Items.Add(new DockItem(new PinnedItem { Name = "回收站", Kind = ItemKind.RecycleBin, Target = "shell:RecycleBinFolder" }));
+        if (!Items.Any(i => i.Pin.Kind == ItemKind.RecycleBin)) Items.Add(new DockItem(new PinnedItem { Name = LocalizedText.Get("回收站"), Kind = ItemKind.RecycleBin, Target = "shell:RecycleBinFolder" }));
     }
     public async Task LoadIconsAsync(bool force = false)
     {
@@ -46,7 +46,7 @@ public sealed class DockViewModel
                 item.Icon = await _icons.GetAsync(item.Pin, force);
             }
             catch (ObjectDisposedException) { return; }
-            catch (Exception ex) { _store.Log("图标重载失败：" + item.Name, ex); }
+            catch (Exception ex) { _store.Log(LocalizedText.Get("图标重载失败：") + item.Name, ex); }
         }
         if (repaired) Save();
         ItemsRebuilt?.Invoke();
@@ -65,7 +65,7 @@ public sealed class DockViewModel
                 if (existing is not null) item.Windows = existing.Windows;
                 Items.Insert(Items.Count(i => i.IsPinned), item);
             }
-            catch (Exception ex) { Error?.Invoke(ex.Message); _store.Log("添加项目失败", ex); }
+            catch (Exception ex) { Error?.Invoke(ex.Message); _store.Log(LocalizedText.Get("添加项目失败"), ex); }
         }
         Save(); ItemsRebuilt?.Invoke();
     }
@@ -172,17 +172,17 @@ public sealed class DockViewModel
             Settings.Pins = Items.Where(i => i.IsPinned).Select(i => i.Pin).ToList();
             _store.Save(Settings); return true;
         }
-        catch (Exception ex) { Error?.Invoke("设置保存失败：" + ex.Message); _store.Log("保存失败", ex); return false; }
+        catch (Exception ex) { Error?.Invoke(LocalizedText.Get("设置保存失败：") + ex.Message); _store.Log(LocalizedText.Get("保存失败"), ex); return false; }
     }
     public event Action? WidgetSettingsChanged;
     private void NotifyWidgets()
     {
-        try{WidgetSettingsChanged?.Invoke();}catch(Exception ex){_store.Log("小组件视图更新失败，配置已经保存",ex);}
+        try{WidgetSettingsChanged?.Invoke();}catch(Exception ex){_store.Log(LocalizedText.Get("小组件视图更新失败，配置已经保存"),ex);}
     }
     public bool TrySaveWidgets(WidgetOptions widgets)
     {
         try{var candidate=Settings.Copy();candidate.Widgets=widgets.Copy();candidate.Normalize();candidate.Pins=Items.Where(i=>i.IsPinned).Select(i=>i.Pin).ToList();_store.Save(candidate);Settings.Widgets=candidate.Widgets;NotifyWidgets();return true;}
-        catch(Exception ex){Error?.Invoke("小组件保存失败，原设置已保留："+ex.Message);_store.Log("保存小组件失败",ex);return false;}
+        catch(Exception ex){Error?.Invoke(LocalizedText.Get("小组件保存失败，原设置已保留：")+ex.Message);_store.Log(LocalizedText.Get("保存小组件失败"),ex);return false;}
     }
     public bool TryApplyPreferences(DockSettings draft)
     {
@@ -198,6 +198,6 @@ public sealed class DockViewModel
             NotifyWidgets();
             return true;
         }
-        catch (Exception ex) { Error?.Invoke("设置保存失败，原设置已保留：" + ex.Message); _store.Log("保存偏好失败", ex); return false; }
+        catch (Exception ex) { Error?.Invoke(LocalizedText.Get("设置保存失败，原设置已保留：") + ex.Message); _store.Log(LocalizedText.Get("保存偏好失败"), ex); return false; }
     }
 }

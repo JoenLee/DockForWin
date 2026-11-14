@@ -9,12 +9,12 @@ internal partial class SettingsShellWindow
     // Labels, fills and lines carry alpha so the desktop's hue reaches through them, as on macOS.
     protected void ApplySettingsPalette(Palette palette)
     {
-        var p = Design = DesignSystem.Palette(palette.Dark);
+        var p = Design = DesignSystem.Palette(palette.Dark,_draft.InterfaceAccent);
         void Set(string key, Color color) => Resources[key] = DesignSystem.Brush(color);
         void Gradient(string key, Color top, Color bottom, double end = 1) { var brush = new LinearGradientBrush(new GradientStopCollection { new(top, 0), new(bottom, end) }, 90); brush.Freeze(); Resources[key] = brush; }
         Set("SettingsInk", p.Label); Set("SettingsMuted", p.SecondaryLabel); Set("SettingsTertiary", p.TertiaryLabel);
         Set("SettingsLine", p.Separator); Set("SettingsCard", p.Group); Set("SettingsField", p.Field); Set("SettingsCanvas", Colors.Transparent);
-        Set("SettingsSidebar", Colors.Transparent); Set("SettingsHero", p.QuietFill); Set("SettingsQuiet", p.QuietFill);
+        Set("SettingsSidebar", p.Dark?DesignSystem.Hex("#242427"):DesignSystem.Hex("#E8E9ED")); Set("SettingsHero", p.QuietFill); Set("SettingsQuiet", p.QuietFill);
         Set("SettingsTrack", p.TrackFill); Set("SettingsSwitchOff", p.Fill); Set("SettingsHover", p.Hover); Set("SettingsPressed", p.Pressed);
         Set("SettingsSidebarHover", p.Hover); Set("SettingsIndicator", p.Dark ? DesignSystem.Hex("#5E5E62") : DesignSystem.Hex("#FFFFFF"));
         Set("SettingsSidebarInk", p.Label); Set("SettingsSidebarIcon", p.SecondaryLabel); Set("SettingsSidebarSelectionInk", p.Label);
@@ -34,7 +34,7 @@ internal partial class SettingsShellWindow
         Resources["SettingsShadowColor"] = p.Shadow; Resources["SettingsAccentColor"] = p.Accent;
         Resources["SettingsControlShadowOpacity"] = p.Dark ? .45 : .12; Resources["SettingsFloatingShadowOpacity"] = p.Dark ? .55 : .16;
         Set("SettingsPrimaryTint", DesignSystem.WithAlpha(p.Accent, p.Dark ? .2 : .14)); Set("SettingsPrimaryRim", DesignSystem.WithAlpha(p.Accent, p.Dark ? .34 : .28));
-        Set("SettingsAccentInk", p.Dark ? DesignSystem.Hex("#7CB8FF") : DesignSystem.Hex("#0A6AD6"));
+        Set("SettingsAccentInk", p.Accent);
         // Flat: an opaque off-white (graphite) card, rows a step darker (lighter), no edges, no sheen.
         Set("SettingsCanvas", p.Dark ? DesignSystem.Hex("#1C1C1E") : DesignSystem.Hex("#F7F7F8"));
         Set("SettingsCard", p.Dark ? DesignSystem.Hex("#2A2A2D") : DesignSystem.Hex("#EDEEF1"));
@@ -56,7 +56,7 @@ internal partial class SettingsShellWindow
             foreach (var key in new[] { "SettingsCard", "SettingsField", "SettingsCanvas", "SettingsSidebar" }) Resources[key] = SystemColors.WindowBrush;
             Resources["SettingsSelection"] = SystemColors.HighlightBrush; Resources["SettingsAccent"] = SystemColors.HighlightBrush; Resources["SettingsSidebarSelectionInk"] = SystemColors.HighlightTextBrush;
         }
-        _sidebar.SetResourceReference(Panel.BackgroundProperty, "SettingsSidebar"); _right.SetResourceReference(Panel.BackgroundProperty, "SettingsCanvas");
+        RefreshFloatingSidebar(); _right.SetResourceReference(Panel.BackgroundProperty, "SettingsCanvas");
         _selection.SetResourceReference(Border.BackgroundProperty, "SettingsSelection");
         Foreground = (Brush)Resources["SettingsInk"];
         ApplyBackdrop();

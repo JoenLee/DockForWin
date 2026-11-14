@@ -20,13 +20,16 @@ internal sealed class WidgetCarousel : Grid
     // units: the cards overflow the viewport, so a relative mask would stretch over their whole extent instead.
     private void FadeEdges()
     {
-        double width = _viewport.ActualWidth; if (width <= 0) return; double fade = Math.Min(96, width * .12) / width;
-        var brush = new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(0, 0, 0, 0), 0), new(Colors.Black, fade), new(Colors.Black, 1 - fade), new(Color.FromArgb(0, 0, 0, 0), 1) }, new Point(0, 0), new Point(width, 0)) { MappingMode = BrushMappingMode.Absolute };
+        double width = _viewport.ActualWidth; if (width <= 0) return; double fade = EdgeFade / width;
+        var brush = new LinearGradientBrush(new GradientStopCollection { new(Color.FromArgb(0, 0, 0, 0), 0), new(Color.FromArgb(30,0,0,0),fade*.25), new(Color.FromArgb(128,0,0,0),fade*.6), new(Colors.Black, fade), new(Colors.Black, 1 - fade), new(Color.FromArgb(128,0,0,0),1-fade*.6), new(Color.FromArgb(30,0,0,0),1-fade*.25), new(Color.FromArgb(0, 0, 0, 0), 1) }, new Point(0, 0), new Point(width, 0)) { MappingMode = BrushMappingMode.Absolute };
         brush.Freeze(); _viewport.OpacityMask = brush;
     }
+    private readonly Canvas _track=new(){ClipToBounds=false};
+    private double EdgeFade=>Math.Min(56,_viewport.ActualWidth*.12);
+    internal void UseInspectorLayout(){_viewport.Height=double.NaN;RowDefinitions[0].Height=new GridLength(1,GridUnitType.Star);RowDefinitions[1].Height=GridLength.Auto;MinHeight=180;}
     private readonly List<Card> _cards = new();
     private readonly List<(Border Active, ScaleTransform Scale, Button Button)> _dots = new();
-    private readonly TextBlock _caption = new() { FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 9) };
+    private readonly TextBlock _caption = new() { FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center,TextAlignment=TextAlignment.Center,TextWrapping=TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 9) };
     private readonly Button _previous, _next;
     private bool _pressed, _dragging;
     private Point _pressPoint;
@@ -48,28 +51,29 @@ internal sealed class WidgetCarousel : Grid
     internal bool IsDragging => _dragging;
     internal IReadOnlyList<WidgetHost> Hosts => _cards.Select(c => c.Host).ToArray();
     internal event Action<int>? SelectionChanged;
+    internal event Action? FrameChanged;
     internal WidgetCarousel(IReadOnlyList<WidgetDefinition> definitions, int selected, double exponent)
     {
-        if (definitions.Count == 0) throw new ArgumentException("轮播不能为空。", nameof(definitions));
+        if (definitions.Count == 0) throw new ArgumentException(LocalizedText.Get("轮播不能为空。"), nameof(definitions));
         _largestWidth = definitions.Max(d => d.Size.Width);
         _centers = new double[definitions.Count];
         Focusable = true; FocusVisualStyle = null; ClipToBounds = true;
         RowDefinitions.Add(new() { Height = new GridLength(296) });
         RowDefinitions.Add(new() { Height = new GridLength(27) });
-        RowDefinitions.Add(new() { Height = new GridLength(26) });
-        Children.Add(_viewport); _viewport.SizeChanged += (_, _) => FadeEdges();
+        RowDefinitions.Add(new() { Height = new GridLength(36) });
+        Children.Add(_viewport);_viewport.Children.Add(_track);_viewport.SizeChanged += (_, _) => {FadeEdges();ApplyFrame();};
         for (int i = 0; i < definitions.Count; i++) {
             var host = new WidgetHost(definitions[i], exponent) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 RenderTransformOrigin = new Point(.5, .5) };
-            var scale = new ScaleTransform(); var shift = new TranslateTransform(); var transform = new TransformGroup();
+            host.UseGalleryShadow();var scale = new ScaleTransform(); var shift = new TranslateTransform(); var transform = new TransformGroup();
             transform.Children.Add(scale); transform.Children.Add(shift); host.RenderTransform = transform;
             AutomationProperties.SetAutomationId(host, definitions[i].Id); AutomationProperties.SetName(host, definitions[i].Title + " " + definitions[i].Size);
-            _cards.Add(new(host, scale, shift)); _viewport.Children.Add(host);
+            _cards.Add(new(host, scale, shift)); _track.Children.Add(host);
             host.VisualScaleChanged+=ApplyFrame;
         }
         _caption.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted"); Grid.SetRow(_caption, 1); Children.Add(_caption);
         var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        _previous = Arrow("‹", "上一个小组件", () => Select(SelectedIndex - 1)); controls.Children.Add(_previous);
+        _previous = Arrow("‹", LocalizedText.Get("上一个小组件"), () => Select(SelectedIndex - 1)); controls.Children.Add(_previous);
         for (int i = 0; i < _cards.Count; i++) {
             int index = i; var body = new Grid { Width = 28, Height = 24 };
             body.Children.Add(new Border { Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = WidgetBrushes.Get("#CCD7D7") });
@@ -78,32 +82,33 @@ internal sealed class WidgetCarousel : Grid
             active.SetResourceReference(Border.BackgroundProperty, "SettingsAccent"); body.Children.Add(active);
             var dot = new Button { Content = body, Padding = new Thickness(0), Margin = new Thickness(0), MinHeight = 24, Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0), ToolTip = definitions[i].Title + " · " + definitions[i].Size };
-            AutomationProperties.SetName(dot, $"选择{definitions[i].Title}，第{i + 1}项，共{definitions.Count}项");
+            AutomationProperties.SetName(dot, LocalizedText.Format($"选择{definitions[i].Title}，第{i + 1}项，共{definitions.Count}项"));
             AutomationProperties.SetAutomationId(dot, definitions[0].Kind.ToString().ToLowerInvariant() + "-page-" + i);
             dot.Click += (_, _) => Select(index); _dots.Add((active, scale, dot)); controls.Children.Add(dot);
         }
-        _next = Arrow("›", "下一个小组件", () => Select(SelectedIndex + 1)); controls.Children.Add(_next);
+        _next = Arrow("›", LocalizedText.Get("下一个小组件"), () => Select(SelectedIndex + 1)); controls.Children.Add(_next);
         Grid.SetRow(controls, 2); Children.Add(controls);
-        SizeChanged += (_, _) => ApplyFrame();
+        SizeChanged += (_, _) => {double width=Math.Clamp((ActualWidth-88)/_cards.Count,8,28);foreach(var dot in _dots){((FrameworkElement)dot.Button.Content).Width=width;dot.Active.Width=Math.Min(22,width-2);}_caption.MaxWidth=Math.Max(1,ActualWidth);ApplyFrame();};
         Loaded+=(_,_)=>{_source=PresentationSource.FromVisual(this) as HwndSource;_source?.AddHook(HorizontalWheel);};
         Unloaded += (_, _) => { _source?.RemoveHook(HorizontalWheel);_source=null;_pressed = _dragging = false; if (IsMouseCaptured) ReleaseMouseCapture(); ControlMotion.Stop(this, PositionProperty, SelectedIndex); };
         Select(selected, false);
     }
     internal void ResizeSelected(WidgetSize size){var host=_cards[SelectedIndex].Host;host.Resize(size);_largestWidth=_cards.Max(c=>c.Host.Width);Select(SelectedIndex,false);ApplyFrame();}
-    private static Button Arrow(string text, string name, Action click)
+    private static Button Arrow(string text,string name,Action click)=>NavigationArrow(text=="‹",name,click);
+    internal static Button NavigationArrow(bool previous,string name,Action click)
     {
-        var button = new Button { Content = text, Width = 28, MinHeight = 24, FontSize = 18, Padding = new Thickness(0), Margin = new Thickness(5, 0, 5, 0),
-            Background = Brushes.Transparent, BorderThickness = new Thickness(0), ToolTip = name };
-        AutomationProperties.SetName(button, name); button.Click += (_, _) => click(); return button;
+        var glyph=new System.Windows.Shapes.Path{Data=Geometry.Parse(previous?"M9,3 L4,8 L9,13":"M4,3 L9,8 L4,13"),Width=14,Height=16,Stretch=Stretch.None,StrokeThickness=1.8,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
+        glyph.SetBinding(System.Windows.Shapes.Shape.StrokeProperty,new System.Windows.Data.Binding("Foreground"){RelativeSource=new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor,typeof(Button),1)});
+        var button=new Button{Content=glyph,Width=32,Height=32,MinHeight=32,MinWidth=32,Padding=new Thickness(0),Margin=new Thickness(5,0,5,0),ToolTip=name,HorizontalContentAlignment=HorizontalAlignment.Center,VerticalContentAlignment=VerticalAlignment.Center};button.SetResourceReference(StyleProperty,"SettingsCircleButton");AutomationProperties.SetName(button,name);button.Click+=(_,_)=>click();return button;
     }
     internal void Select(int index, bool animate = true, double? velocity = null)
     {
         index = Math.Clamp(index, 0, _cards.Count - 1); bool changed = SelectedIndex != index; SelectedIndex = index;
         _previous.IsEnabled = index > 0; _next.IsEnabled = index < _cards.Count - 1;
         _caption.Text = $"{_cards[index].Host.Definition.Title}   ·   {_cards[index].Host.Definition.Size}   ·   {index + 1} / {_cards.Count}";
-        for (int i = 0; i < _dots.Count; i++) AutomationProperties.SetItemStatus(_dots[i].Button, i == index ? "已选中" : "未选中");
+        for (int i = 0; i < _dots.Count; i++) AutomationProperties.SetItemStatus(_dots[i].Button, i == index ? LocalizedText.Get("已选中") : LocalizedText.Get("未选中"));
         if (animate && IsLoaded && IsVisible && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast)
-            ControlMotion.To(this, PositionProperty, index, speed: 1.28, initialVelocity: velocity);
+            ControlMotion.To(this, PositionProperty, index, speed: 1.08, damping: .95, initialVelocity: velocity);
         else ControlMotion.Stop(this, PositionProperty, index);
         if (changed) SelectionChanged?.Invoke(index);
     }
@@ -119,7 +124,7 @@ internal sealed class WidgetCarousel : Grid
         if (_cards.Count == 0) return;
         double previousWidth = 0;
         for (int i = 0; i < _cards.Count; i++) {
-            var card = _cards[i];double fit=Math.Min(Math.Min(1,Math.Max(1,_viewport.ActualHeight-42)/(card.Host.Height*card.Host.PanelScale*1.025)),Math.Max(1,_viewport.ActualWidth-2*(CardGap+28))/(card.Host.Width*card.Host.PanelScale*1.025));
+            var card = _cards[i];Canvas.SetLeft(card.Host,_viewport.ActualWidth/2-card.Host.Width/2);Canvas.SetTop(card.Host,_viewport.ActualHeight/2-card.Host.Height/2);double fit=Math.Min(Math.Min(1,Math.Max(1,_viewport.ActualHeight-48)/(card.Host.Height*card.Host.PanelScale*1.025)),Math.Max(1,_viewport.ActualWidth-2*(EdgeFade+10))/(card.Host.Width*card.Host.PanelScale*1.025));
             double scale = fit * (.77 + .23 * Math.Max(0, 1 - Math.Abs(i - Position)));
             card.Scale.ScaleX = card.Scale.ScaleY = scale;
             double width = card.Host.Width * scale * card.Host.VisualScale;
@@ -132,13 +137,18 @@ internal sealed class WidgetCarousel : Grid
             var card = _cards[i]; double distance = i - Position, abs = Math.Abs(distance);
             double emphasis = Math.Max(0, 1 - abs);
             card.Shift.X = _centers[i] - center; card.Shift.Y = 6 * Math.Min(abs, 2);
-            card.Host.Opacity = Math.Clamp(1 - abs * .31, 0, 1);
+            var background=(card.Host.Resources["WidgetBackground"] as SolidColorBrush)?.Color??Colors.White;
+            var canvas=(TryFindResource("SettingsCard") as SolidColorBrush)?.Color??Color.FromRgb(237,238,241);
+            static double Light(Color color)=>.2126*color.ScR+.7152*color.ScG+.0722*color.ScB;
+            double contrast=Math.Abs(Light(background)-Light(canvas));
+            card.Host.Opacity = Math.Clamp(1 - abs * .31, 0, 1)*(1-Math.Min(abs,1)*contrast*.78);
             card.Host.Visibility = abs > 2.4 ? Visibility.Hidden : Visibility.Visible;
             card.Host.IsHitTestVisible = abs < 1.6;
             Panel.SetZIndex(card.Host, (int)Math.Round(100 - abs * 10));
             _dots[i].Active.Opacity = emphasis;
             _dots[i].Scale.ScaleX = .28 + .72 * emphasis;
         }
+        FrameChanged?.Invoke();
     }
     internal bool TryWheel(int delta)
     {

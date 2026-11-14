@@ -23,6 +23,11 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if(args.Length==3&&args[0]=="--preview-settings-polish")return SettingsPolishChecks.Preview(args[1],args[2]=="en-US");
+        if(args.Length==2&&args[0]=="--verify-settings-polish")return SettingsPolishChecks.Run(args[1],false);
+        if(args.Length==2&&args[0]=="--verify-settings-polish-en")return SettingsPolishChecks.Run(args[1],true);
+        if(args.Length==2&&args[0]=="--verify-themed-menus")return ThemedMenuChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-sidebar-preview")return SidebarPreviewChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--preview-widget-system")return WidgetSystemChecks.Run(new[]{args[1],"--preview"});
         if(args.Length==2&&args[0]=="--verify-widget-system")return WidgetSystemChecks.Run(new[]{args[1]});
         if(args.Length==2&&args[0]=="--verify-widget-desktop")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only"});
@@ -709,8 +714,3 @@ internal static class Program
         window.Controls.Add(label); System.Windows.Forms.Application.Run(window); return 0;
     }
 }
-
-
-
-
-

@@ -80,6 +80,6 @@ public sealed class FramePerformance
     public string Describe()
     {
         var (p95, p99) = Percentiles();
-        return $"刷新率 {RefreshRate:0}Hz · 呈现回调 {Fps:0}/s · 平均 {AvgFrameMs:0.0}ms · P95 {p95:0.0}ms · P99 {p99:0.0}ms · 掉帧 {_droppedFrames} · 最长 {_longestGapMs:0.0}ms";
+        return LocalizedText.Format($"刷新率 {RefreshRate:0}Hz · 呈现回调 {Fps:0}/s · 平均 {AvgFrameMs:0.0}ms · P95 {p95:0.0}ms · P99 {p99:0.0}ms · 掉帧 {_droppedFrames} · 最长 {_longestGapMs:0.0}ms");
     }
 }

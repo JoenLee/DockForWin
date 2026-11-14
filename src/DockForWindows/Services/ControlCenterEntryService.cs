@@ -78,7 +78,7 @@ public sealed class ControlCenterEntryService : IDisposable
     {
         string text=_hotkey?.Invoke()??"Ctrl+Win+A";if(text==_registeredHotkey)return;
         if(!TryParseHotkey(text,out var modifiers,out var key))return;
-        UnregisterHotKey(_messages.Handle,0xD0C);HotkeyRegistered=RegisterHotKey(_messages.Handle,0xD0C,modifiers|0x4000,key);_registeredHotkey=text;if(!HotkeyRegistered)_notify?.Invoke("快捷键 "+text+" 已被占用，请在控制中心设置中更换；托盘入口仍可使用。");
+        UnregisterHotKey(_messages.Handle,0xD0C);HotkeyRegistered=RegisterHotKey(_messages.Handle,0xD0C,modifiers|0x4000,key);_registeredHotkey=text;if(!HotkeyRegistered)_notify?.Invoke(LocalizedText.Get("快捷键 ")+text+LocalizedText.Get(" 已被占用，请在控制中心设置中更换；托盘入口仍可使用。"));
     }
     public void Dispose(){if(_disposed)return;_disposed=true;AccessoryBounds=Rect.Empty;_refresh.Stop();_mouse.Dispose();UnregisterHotKey(_messages.Handle,0xD0C);_messages.Dispose();}
 }

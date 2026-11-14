@@ -28,5 +28,8 @@ internal static class GlassMaterial
         }
     }
     // Tint presets offered beside the material: none, ice, lavender, blossom, mint.
-    public static readonly (string Name, string Hex)[] Tints = { ("无色", ""), ("冰蓝", "#BFDDFF"), ("薰衣草", "#D9CCFF"), ("樱粉", "#FFCCDB"), ("薄荷", "#C4EEDC") };
+    private static readonly (string Name, string Hex)[] ChineseTints = { ("无色", ""), ("冰蓝", "#BFDDFF"), ("薰衣草", "#D9CCFF"), ("樱粉", "#FFCCDB"), ("薄荷", "#C4EEDC") };
+    private static readonly Lazy<(string Name,string Hex)[]> EnglishTints=new(()=>Array.ConvertAll(ChineseTints,p=>(LocalizedText.Get(p.Name),p.Hex)));
+    public static (string Name,string Hex)[] Tints=>LocalizedText.IsEnglish?EnglishTints.Value:ChineseTints;
+
 }

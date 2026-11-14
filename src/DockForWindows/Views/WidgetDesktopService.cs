@@ -40,22 +40,22 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     }
     public bool TryRequest(WidgetPlacementRequest request,out string message)
     {
-        if(!IsAvailable){message="Windows 桌面容器不可用，未添加组件。";return false;}
-        _ =AddAsync(request.Instance.Copy());message="正在读取桌面图标区域并寻找空位…";return true;
+        if(!IsAvailable){message=LocalizedText.Get("Windows 桌面容器不可用，未添加组件。");return false;}
+        _ =AddAsync(request.Instance.Copy());message=LocalizedText.Get("正在读取桌面图标区域并寻找空位…");return true;
     }
     internal async Task<bool> AddAsync(WidgetInstance instance)
     {
         try{
-            if(!IsAvailable)throw new InvalidOperationException("Windows 桌面容器不可用。");
-            if(_model.Settings.Widgets.Instances.Count>=100)throw new InvalidOperationException("桌面组件已达 100 个。");
+            if(!IsAvailable)throw new InvalidOperationException(LocalizedText.Get("Windows 桌面容器不可用。"));
+            if(_model.Settings.Widgets.Instances.Count>=100)throw new InvalidOperationException(LocalizedText.Get("桌面组件已达 100 个。"));
             var screen=Forms.Screen.FromPoint(Forms.Cursor.Position);var occupied=(await WidgetDesktopLayout.Icons()).ToList();if(_disposed)return false;
             occupied.AddRange(OtherBounds(null));instance.Monitor=screen.DeviceName;
-            if(!WidgetDesktopLayout.FindSpace(instance,screen,WidgetDesktopLayout.Dpi(screen),occupied,out int col,out int row))throw new InvalidOperationException("当前显示器没有足够空位，请移动图标或选择较小尺寸。");
+            if(!WidgetDesktopLayout.FindSpace(instance,screen,WidgetDesktopLayout.Dpi(screen),occupied,out int col,out int row))throw new InvalidOperationException(LocalizedText.Get("当前显示器没有足够空位，请移动图标或选择较小尺寸。"));
             instance.Column=col;instance.Row=row;var draft=_model.Settings.Widgets.Copy();draft.Instances.Add(instance);
             if(!_model.TrySaveWidgets(draft))return false;
-            if(!_windows.TryGetValue(instance.InstanceId,out var window)||!window.Attached){var rollback=_model.Settings.Widgets.Copy();rollback.Instances.RemoveAll(x=>x.InstanceId==instance.InstanceId);_model.TrySaveWidgets(rollback);throw new InvalidOperationException("无法附着到 Explorer 桌面，已撤回添加。");}
+            if(!_windows.TryGetValue(instance.InstanceId,out var window)||!window.Attached){var rollback=_model.Settings.Widgets.Copy();rollback.Instances.RemoveAll(x=>x.InstanceId==instance.InstanceId);_model.TrySaveWidgets(rollback);throw new InvalidOperationException(LocalizedText.Get("无法附着到 Explorer 桌面，已撤回添加。"));}
             return true;
-        }catch(Exception e){if(!_disposed){if(Error!=null)Error(e.Message);else MessageBox.Show(e.Message,"添加小组件",MessageBoxButton.OK,MessageBoxImage.Information);}return false;}
+        }catch(Exception e){if(!_disposed){if(Error!=null)Error(e.Message);else MessageBox.Show(e.Message,LocalizedText.Get("添加小组件"),MessageBoxButton.OK,MessageBoxImage.Information);}return false;}
     }
     private IEnumerable<Rect> OtherBounds(Guid? excluding)
     {
@@ -71,7 +71,7 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
                     changed|=col!=item.Column||row!=item.Row||item.Monitor!=screen.DeviceName;item.Column=col;item.Row=row;item.Monitor=screen.DeviceName;occupied.Add(WidgetDesktopLayout.Bounds(item,screen,dpi));if(_windows.TryGetValue(item.InstanceId,out var window)&&!window.IsVisible)window.Show();
                 }else if(_windows.TryGetValue(item.InstanceId,out var window))window.Hide();
             }if(changed)_model.TrySaveWidgets(draft);
-        }catch(Exception e){Error?.Invoke("图标避让检查未完成，保留布局："+e.Message);}finally{_validating=false;}
+        }catch(Exception e){Error?.Invoke(LocalizedText.Get("图标避让检查未完成，保留布局：")+e.Message);}finally{_validating=false;}
     }
     internal async Task Place(WidgetDesktopWindow window,Point physical)
     {
@@ -79,9 +79,9 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
             var screen=Forms.Screen.FromPoint(new System.Drawing.Point((int)physical.X,(int)physical.Y));double dpi=WidgetDesktopLayout.Dpi(screen),pitch=(WidgetSize.Unit+WidgetSize.Gap)*dpi/96;
             var occupied=(await WidgetDesktopLayout.Icons()).Concat(OtherBounds(item.InstanceId)).ToArray();if(_disposed)return;
             int desiredX=(int)Math.Round((physical.X-screen.WorkingArea.Left)/pitch),desiredY=(int)Math.Round((physical.Y-screen.WorkingArea.Top)/pitch);
-            if(!WidgetDesktopLayout.FindSpace(item,screen,dpi,occupied,out int col,out int row,desiredX,desiredY))throw new InvalidOperationException("没有合适的空位，位置已恢复。");
+            if(!WidgetDesktopLayout.FindSpace(item,screen,dpi,occupied,out int col,out int row,desiredX,desiredY))throw new InvalidOperationException(LocalizedText.Get("没有合适的空位，位置已恢复。"));
             item.Column=col;item.Row=row;item.Monitor=screen.DeviceName;if(!_model.TrySaveWidgets(draft))window.Position();
-        }catch(Exception e){window.Position();MessageBox.Show(e.Message,"移动小组件");}
+        }catch(Exception e){window.Position();MessageBox.Show(e.Message,LocalizedText.Get("移动小组件"));}
     }
     internal void Change(Guid id,Action<WidgetInstance> update)
     {
@@ -93,9 +93,9 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     {
         try{var screen=Forms.Screen.AllScreens.FirstOrDefault(s=>s.DeviceName==item.Monitor)??Forms.Screen.PrimaryScreen!;
             var occupied=(await WidgetDesktopLayout.Icons()).Concat(OtherBounds(item.InstanceId)).ToArray();if(_disposed)return;
-            if(!WidgetDesktopLayout.FindSpace(item,screen,WidgetDesktopLayout.Dpi(screen),occupied,out int col,out int row,item.Column,item.Row))throw new InvalidOperationException("该尺寸没有可用空位。");
+            if(!WidgetDesktopLayout.FindSpace(item,screen,WidgetDesktopLayout.Dpi(screen),occupied,out int col,out int row,item.Column,item.Row))throw new InvalidOperationException(LocalizedText.Get("该尺寸没有可用空位。"));
             item.Column=col;item.Row=row;var latest=_model.Settings.Widgets.Copy();int index=latest.Instances.FindIndex(x=>x.InstanceId==item.InstanceId);if(index>=0){latest.Instances[index]=item.Copy();_model.TrySaveWidgets(latest);}
-        }catch(Exception e){MessageBox.Show(e.Message,"组件设置");}
+        }catch(Exception e){MessageBox.Show(e.Message,LocalizedText.Get("组件设置"));}
     }
     internal void Delete(Guid id){var draft=_model.Settings.Widgets.Copy();draft.Instances.RemoveAll(x=>x.InstanceId==id);_model.TrySaveWidgets(draft);}
     internal void Duplicate(WidgetInstance item){var copy=item.Copy();copy.InstanceId=Guid.NewGuid();_ =AddAsync(copy);}
@@ -145,7 +145,7 @@ internal sealed class WidgetDesktopWindow : Window
     private static bool Interactive(DependencyObject? node){while(node!=null){if(node is ButtonBase)return true;node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node);}return false;}
     internal void Attach()
     {
-        _handle=new WindowInteropHelper(this).Handle;_parent=WidgetDesktopLayout.DesktopParent();if(_parent==0)throw new InvalidOperationException("Explorer 桌面不可用。");
+        _handle=new WindowInteropHelper(this).Handle;_parent=WidgetDesktopLayout.DesktopParent();if(_parent==0)throw new InvalidOperationException(LocalizedText.Get("Explorer 桌面不可用。"));
         long style=GetWindowLongPtr(_handle,-16).ToInt64();SetWindowLongPtr(_handle,-16,new nint((style&~0x80000000L)|0x40000000L));
         SetParent(_handle,_parent);if(GetParent(_handle)!=_parent)throw new Win32Exception(Marshal.GetLastWin32Error());Position();
     }
@@ -165,9 +165,9 @@ internal sealed class WidgetDesktopWindow : Window
     private void Menu()
     {
         var menu=new ContextMenu();void Add(string title,Action action){var item=new MenuItem{Header=title};item.Click+=(_,_)=>action();menu.Items.Add(item);}
-        Add("组件设置…",()=>WidgetInstanceEditor.Show(Instance,copy=>_service.Change(copy.InstanceId,x=>{x.Size=copy.Size;x.Source=copy.Source;x.Appearance=copy.Appearance;x.Material=copy.Material;})));
-        var sizes=new MenuItem{Header="调整尺寸"};foreach(var size in WidgetSizes.For(WidgetRegistry.Get(Instance.DefinitionId))){var item=new MenuItem{Header=size.ToString(),IsCheckable=true,IsChecked=size==Instance.Size};item.Click+=(_,_)=>_service.Change(Instance.InstanceId,x=>x.Size=size);sizes.Items.Add(item);}menu.Items.Add(sizes);
-        Add(Instance.Locked?"解锁位置":"锁定位置",()=>_service.Change(Instance.InstanceId,x=>x.Locked=!x.Locked));Add("复制组件",()=>_service.Duplicate(Instance));Add("删除组件",()=>_service.Delete(Instance.InstanceId));ContextMenu=menu;
+        Add(LocalizedText.Get("组件设置…"),()=>WidgetInstanceEditor.Show(Instance,copy=>_service.Change(copy.InstanceId,x=>{x.Size=copy.Size;x.Source=copy.Source;x.Appearance=copy.Appearance;x.Material=copy.Material;})));
+        var sizes=new MenuItem{Header=LocalizedText.Get("调整尺寸")};foreach(var size in WidgetSizes.For(WidgetRegistry.Get(Instance.DefinitionId))){var item=new MenuItem{Header=size.ToString(),IsCheckable=true,IsChecked=size==Instance.Size};item.Click+=(_,_)=>_service.Change(Instance.InstanceId,x=>x.Size=size);sizes.Items.Add(item);}menu.Items.Add(sizes);
+        Add(Instance.Locked?LocalizedText.Get("解锁位置"):LocalizedText.Get("锁定位置"),()=>_service.Change(Instance.InstanceId,x=>x.Locked=!x.Locked));Add(LocalizedText.Get("复制组件"),()=>_service.Duplicate(Instance));Add(LocalizedText.Get("删除组件"),()=>_service.Delete(Instance.InstanceId));ContextMenu=menu;
     }
     internal void Position()
     {

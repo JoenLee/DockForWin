@@ -12,10 +12,13 @@ public sealed partial class ControlCenterWindow
     private static readonly Brush ClassicLightCard=Palette.Brush("#A84A4D52");
     private static readonly Brush ClassicDarkCard=Palette.Brush("#A8383B40");
     private void ConfigureSurfaceMaterial(DockSurface surface)
+        =>ConfigurePreviewMaterial(surface,_options,_palette);
+    internal static void ConfigurePreviewMaterial(DockSurface surface,ControlCenterOptions options,Palette palette)
     {
-        surface.ClassicMaterial=UsesClassicBlur;surface.UseControlCenterLighting();
-        surface.Fill=UsesClassicBlur?(_options.ColorMode==ControlCenterColorMode.Light?ClassicLightCard:ClassicDarkCard):SystemParameters.HighContrast?_palette.SettingsCard:Brushes.White;
-        if(UsesClassicBlur){surface.Backdrop=null;surface.Opacity=1;}
+        bool classic=options.MaterialMode==ControlCenterMaterialMode.ClassicBlur&&!SystemParameters.HighContrast;
+        surface.ClassicMaterial=classic;surface.UseControlCenterLighting();
+        surface.Fill=classic?(options.ColorMode==ControlCenterColorMode.Light?ClassicLightCard:ClassicDarkCard):SystemParameters.HighContrast?palette.SettingsCard:Brushes.White;
+        if(classic){surface.Backdrop=null;surface.Opacity=1;}
         surface.InvalidateVisual();
     }
     private void UpdateMaterialMask()
