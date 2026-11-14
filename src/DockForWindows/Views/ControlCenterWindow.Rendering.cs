@@ -102,10 +102,27 @@ public sealed partial class ControlCenterWindow
             else if(NativeMethods.GetWindowRect(handle,out var pre)&&!_screen.Bounds.Contains((int)((pre.Left+pre.Right)/2d),(int)((pre.Top+pre.Bottom)/2d)))NativeMethods.SetWindowPos(handle,0,area.Left+16,area.Top+16,0,0,0x0015);
             double dpi=NativeMethods.GetDpiForWindow(handle)/96d;double logicalHeight=Math.Max(_mainHeight,_stage.Height)+90;
             double fit=ControlCenterLayout.FitPanel(_options.Geometry.PanelScale,new Size(_stage.Width+SideGutter*2,logicalHeight),new Size(Math.Max(1,area.Width/dpi-16),Math.Max(1,area.Height/dpi-20)));if(Math.Abs(fit-_fit.ScaleX)>.002){_fit.ScaleX=_fit.ScaleY=fit;Width=(_stage.Width+SideGutter*2)*fit;}
+            _fromBelow=!(area.Top>_screen.Bounds.Top);
             int x=area.Right-(int)Math.Ceiling((Width-(SideGutter-40)*_fit.ScaleX)*dpi)-8;int y=area.Top>_screen.Bounds.Top?area.Top+4-(int)Math.Round((VerticalGutter-18)*_fit.ScaleY*dpi):area.Bottom-(int)Math.Ceiling(ActualHeight*dpi)-4+(int)Math.Round((VerticalGutter-18)*_fit.ScaleY*dpi);
             if(NativeMethods.GetWindowRect(handle,out var current)&&(Math.Abs(current.Left-x)>1||Math.Abs(current.Top-y)>1)){NativeMethods.SetWindowPos(handle,0,x,y,0,0,0x0015);_lastMotion=_runtime.Elapsed.TotalSeconds;}
         }
         finally{if(Content is FrameworkElement host&&_screen is not null&&PresentationSource.FromVisual(host) is not null){var area=_screen.WorkingArea;var a=host.PointFromScreen(new Point(area.Left,area.Top));var b=host.PointFromScreen(new Point(area.Right,area.Bottom));var rect=Rect.Intersect(new Rect(a,b),new Rect(host.RenderSize));if(host.Clip is not RectangleGeometry existing||existing.Rect!=rect){var clip=new RectangleGeometry(rect);clip.Freeze();host.Clip=clip;}}_positioning=false;}
+    }
+    // Opens on one copy of the screen under the panel (about 20 ms) instead of waiting 150-250 ms for the first
+    // composed sample; the capture loop's first result replaces it, normally within a few frames of the entrance.
+    private async Task SeedFromScreen()
+    {
+        if(_closing||_wholeFrame is not null)return;nint handle=new WindowInteropHelper(this).Handle;if(!NativeMethods.GetWindowRect(handle,out var rect))return;double dpi=VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var bounds=System.Drawing.Rectangle.FromLTRB(rect.Left,rect.Top,rect.Right,rect.Bottom);
+        try
+        {
+            var raw=await Task.Run(()=>GlassBackdropService.ReadScreen(bounds,dpi));
+            if(raw is not {} frame||_closing||_wholeFrame is not null)return;
+            int pad=(int)Math.Ceiling(24*dpi);
+            using var outcome=new SampleResult(frame.Pixels,frame.Width,frame.Height,new Rect(bounds.X-pad,bounds.Y-pad,frame.Width,frame.Height));
+            ApplySample(outcome);_capture.ForgetComposite();
+        }
+        catch(Exception ex){_log?.Invoke(LocalizedText.Get("控制中心背景采样"),ex);}
     }
     private async Task CaptureFrame()
     {

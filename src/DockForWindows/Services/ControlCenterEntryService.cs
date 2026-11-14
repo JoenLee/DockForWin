@@ -22,6 +22,9 @@ public sealed class ControlCenterEntryService : IDisposable
     private readonly Dispatcher _dispatcher;private readonly Action _toggle;private readonly Func<bool> _enabled;private readonly LowLevelMouseHook _mouse;private readonly HwndSource _messages;private readonly DispatcherTimer _refresh;
     internal static Rect AccessoryBounds=Rect.Empty,NetworkAnchor=Rect.Empty;
     internal static event Action<Rect>? NetworkAnchorChanged;
+    // Raised after every scan, and when the pointer reaches a taskbar, so the accessory can return above the taskbar.
+    internal static event Action? AccessoryRaise;
+    private int _anchorMisses;
     internal static bool IsDedicatedButton(Point point)=>!AccessoryBounds.IsEmpty&&AccessoryBounds.Contains(point);
     // Written on the UI thread, read on the hook thread.
     private volatile Rect[] _targets=Array.Empty<Rect>(),_bars=Array.Empty<Rect>();private volatile bool _intercept;
@@ -59,7 +62,16 @@ public sealed class ControlCenterEntryService : IDisposable
                     if(name.StartsWith("网络",StringComparison.Ordinal)||name.StartsWith("音量",StringComparison.Ordinal)||name.StartsWith("电源",StringComparison.Ordinal)||name.StartsWith("Network",StringComparison.OrdinalIgnoreCase)||name.StartsWith("Speakers",StringComparison.OrdinalIgnoreCase)||name.StartsWith("Volume",StringComparison.OrdinalIgnoreCase)||name.StartsWith("Battery",StringComparison.OrdinalIgnoreCase))
                     {var r=current.BoundingRectangle;if(!r.IsEmpty&&r.Width>0)list.Add(r);}}
                 }catch(ElementNotAvailableException){}catch(InvalidOperationException){} } if(!network.IsEmpty){double previous=double.NegativeInfinity;foreach(var r in occupied)if(r.Right<=network.Left&&r.Right>previous)previous=r.Right;if(network.Left-previous<network.Height*1.25)network=Rect.Empty;}return (Normal:list.ToArray(),Anchor:network,Bars:bars.ToArray());
-            });if(!_disposed){_targets=rects.Normal;_bars=rects.Bars;if(NetworkAnchor!=rects.Anchor){NetworkAnchor=rects.Anchor;NetworkAnchorChanged?.Invoke(rects.Anchor);}}
+            });
+            if(!_disposed){
+                _targets=rects.Normal;_bars=rects.Bars;
+                // One scan that misses the network button (explorer busy, tray re-laying out) must not hide the accessory;
+                // it moves at once when the button is found elsewhere and hides only after two misses in a row.
+                var anchor=rects.Anchor;if(anchor.IsEmpty&&!NetworkAnchor.IsEmpty&&++_anchorMisses<2)anchor=NetworkAnchor;
+                if(!rects.Anchor.IsEmpty)_anchorMisses=0;
+                if(NetworkAnchor!=anchor){NetworkAnchor=anchor;NetworkAnchorChanged?.Invoke(anchor);}
+                AccessoryRaise?.Invoke();
+            }
         }
         catch{}finally{_busy=false;}
     }
@@ -72,6 +84,11 @@ public sealed class ControlCenterEntryService : IDisposable
             return false;
         }
         if(message==0x202&&_swallowUp){_swallowUp=false;return true;}
+        if(message==0x202){var point=new Point(x,y);foreach(var bar in _bars)if(bar.Contains(point)){_dispatcher.BeginInvoke(DispatcherPriority.Background,()=>AccessoryRaise?.Invoke());break;}}
+        // The accessory button beside quick settings answers on press, here, rather than through its window: the
+        // taskbar is topmost too and comes back over the small button whenever it is clicked, which used to hide the
+        // button and send its clicks to the taskbar.
+        if(message==0x201&&IsDedicatedButton(new Point(x,y))){_swallowUp=true;_dispatcher.BeginInvoke(_toggle);return true;}
         if(message==0x201&&_intercept&&GetAsyncKeyState(0x11)>=0)
         {var point=new Point(x,y);foreach(var target in _targets)if(target.Contains(point)){_swallowUp=true;_dispatcher.BeginInvoke(_toggle);return true;}}
         return false;

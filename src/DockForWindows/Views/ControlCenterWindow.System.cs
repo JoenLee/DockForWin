@@ -28,26 +28,17 @@ public sealed partial class ControlCenterWindow
         try
         {
             _ = PollNetworks();
-            var brightness=Task.Run(()=>{try{return(Value:SystemControlService.ReadBrightness(),Error:(string?)null);}catch(Exception ex){return(Value:(byte?)null,Error:ex.Message);}});
-            var state=await Task.Run(()=>
-            {
-                AudioState? audio=null;bool? dark=null,saver=null;
-                try{audio=SystemControlService.ReadAudio();}catch(Exception ex){_log?.Invoke(LocalizedText.Get("读取音频"),ex);}
-                try{dark=SystemControlService.ReadDarkMode();}catch{ }
-                try{saver=SystemControlService.ReadPowerSaver();}catch{ }
-                return(audio,power:SystemControlService.ReadPower(),dark,saver);
-            });if(_closing)return;
+            var brightness=_brightnessRead??ReadBrightnessAsync();var quick=_quickRead??ReadQuickAsync();_brightnessRead=null;_quickRead=null;
+            var state=await quick;if(_closing)return;
+            if(state.AudioError is not null)_log?.Invoke(LocalizedText.Get("读取音频"),state.AudioError);
             _updating=true;
             try{
-                _volume.IsEnabled=state.audio is not null;if(state.audio is not null){_muted=state.audio.Muted;if(!_volume.IsMouseCaptureWithin&&!_volumeBusy&&_pendingVolume is null)_volume.Value=state.audio.Volume;Status(ControlModule.Volume,_muted?LocalizedText.Get("已静音"):$"{_volume.Value:0}%");if(_mute is not null)SetIcon(_mute,_muted?"Muted":"Volume");}else Status(ControlModule.Volume,LocalizedText.Get("无音频设备"));
-                Status(ControlModule.Battery,state.power.Percent is int p?$"{p}% · {(state.power.PluggedIn?LocalizedText.Get("充电中"):LocalizedText.Get("电池供电"))}":LocalizedText.Get("已接通电源"));
+                ApplyQuickState(state);
                 UpdateWifiStatus();var bt=_connectivity.State(RadioKind.Bluetooth);Status(ControlModule.Bluetooth,bt==RadioState.On?LocalizedText.Get("已打开"):bt is null?LocalizedText.Get("无蓝牙设备"):LocalizedText.Get("已关闭"));
                 Active(ControlModule.Bluetooth,bt==RadioState.On);
-                Status(ControlModule.DarkMode,state.dark is null?LocalizedText.Get("系统不支持"):state.dark==true?LocalizedText.Get("深色"):LocalizedText.Get("浅色"));Active(ControlModule.DarkMode,state.dark==true);
-                Status(ControlModule.PowerSaver,state.saver is null?LocalizedText.Get("系统不支持"):state.saver==true?LocalizedText.Get("已开启"):LocalizedText.Get("已关闭"));Active(ControlModule.PowerSaver,state.saver==true);
             }finally{_updating=false;}
             var light=await brightness;if(_closing)return;_updating=true;
-            _brightness.IsEnabled=light.Value.HasValue;if(light.Value is byte b){if(!_brightness.IsMouseCaptureWithin&&!_brightnessDelay.IsEnabled&&!_brightnessBusy)_brightness.Value=b;Status(ControlModule.Brightness,$"{_brightness.Value:0}%");}else{Status(ControlModule.Brightness,LocalizedText.Get("显示器不支持调节"));_brightness.ToolTip=light.Error??LocalizedText.Get("内置屏幕使用 WMI；未提供亮度接口的外接屏幕请使用显示器按键。");}
+            ApplyBrightness(light);
             // A WinRT query: off the UI thread like the other readings of this poll.
             var focus=await Task.Run(()=>{try{return MediaControlService.ReadFocus();}catch{return (bool?)null;}});if(_closing)return;
             Status(ControlModule.Focus,focus==true?LocalizedText.Get("专注中"):LocalizedText.Get("Windows 专注"));try{Status(ControlModule.Projection,await Task.Run(ProjectionService.ReadTopology));}catch{Status(ControlModule.Projection,LocalizedText.Get("投影与无线显示"));}
@@ -55,6 +46,43 @@ public sealed partial class ControlCenterWindow
             _ = RefreshMedia();
         }
         catch(Exception ex){Report(ex);}finally{_updating=false;_polling=false;if(!_closing){SyncDetailToggles();RefreshVisibleDetails();}}
+    }
+    // The cards that show a system reading (volume, brightness, dark mode, power saver, battery) start reading before
+    // the window is shown and take the last reading of this process at once, so the entrance never shows a default
+    // value that jumps to the real one while the panel is moving.
+    internal readonly record struct QuickState(AudioState? Audio,Exception? AudioError,PowerState Power,bool? Dark,bool? Saver);
+    private static QuickState? _rememberedQuick;private static (byte? Value,string? Error)? _rememberedBrightness;
+    private Task<QuickState>? _quickRead;private Task<(byte? Value,string? Error)>? _brightnessRead;
+    private static Task<QuickState> ReadQuickAsync()=>Task.Run(()=>
+    {
+        AudioState? audio=null;Exception? error=null;bool? dark=null,saver=null;
+        try{audio=SystemControlService.ReadAudio();}catch(Exception ex){error=ex;}
+        try{dark=SystemControlService.ReadDarkMode();}catch{ }
+        try{saver=SystemControlService.ReadPowerSaver();}catch{ }
+        var state=new QuickState(audio,error,SystemControlService.ReadPower(),dark,saver);_rememberedQuick=state;return state;
+    });
+    private static Task<(byte? Value,string? Error)> ReadBrightnessAsync()=>Task.Run(()=>
+    {
+        (byte? Value,string? Error) light;try{light=(SystemControlService.ReadBrightness(),null);}catch(Exception ex){light=(null,ex.Message);}
+        _rememberedBrightness=light;return light;
+    });
+    private void StartEarlyReadings()
+    {
+        _quickRead=ReadQuickAsync();_brightnessRead=ReadBrightnessAsync();
+        _updating=true;try{if(_rememberedQuick is {} quick)ApplyQuickState(quick);if(_rememberedBrightness is {} light)ApplyBrightness(light);}finally{_updating=false;}
+        async Task Arrive<T>(Task<T> read,Action<T> apply){try{var value=await read;if(_closing)return;_updating=true;try{apply(value);}finally{_updating=false;}}catch{ }}
+        _ = Arrive(_quickRead,ApplyQuickState);_ = Arrive(_brightnessRead,ApplyBrightness);
+    }
+    private void ApplyQuickState(QuickState state)
+    {
+        _volume.IsEnabled=state.Audio is not null;if(state.Audio is not null){_muted=state.Audio.Muted;if(!_volume.IsMouseCaptureWithin&&!_volumeBusy&&_pendingVolume is null)_volume.Value=state.Audio.Volume;Status(ControlModule.Volume,_muted?LocalizedText.Get("已静音"):$"{_volume.Value:0}%");if(_mute is not null)SetIcon(_mute,_muted?"Muted":"Volume");}else Status(ControlModule.Volume,LocalizedText.Get("无音频设备"));
+        Status(ControlModule.Battery,state.Power.Percent is int p?$"{p}% · {(state.Power.PluggedIn?LocalizedText.Get("充电中"):LocalizedText.Get("电池供电"))}":LocalizedText.Get("已接通电源"));
+        Status(ControlModule.DarkMode,state.Dark is null?LocalizedText.Get("系统不支持"):state.Dark==true?LocalizedText.Get("深色"):LocalizedText.Get("浅色"));Active(ControlModule.DarkMode,state.Dark==true);
+        Status(ControlModule.PowerSaver,state.Saver is null?LocalizedText.Get("系统不支持"):state.Saver==true?LocalizedText.Get("已开启"):LocalizedText.Get("已关闭"));Active(ControlModule.PowerSaver,state.Saver==true);
+    }
+    private void ApplyBrightness((byte? Value,string? Error) light)
+    {
+        _brightness.IsEnabled=light.Value.HasValue;if(light.Value is byte b){if(!_brightness.IsMouseCaptureWithin&&!_brightnessDelay.IsEnabled&&!_brightnessBusy)_brightness.Value=b;Status(ControlModule.Brightness,$"{_brightness.Value:0}%");}else{Status(ControlModule.Brightness,LocalizedText.Get("显示器不支持调节"));_brightness.ToolTip=light.Error??LocalizedText.Get("内置屏幕使用 WMI；未提供亮度接口的外接屏幕请使用显示器按键。");}
     }
     // Runs beside PollSystem with its own guard. Without location consent (Windows 11 24H2+) it does not
     // call the WLAN list at all, so a status poll never raises the system location prompt.

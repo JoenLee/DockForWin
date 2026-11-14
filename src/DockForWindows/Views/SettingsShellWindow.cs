@@ -58,12 +58,14 @@ internal partial class SettingsShellWindow:Window
         Title=LocalizedText.Get("设置 · DockForWin");Icon=IosStyles.AppIcon();FontFamily=DesignSystem.TextFont;FontSize=13.5;
         // A wide, flat card in the manner of a music player's mini window: preview on the left, choices on the right.
         Width=Math.Min(1080,SystemParameters.WorkArea.Width-48);Height=Math.Min(700,SystemParameters.WorkArea.Height-48);MinWidth=Math.Min(1000,Width);MinHeight=Math.Min(520,Height);
-        WindowStartupLocation=WindowStartupLocation.CenterOwner;WindowStyle=WindowStyle.None;AllowsTransparency=true;Background=Brushes.Transparent;ResizeMode=ResizeMode.CanResize;UseLayoutRounding=true;SnapsToDevicePixels=true;
+        WindowStartupLocation=WindowStartupLocation.CenterOwner;WindowStyle=WindowStyle.None;AllowsTransparency=!ComposedShell;Background=Brushes.Transparent;ResizeMode=ResizeMode.CanResize;UseLayoutRounding=true;SnapsToDevicePixels=true;
         Resources.MergedDictionaries.Add(new ResourceDictionary{Source=new Uri("/DockForWindows;component/Views/SettingsShellStyles.xaml",UriKind.Relative)});
         Resources.MergedDictionaries.Add(new ResourceDictionary{Source=new Uri("/DockForWindows;component/Assets/Ionicons/SettingsIonicons.xaml",UriKind.Relative)});
         // Keep native caption/resize hit testing; WPF alpha coverage smooths the custom corner instead of a hard HRGN.
-        WindowChrome.SetWindowChrome(this,new WindowChrome{CaptionHeight=TabBarHeight,ResizeBorderThickness=new Thickness(6),CornerRadius=new CornerRadius(0),GlassFrameThickness=new Thickness(0),UseAeroCaptionButtons=false});
-        SourceInitialized+=(_,_)=>ApplyBackdrop();KeyboardCue.Track(this);
+        // With composed transparency there is no WindowChrome: it cannot run on the WS_POPUP window that transparency
+        // needs, so SettingsShellWindow.Composition answers the same caption and edge hit tests itself.
+        if(!ComposedShell)WindowChrome.SetWindowChrome(this,new WindowChrome{CaptionHeight=TabBarHeight,ResizeBorderThickness=new Thickness(ResizeBorder),CornerRadius=new CornerRadius(0),GlassFrameThickness=new Thickness(0),UseAeroCaptionButtons=false});
+        SourceInitialized+=(_,_)=>{ApplyBackdrop();InstallComposition();};KeyboardCue.Track(this);
 
         var root=_right=new Grid();AutomationProperties.SetAutomationId(root,"settings-shell-two-columns");
         root.RowDefinitions.Add(new(){Height=new GridLength(0)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});
