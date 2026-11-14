@@ -40,6 +40,8 @@ internal static class Program
         if(args.Length==2&&args[0]=="--measure-backdrop-latency")return BackdropLatencyChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--verify-shadow-render")return ShadowRenderChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--measure-material-perf")return MaterialPerfChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--measure-control-center-perf")return ControlCenterPerfChecks.Run(args[1]);
+        if(args.Length is 5 or 6&&args[0]=="--perf-background")return ControlCenterPerfChecks.Background(double.Parse(args[1],System.Globalization.CultureInfo.InvariantCulture),double.Parse(args[2],System.Globalization.CultureInfo.InvariantCulture),double.Parse(args[3],System.Globalization.CultureInfo.InvariantCulture),double.Parse(args[4],System.Globalization.CultureInfo.InvariantCulture),args.Length==6?int.Parse(args[5]):0);
         if(args.Length==2&&args[0]=="--verify-card-frost")return CardFrostChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--verify-control-polish")return ControlPolishChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--verify-interactive-motion")return InteractiveMotionChecks.Run(args[1]);

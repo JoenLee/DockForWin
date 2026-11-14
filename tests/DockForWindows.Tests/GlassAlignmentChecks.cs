@@ -36,8 +36,11 @@ internal static class GlassAlignmentChecks
                 foreach(double scale in new[]{.8,1.2}){
                     settings.ControlCenter.Geometry.PanelScale=scale;typeof(ControlCenterWindow).GetMethod("ApplyPreview",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(center,new object[]{settings});await Task.Delay(700);
                     foreach(var glass in Tree<DockSurface>(center).Where(s=>s.IsVisible&&s.Backdrop is not null)){
-                        var image=Field<Image>(glass,"_backdropImage");var origin=image.PointToScreen(new Point());var end=image.PointToScreen(new Point(image.ActualWidth,image.ActualHeight));var bounds=glass.BackdropScreenBounds;
-                        double error=(origin-bounds.TopLeft).Length+(end-bounds.BottomRight).Length;Console.WriteLine($"source alignment scale={scale}: {error:0.00}px; actual {origin} to {end}; expected {bounds}; image {image.RenderSize}");Check(error<3,"glass sample, blur and pane share the same screen coordinates");
+                        // The plate draws only its part of the capture: the brush's viewbox, at one capture pixel per screen pixel.
+                        var image=Field<Border>(glass,"_backdropImage");var origin=image.PointToScreen(new Point());var end=image.PointToScreen(new Point(image.ActualWidth,image.ActualHeight));var bounds=glass.BackdropScreenBounds;
+                        var capture=(System.Windows.Media.Imaging.BitmapSource)glass.Backdrop!;var view=((ImageBrush)image.Background).Viewbox;
+                        var expected=new Rect(bounds.X+view.X*capture.PixelWidth,bounds.Y+view.Y*capture.PixelHeight,view.Width*capture.PixelWidth,view.Height*capture.PixelHeight);
+                        double error=(origin-expected.TopLeft).Length+(end-expected.BottomRight).Length;Console.WriteLine($"source alignment scale={scale}: {error:0.00}px; actual {origin} to {end}; expected {expected}; element {image.RenderSize}");Check(error<3,"glass sample, blur and pane share the same screen coordinates");
                     }
                     var tile=Tree<Grid>(center).Single(g=>AutomationProperties.GetAutomationId(g)=="control-card-Volume");var host=(Grid)center.Content;var boundsTile=tile.TransformToAncestor(host).TransformBounds(new Rect(tile.RenderSize));Check(boundsTile.Left>=60,"whole card lies inside the safety gutter, not in its fade");Capture(center,Path.Combine(directory,$"Aligned-{scale}.png"));
                 }
