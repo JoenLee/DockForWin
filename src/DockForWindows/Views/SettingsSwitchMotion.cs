@@ -18,10 +18,12 @@ public static class SettingsSwitchMotion
     private static void Changed(DependencyObject owner,DependencyPropertyChangedEventArgs args)
     {
         if(owner is not CheckBox box)return;
-        if((bool)args.NewValue){box.Loaded+=Loaded;box.Unloaded+=Unloaded;box.Checked+=Toggled;box.Unchecked+=Toggled;box.PreviewMouseLeftButtonDown+=Pressed;box.PreviewMouseLeftButtonUp+=Released;box.LostMouseCapture+=Released;box.PreviewKeyDown+=KeyDown;box.PreviewKeyUp+=KeyUp;}
-        else{box.Loaded-=Loaded;box.Unloaded-=Unloaded;box.Checked-=Toggled;box.Unchecked-=Toggled;box.PreviewMouseLeftButtonDown-=Pressed;box.PreviewMouseLeftButtonUp-=Released;box.LostMouseCapture-=Released;box.PreviewKeyDown-=KeyDown;box.PreviewKeyUp-=KeyUp;Update(box,false,false);}
+        if((bool)args.NewValue){box.IsEnabledChanged+=EnabledChanged;box.Loaded+=Loaded;box.Unloaded+=Unloaded;box.Checked+=Toggled;box.Unchecked+=Toggled;box.PreviewMouseLeftButtonDown+=Pressed;box.PreviewMouseLeftButtonUp+=Released;box.LostMouseCapture+=Released;box.PreviewKeyDown+=KeyDown;box.PreviewKeyUp+=KeyUp;}
+        else{box.IsEnabledChanged-=EnabledChanged;box.Loaded-=Loaded;box.Unloaded-=Unloaded;box.Checked-=Toggled;box.Unchecked-=Toggled;box.PreviewMouseLeftButtonDown-=Pressed;box.PreviewMouseLeftButtonUp-=Released;box.LostMouseCapture-=Released;box.PreviewKeyDown-=KeyDown;box.PreviewKeyUp-=KeyUp;Update(box,false,false);}
     }
     private static void Loaded(object sender,RoutedEventArgs args)=>Update((CheckBox)sender,false,false);
+    // A switch that cannot be used keeps its position but loses the accent: blue only ever means "on and usable".
+    private static void EnabledChanged(object sender,DependencyPropertyChangedEventArgs args)=>Update((CheckBox)sender,false,false);
     private static void Unloaded(object sender,RoutedEventArgs args)=>Update((CheckBox)sender,false,false);
     private static void Toggled(object sender,RoutedEventArgs args)=>Update((CheckBox)sender,true,false);
     private static void Pressed(object sender,MouseButtonEventArgs args)=>Update((CheckBox)sender,true,true);
@@ -45,7 +47,7 @@ public static class SettingsSwitchMotion
         Move(scale,ScaleTransform.ScaleXProperty,pressed?1.22:1,motion ? .14 : 0);
         var brush=(SolidColorBrush)track.Background;if(brush.IsFrozen){brush=brush.CloneCurrentValue();track.Background=brush;}
         var off=box.TryFindResource("SettingsSwitchOff") as SolidColorBrush;var on=box.TryFindResource("SettingsAccent") as SolidColorBrush;
-        var color=enabled?on?.Color??Color.FromRgb(0,122,255):off?.Color??Color.FromArgb(51,120,120,128);
+        var color=enabled&&box.IsEnabled?on?.Color??Color.FromRgb(0,122,255):off?.Color??Color.FromArgb(51,120,120,128);
         if(motion)brush.BeginAnimation(SolidColorBrush.ColorProperty,new ColorAnimation(color,TimeSpan.FromSeconds(.18)){EasingFunction=new CubicEase{EasingMode=EasingMode.EaseOut}},HandoffBehavior.SnapshotAndReplace);
         else{brush.BeginAnimation(SolidColorBrush.ColorProperty,null);brush.Color=color;}
     }

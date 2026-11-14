@@ -63,7 +63,7 @@ internal partial class SettingsShellWindow:Window
         Resources.MergedDictionaries.Add(new ResourceDictionary{Source=new Uri("/DockForWindows;component/Assets/Ionicons/SettingsIonicons.xaml",UriKind.Relative)});
         // Keep native caption/resize hit testing; WPF alpha coverage smooths the custom corner instead of a hard HRGN.
         WindowChrome.SetWindowChrome(this,new WindowChrome{CaptionHeight=TabBarHeight,ResizeBorderThickness=new Thickness(6),CornerRadius=new CornerRadius(0),GlassFrameThickness=new Thickness(0),UseAeroCaptionButtons=false});
-        SourceInitialized+=(_,_)=>ApplyBackdrop();
+        SourceInitialized+=(_,_)=>ApplyBackdrop();KeyboardCue.Track(this);
 
         var root=_right=new Grid();AutomationProperties.SetAutomationId(root,"settings-shell-two-columns");
         root.RowDefinitions.Add(new(){Height=new GridLength(0)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});

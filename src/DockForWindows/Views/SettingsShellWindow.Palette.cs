@@ -49,6 +49,9 @@ internal partial class SettingsShellWindow
         Set("SettingsControlFill", p.Dark ? DesignSystem.Hex("#3A3A3E") : DesignSystem.Hex("#FFFFFF"));
         Resources["SettingsControlSheen"] = Brushes.Transparent;
         Resources["SettingsControlShadowOpacity"] = p.Dark ? .3 : .07;
+        Set("SettingsRaised", p.Dark ? DesignSystem.Hex("#30353E") : Colors.White);
+        Set("SettingsRaisedEdge", p.Dark ? DesignSystem.Hex("#14FFFFFF") : DesignSystem.Hex("#0F0A1A33"));
+        Set("SettingsDanger", p.Dark ? DesignSystem.Hex("#FF6B66") : DesignSystem.Hex("#C9302C"));
         ApplyGlassPalette(p);
         if (SystemParameters.HighContrast)
         {

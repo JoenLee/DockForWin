@@ -92,7 +92,7 @@
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="State" Property="Background" Value="{DynamicResource SettingsHover}"/></Trigger>
             <Trigger Property="IsPressed" Value="True"><Setter TargetName="State" Property="Background" Value="{DynamicResource SettingsPressed}"/></Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource SettingsFocusRing}"/></Trigger>
+            <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsKeyboardFocused" Value="True"/><Condition Property="local:KeyboardCue.Visible" Value="True"/></MultiTrigger.Conditions><Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource SettingsFocusRing}"/></MultiTrigger>
             <Trigger Property="Background" Value="Transparent"><Setter TargetName="Sheen" Property="Visibility" Value="Collapsed"/><Setter TargetName="Body" Property="Effect" Value="{x:Null}"/></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".4"/></Trigger>
           </ControlTemplate.Triggers>
@@ -122,7 +122,7 @@
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="State" Property="Background" Value="{DynamicResource SettingsPrimaryTint}"/></Trigger>
             <Trigger Property="IsPressed" Value="True"><Setter TargetName="State" Property="Background" Value="{DynamicResource SettingsPrimaryRim}"/></Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource SettingsFocusRing}"/></Trigger>
+            <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsKeyboardFocused" Value="True"/><Condition Property="local:KeyboardCue.Visible" Value="True"/></MultiTrigger.Conditions><Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource SettingsFocusRing}"/></MultiTrigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".4"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -171,12 +171,12 @@
         <ControlTemplate TargetType="TextBox">
           <Grid>
             <Border x:Name="Ring" CornerRadius="11" Margin="-3" BorderBrush="{DynamicResource SettingsFocusRing}" BorderThickness="3" Opacity="0" IsHitTestVisible="False"/>
-            <Border CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+            <Border CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
               <ScrollViewer x:Name="PART_ContentHost" Focusable="False" VerticalAlignment="Center"/>
             </Border>
           </Grid>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Ring" Property="Opacity" Value="0"/></Trigger>
+            <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsKeyboardFocused" Value="True"/><Condition Property="local:KeyboardCue.Visible" Value="True"/></MultiTrigger.Conditions><Setter TargetName="Ring" Property="Opacity" Value="0"/></MultiTrigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".4"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -264,7 +264,7 @@
                   </Border>
                   <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Wash" Property="Background" Value="{DynamicResource SettingsHover}"/></Trigger>
-                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Wash" Property="Background" Value="{DynamicResource SettingsHover}"/></Trigger>
+                    <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsKeyboardFocused" Value="True"/><Condition Property="local:KeyboardCue.Visible" Value="True"/></MultiTrigger.Conditions><Setter TargetName="Wash" Property="Background" Value="{DynamicResource SettingsHover}"/></MultiTrigger>
                     <Trigger Property="IsChecked" Value="True">
                       <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Turn" Storyboard.TargetProperty="Angle" To="90" Duration="0:0:0.18"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></Trigger.EnterActions>
                       <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Turn" Storyboard.TargetProperty="Angle" To="0" Duration="0:0:0.18"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></Trigger.ExitActions>
@@ -406,7 +406,7 @@
             </Grid>
           </Grid>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Ring" Property="Opacity" Value="1"/></Trigger>
+            <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsKeyboardFocused" Value="True"/><Condition Property="local:KeyboardCue.Visible" Value="True"/></MultiTrigger.Conditions><Setter TargetName="Ring" Property="Opacity" Value="1"/></MultiTrigger>
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".4"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>

@@ -26,7 +26,9 @@ public static class DesignSystem
     public static FontFamily DisplayFont { get; } = new(FontBase, "Segoe UI Variable Display, Segoe UI, ./Assets/Fonts/#Glow Sans SC, Microsoft YaHei UI");
 
     // Type scale (DIP): macOS 26 Large Title 26, Title1 22, Title3 15, Body 13 — Chinese reads a half step larger.
-    public const double LargeTitle = 26, Title = 22, Headline = 13.5, Body = 13.5, Callout = 12.5, Footnote = 11.5, Caption = 10.5;
+    public const double LargeTitle = 26, Title = 20, Headline = 13.5, Body = 13.5, Callout = 12.5, Footnote = 11.5, Caption = 10.5;
+    // Rhythm between sections of a page, and the height of input-like controls (segments, menus, fields, buttons).
+    public const double SectionGap = 20, ControlHeight = 28;
     // Shape and rhythm: groups r12 with 10 between them, 20 page inset, sidebar floating 8 from the frame.
     public const double GroupRadius = 12, ControlRadius = 7, TileRadius = 6.5, RowHeight = 44, RowInset = 14, PageInset = 28, SidebarInset = 8, SidebarRadius = 14;
 
