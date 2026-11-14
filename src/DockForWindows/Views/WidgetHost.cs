@@ -66,8 +66,9 @@ internal sealed class WidgetHost : Grid
     internal event Action? VisualScaleChanged;
     private static Brush? _glass;
     private static readonly DropShadowEffect Shadow = CreateShadow();
+    private bool _galleryShadow;
     private double _shadowStrength=1,_shadowBaseOpacity=.14;
-    internal void UseGalleryShadow(){_shadowBaseOpacity=.19;_shadow.Effect=new DropShadowEffect{BlurRadius=24,ShadowDepth=8,Direction=270,Opacity=.19,Color=Color.FromRgb(39,69,74),RenderingBias=RenderingBias.Performance};}
+    internal void UseGalleryShadow(){_galleryShadow=true;_shadowBaseOpacity=.19;_shadow.Effect=new DropShadowEffect{BlurRadius=24,ShadowDepth=8,Direction=270,Opacity=.19,Color=Color.FromRgb(39,69,74),RenderingBias=RenderingBias.Performance};}
     internal WidgetDefinition Definition { get; private set; }
     internal WidgetMaterial Material { get; private set; }
     internal Geometry Outline { get; private set; } = null!;
@@ -138,7 +139,7 @@ internal sealed class WidgetHost : Grid
         Resources["WidgetNumberStyle"] = colors?.NumberStyle??WidgetNumberStyle.Standard;
         Resources["WidgetTextWeight"] = colors?.TextWeight??WidgetTextWeight.Automatic;
         Resources["WidgetTextScale"] = colors?.TextScale??1d;
-        double strength=Math.Clamp(colors?.Shadow??1,0,2);
+        double strength=_galleryShadow?1:Math.Clamp(colors?.Shadow??1,0,2);
         if(Math.Abs(strength-_shadowStrength)>.000001&&_shadow.Effect is DropShadowEffect shadow){_shadowStrength=strength;if(shadow.IsFrozen){shadow=shadow.Clone();_shadow.Effect=shadow;}shadow.Opacity=_shadowBaseOpacity*strength;}_plate.Opacity=_tint.Opacity=colors?.Opacity??1;
         if(colors?.Curvature is double curve)SetExponent(curve);
         double panelScale=colors?.PanelScale??1;
