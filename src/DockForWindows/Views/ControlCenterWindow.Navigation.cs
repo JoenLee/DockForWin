@@ -15,12 +15,15 @@ public sealed partial class ControlCenterWindow
         private readonly Grid _sourceHost=new OverflowGrid(),_targetHost=new OverflowGrid();
         private readonly ScaleTransform _sourceScale=new(),_targetScale=new();private readonly Size _sourceSize;
         private Size _targetSize;private readonly int _sourceIndex;private bool _released;
-        public NavigationInk(Card source,Grid body,Grid header,Grid destination)
+        public NavigationInk(Card source,Grid body,Grid header,Grid destination,double growth)
         {
             IsHitTestVisible=false;_source=source;_body=body;_header=header;_destination=destination;_sourceSize=source.Root.RenderSize;
             _sourceIndex=source.Root.Children.IndexOf(source.Body);source.Root.Children.Remove(source.Body);_sourceHost.Children.Add(source.Body);
             destination.Children.Remove(body);destination.Children.Remove(header);_targetHost.Children.Add(body);_targetHost.Children.Add(header);
             _sourceHost.RenderTransform=_sourceScale;_targetHost.RenderTransform=_targetScale;AddVisualChild(_sourceHost);AddVisualChild(_targetHost);
+            // Both pages only scale and cross-fade inside the growing outline; cached, each is one texture per frame. The
+            // card's content grows to the destination's width, so it is cached at that scale to stay sharp while it fades.
+            _sourceHost.CacheMode=new BitmapCache{RenderAtScale=growth,EnableClearType=false};_targetHost.CacheMode=new BitmapCache{RenderAtScale=1,EnableClearType=false};
         }
         protected override int VisualChildrenCount=>2;
         protected override Visual GetVisualChild(int i)=>i switch{0=>_sourceHost,1=>_targetHost,_=>throw new ArgumentOutOfRangeException(nameof(i))};
@@ -67,7 +70,8 @@ public sealed partial class ControlCenterWindow
     private void StartNavigationGlass(bool forward,Card? source)
     {
         if(!Animate||source is null){FinishNavigationGlass();return;}
-        if(_navigationGlass is null){_navigationGlass=Surface(0);_navigationLayer=new NavigationLayer(_navigationGlass){RenderTransform=_navigationPosition};Panel.SetZIndex(_navigationLayer,3);_stage.Children.Add(_navigationLayer);}
+        if(_navigationGlass is null){_navigationGlass=Surface(0);_navigationGlass.CacheMode=null; // reshaped every frame: a cache would only add a pass
+            _navigationLayer=new NavigationLayer(_navigationGlass){RenderTransform=_navigationPosition};Panel.SetZIndex(_navigationLayer,3);_stage.Children.Add(_navigationLayer);}
         bool continuing=_navigationStarted>=0&&_navigationCard==source;double now=_runtime.Elapsed.TotalSeconds;
         double progress=continuing?_navigationPath.Value(now-_navigationStarted):forward?0:1,velocity=continuing?_navigationPath.Velocity(now-_navigationStarted):0;
         if(!continuing){
@@ -75,7 +79,7 @@ public sealed partial class ControlCenterWindow
             _navigationFrom=forward?source.Root.TransformToAncestor(_stage).TransformBounds(new Rect(source.Root.RenderSize)):source.Target;
             _navigationRadiusFrom=Math.Min(_navigationFrom.Width,_navigationFrom.Height)*source.Surface.Radius/200;
             _navigationDestination=new Rect(0,0,Math.Max(1,_stage.Width),Math.Max(1,_details.ActualHeight));_navigationDestinationRadius=DetailPhysicalRadius(_navigationDestination.Size);
-            _navigationLayer!.Content(new NavigationInk(source,_detailContent,_detailHeader,_details));
+            _navigationLayer!.Content(new NavigationInk(source,_detailContent,_detailHeader,_details,Math.Clamp(_navigationDestination.Width/Math.Max(1,source.Root.RenderSize.Width),1,5)));
         }
         if(_navigationCard is {} old&&old!=source)ControlMotion.Stop(old.Root,OpacityProperty,1);
         _returnCard=source;_navigationCard=source;_navigationForward=forward;
