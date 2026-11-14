@@ -48,7 +48,7 @@ internal static class WidgetSystemChecks
     static async Task Run(bool desktop)
     {
         Check(Enum.GetValues<WidgetKind>().All(k=>WidgetRegistry.Definitions.Any(d=>d.Kind==k)),"all six categories have registered templates");
-        var options=new WidgetOptions();options.Tasks.Add(new(){Title="整理本周项目",Detail="检查日程与交接记录",List="工作",Due=DateTime.Today.AddHours(18)});options.Tasks.Add(new(){Title="读完正在读的书",List="个人"});options.Notes.Add(new(){Title="今天的想法",Body="留住值得记录的事情。\n让桌面留一点从容。",Modified=DateTime.Now});options.Events.Add(new(){Title="项目评审",Start=DateTime.Today.AddDays(1).AddHours(10)});
+        var options=new WidgetOptions();foreach(var definition in WidgetRegistry.Definitions)options.Sources[definition.Id]=new WidgetSource();options.Tasks.Add(new(){Title="整理本周项目",Detail="检查日程与交接记录",List="工作",Due=DateTime.Today.AddHours(18)});options.Tasks.Add(new(){Title="读完正在读的书",List="个人"});options.Notes.Add(new(){Title="今天的想法",Body="留住值得记录的事情。\n让桌面留一点从容。",Modified=DateTime.Now});options.Events.Add(new(){Title="项目评审",Start=DateTime.Today.AddDays(1).AddHours(10)});
         var instance=WidgetRegistry.CreateInstance("calendar-giant",WidgetMaterial.Light,options);options.Instances.Add(instance);var copy=options.Copy();copy.Instances[0].Source.City="厦门";copy.Tasks[0].Completed=true;copy.Notes[0].Body="changed";
         Check(options.Instances[0].Source.City!="厦门"&&!options.Tasks[0].Completed&&options.Notes[0].Body!="changed","instances, sources, tasks and notes copy independently");
         var baseline=options.Copy();var draft=options.Copy();var live=options.Copy();live.Tasks[0].Completed=true;live.Instances[0].Column=3;draft.Notes[0].Body="draft edit";draft.MergeLive(baseline,live);

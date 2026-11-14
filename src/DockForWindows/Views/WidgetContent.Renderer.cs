@@ -18,7 +18,10 @@ namespace DockForWindows.Views;
 
 internal sealed record WidgetRenderData(WidgetOptions Options,WidgetSource Source,WidgetWeatherSnapshot? Weather=null,MediaState? Media=null,
     IReadOnlyList<WidgetNote>? FolderNotes=null,string? Error=null,bool Preview=true,Action<Guid>? Complete=null,Action<Guid>? EditTask=null,Action<Guid>? EditNote=null,Action<string>? MediaCommand=null,
-    DateTime? Month=null,DateTime? SelectedDate=null,Action<DateTime>? SelectDate=null,IReadOnlyDictionary<string,byte[]>? HistoryArt=null);
+    DateTime? Month=null,DateTime? SelectedDate=null,Action<DateTime>? SelectDate=null,IReadOnlyDictionary<string,byte[]>? HistoryArt=null)
+{
+    internal IReadOnlyList<WidgetTask>? RemoteTasks {get;init;}
+}
 
 internal static partial class WidgetContent
 {
@@ -144,10 +147,10 @@ internal static partial class WidgetContent
     internal static string ZoneName(TimeZoneInfo zone)=>zone.Id switch{"China Standard Time"=>LocalizedText.Get("北京"),"GMT Standard Time"=>LocalizedText.Get("伦敦"),"Eastern Standard Time"=>LocalizedText.Get("纽约"),"Tokyo Standard Time"=>LocalizedText.Get("东京"),_=>zone.DisplayName};
     private static FrameworkElement Reminders(WidgetDefinition d,WidgetRenderData data)
     {
-        var g=Body(d);Rows(g,-1,1);var tasks=data.Options.Tasks.Where(t=>data.Source.List.Length==0||t.List==data.Source.List).ToArray();
-        var head=new Grid();Columns(head,1,1);At(head,T(data.Source.List.Length==0?LocalizedText.Get("提醒事项"):data.Source.List,16,"WidgetAccent",true));var count=T(tasks.Count(t=>!t.Completed).ToString(),31,"WidgetAccent",true);count.HorizontalAlignment=HorizontalAlignment.Right;At(head,count,1);At(g,head);
+        var g=Body(d);Rows(g,-1,1);var tasks=(data.RemoteTasks??data.Options.Tasks).Where(t=>data.Source.List.Length==0||t.List==data.Source.List).ToArray();
+        var head=new Grid();Columns(head,1,1);At(head,T(data.Source.List.Length==0?LocalizedText.Get("提醒事项"):data.Source.List,16,"WidgetAccent",true));var count=T(data.Source.MicrosoftAccount&&data.Error!=null?"—":tasks.Count(t=>!t.Completed).ToString(),31,"WidgetAccent",true);count.HorizontalAlignment=HorizontalAlignment.Right;At(head,count,1);At(g,head);
         var content=new Grid{Margin=new Thickness(0,10,0,0)};bool date=d.Layout==WidgetLayout.ReminderDate&&d.Size.Columns>=4;if(date){Columns(content,1,2);At(content,Stack(T(DateTime.Now.ToString("ddd",Chinese),12,"WidgetAccent"),T(DateTime.Today.Day.ToString(),61)));}
-        var list=new StackPanel();int max=d.Size.Rows>=6?10:d.Size.Rows>=4?6:3;string? group=null;
+        var list=new StackPanel();if(data.Error!=null)list.Children.Add(T(data.Error,11,"WidgetMuted"));int max=d.Size.Rows>=6?10:d.Size.Rows>=4?6:3;string? group=null;
         foreach(var t in tasks.OrderBy(t=>t.Completed).ThenBy(t=>t.Due??DateTime.MaxValue).Take(max)){
             if(d.Layout is WidgetLayout.ReminderGroups or WidgetLayout.ReminderDetail&&t.List!=group){group=t.List;var h=T(group,12,"WidgetAccent",true);h.Margin=new Thickness(0,9,0,6);list.Children.Add(h);}
             var row=new Grid{Margin=new Thickness(0,4,0,4)};row.ColumnDefinitions.Add(new(){Width=new GridLength(25)});row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
@@ -156,7 +159,7 @@ internal static partial class WidgetContent
             check.Click+=async(_,_)=>{if(data.Preview)return;check.IsEnabled=false;check.BeginAnimation(UIElement.OpacityProperty,new DoubleAnimation(1,.35,TimeSpan.FromMilliseconds(160)));await System.Threading.Tasks.Task.Delay(140);try{if(check.IsLoaded)data.Complete?.Invoke(t.Id);}finally{if(check.IsLoaded){check.IsEnabled=true;check.BeginAnimation(UIElement.OpacityProperty,null);}}};At(row,check);
             var label=T(t.Title,13,bold:false);label.Opacity=t.Completed?.4:1;var detail=Stack(label);if(t.Due.HasValue)detail.Children.Add(T(t.Due.Value.ToString(LocalizedText.Get("M月d日 HH:mm")),10,"WidgetMuted"));if(d.Size.Rows>=6&&t.Detail.Length>0){var text=new TextBlock{Text=t.Detail,TextWrapping=TextWrapping.Wrap,MaxHeight=35,FontSize=11};text.SetResourceReference(TextBlock.ForegroundProperty,"WidgetMuted");detail.Children.Add(text);}
             detail.ToolTip=t.Detail.Length>0?t.Detail:t.Title;detail.MouseLeftButtonUp+=(_,e)=>{if(!data.Preview)data.EditTask?.Invoke(t.Id);e.Handled=true;};At(row,detail,1);list.Children.Add(row);}
-        if(tasks.Length==0)list.Children.Add(Empty(LocalizedText.Get("一切就绪"),LocalizedText.Get("在组件库中添加待办")));At(content,list,date?1:0);At(g,content,row:1);return g;
+        if(tasks.Length==0)list.Children.Add(Empty(data.Source.MicrosoftAccount?"Microsoft To Do":LocalizedText.Get("一切就绪"),data.Source.MicrosoftAccount?(data.Error==null?LocalizedText.Get("暂无待办"):""):LocalizedText.Get("在组件库中添加待办")));At(content,list,date?1:0);At(g,content,row:1);return g;
     }
     private static FrameworkElement Notes(WidgetDefinition d,WidgetRenderData data)
     {
@@ -165,37 +168,8 @@ internal static partial class WidgetContent
         var notes=(data.FolderNotes??data.Options.Notes).Where(n=>data.Source.List.Length==0||n.Folder==data.Source.List).OrderByDescending(n=>n.Modified).Take(d.Size.Rows>=6?7:d.Size.Rows>=4?4:d.Size.Columns==2?1:2).ToArray();
         var p=new StackPanel{Margin=new Thickness(18,13,18,12)};
         if(data.Error!=null)p.Children.Add(T(data.Error,11,"WidgetMuted"));
-        foreach(var n in notes){var item=Stack(T(n.Title.Length==0?LocalizedText.Get("无标题"):n.Title,14,bold:true),T(n.Modified.ToString(LocalizedText.Get("M月d日 HH:mm")),10,"WidgetMuted"));var summary=new TextBlock{Text=n.Body,FontSize=12,TextWrapping=TextWrapping.Wrap,TextTrimming=TextTrimming.CharacterEllipsis,MaxHeight=d.Size.Rows>=4?40:33,Margin=new Thickness(0,5,0,0)};summary.SetResourceReference(TextBlock.ForegroundProperty,"WidgetMuted");item.Children.Add(summary);item.ToolTip=n.Title;item.MouseLeftButtonUp+=(_,e)=>{if(!data.Preview){if(n.FilePath.Length>0){try{System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(n.FilePath){UseShellExecute=true});}catch(Exception ex){MessageBox.Show(ex.Message,LocalizedText.Get("打开笔记"));}}else data.EditNote?.Invoke(n.Id);}e.Handled=true;};p.Children.Add(item);p.Children.Add(Rule());}
-        if(notes.Length==0)p.Children.Add(Empty(LocalizedText.Get("捕捉一个想法"),LocalizedText.Get("添加笔记，或选择笔记文件夹")));At(g,p,row:1);return g;
-    }
-    private static readonly Dictionary<byte[],BitmapSource> Images=new();
-    private static FrameworkElement Art(byte[]? bytes,double extent)
-    {
-        if(bytes!=null){try{if(!Images.TryGetValue(bytes,out var source)){var bitmap=new BitmapImage();using var stream=new MemoryStream(bytes);bitmap.BeginInit();bitmap.CacheOption=BitmapCacheOption.OnLoad;bitmap.DecodePixelWidth=512;bitmap.StreamSource=stream;bitmap.EndInit();bitmap.Freeze();if(Images.Count>24)Images.Clear();Images[bytes]=source=bitmap;}return new Image{Source=source,Width=extent,Height=extent,Stretch=Stretch.UniformToFill};}catch{}}
-        return new Border{Width=extent,Height=extent,CornerRadius=new CornerRadius(10),Background=WidgetBrushes.Get("#393A40"),Child=new TextBlock{Text="♫",FontSize=extent*.4,Foreground=WidgetBrushes.Get("#989AA5"),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center}};
-    }
-    private static FrameworkElement Music(WidgetDefinition d,WidgetRenderData data)
-    {
-        var g=Body(d);var m=data.Media;bool small=d.Size.Columns==2,tall=d.Size.Rows>=4;
-        if(tall&&d.Layout==WidgetLayout.MusicNow){Rows(g,1,-1,-1);var cover=Art(m?.Artwork,Math.Min(d.Size.Width-70,d.Size.Height*.5));At(g,cover);
-            var detail=Stack(T(m?.Title??LocalizedText.Get("尚未播放"),20,bold:true),T(m?.Artist??LocalizedText.Get("打开支持系统媒体控制的播放器"),12,"WidgetMuted"));detail.Margin=new Thickness(0,12,0,8);At(g,detail,row:1);
-            var footer=new StackPanel();var progress=new ProgressBar{Maximum=Math.Max(1,m?.Duration.TotalSeconds??1),Value=m?.Position.TotalSeconds??0,Height=4,BorderThickness=new Thickness(0),Margin=new Thickness(0,8,0,7)};progress.SetResourceReference(Control.ForegroundProperty,"WidgetAccent");footer.Children.Add(progress);footer.Children.Add(T(m==null?"—:— / —:—":$"{m.Position:mm\\:ss} / {m.Duration:mm\\:ss}",11,"WidgetMuted"));
-            var transport=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,5,0,0)};
-            foreach(var entry in new[]{("‹","previous",m?.CanPrevious==true),(m?.Playing==true?"Ⅱ":"▶","toggle",m?.CanPlay==true),("›","next",m?.CanNext==true)}){var b=new Button{Template=PlainButton,Content=entry.Item1,Foreground=Brushes.White,Background=Brushes.Transparent,Width=60,Height=34,FontSize=20,IsEnabled=entry.Item3&&!data.Preview};b.Click+=(_,e)=>{data.MediaCommand?.Invoke(entry.Item2);e.Handled=true;};transport.Children.Add(b);}footer.Children.Add(transport);At(g,footer,row:2);return g;
-        }
-        Rows(g,-1,1);var main=new Grid();if(!small)Columns(main,1,1.65);else Rows(main,1,-1);
-        double extent=small?68:tall?124:111;At(main,Art(m?.Artwork,extent));
-        var info=Stack(T(m?.Title??LocalizedText.Get("尚未播放"),small?13:17,bold:true),T(m?.Artist??LocalizedText.Get("打开支持系统媒体控制的播放器"),11,"WidgetMuted"));if(!small)info.Margin=new Thickness(17,0,0,0);info.VerticalAlignment=VerticalAlignment.Center;
-        var controls=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,9,0,0)};
-        void Button(string label,string command,bool enabled){var b=new Button{Template=PlainButton,Content=label,Width=34,Height=30,MinHeight=0,Padding=new Thickness(0),Margin=new Thickness(0,0,5,0),IsEnabled=enabled&&!data.Preview,Background=Brushes.Transparent,BorderThickness=new Thickness(0),Foreground=Brushes.White};b.Click+=(_,e)=>{data.MediaCommand?.Invoke(command);e.Handled=true;};controls.Children.Add(b);}
-        if(!small)Button("‹","previous",m?.CanPrevious==true);Button(m?.Playing==true?"Ⅱ":"▶","toggle",m?.CanPlay==true);if(!small)Button("›","next",m?.CanNext==true);info.Children.Add(controls);At(main,info,small?0:1,small?1:0);At(g,main);
-        if(tall){var footer=new StackPanel{Margin=new Thickness(0,18,0,0)};
-            if(d.Layout==WidgetLayout.MusicNow){var progress=new ProgressBar{Minimum=0,Maximum=Math.Max(1,m?.Duration.TotalSeconds??1),Value=m?.Position.TotalSeconds??0,Height=4,BorderThickness=new Thickness(0),Margin=new Thickness(0,12,0,7)};progress.SetResourceReference(Control.ForegroundProperty,"WidgetAccent");footer.Children.Add(progress);footer.Children.Add(T(m==null?"—:— / —:—":$"{m.Position:mm\\:ss} / {m.Duration:mm\\:ss}",11,"WidgetMuted"));}
-            else{footer.Children.Add(T(LocalizedText.Get("本应用记录的最近播放"),11,"WidgetMuted"));foreach(var item in data.Options.MusicHistory.Take(d.Size.Rows>=6?6:3)){
-                footer.Children.Add(Rule());var row=new Grid();Columns(row,.36,2,.3);At(row,Art(data.HistoryArt?.GetValueOrDefault(item.ArtworkKey),34));var meta=Stack(T(item.Title,13,bold:true),T(item.Artist+" · "+item.Played.ToString(LocalizedText.Get("M月d日")),10,"WidgetMuted"));meta.Margin=new Thickness(9,0,5,0);At(row,meta,1);var play=T("▶",12,"WidgetMuted");play.Opacity=.35;play.ToolTip=LocalizedText.Get("系统媒体会话不支持直接重播历史项目");At(row,play,2);footer.Children.Add(row);
-            }if(data.Options.MusicHistory.Count==0)footer.Children.Add(T(LocalizedText.Get("播放后自动记录；历史项目无法直接重播"),11,"WidgetMuted"));}
-            if(data.Error!=null)footer.Children.Add(T(data.Error,10,"WidgetMuted"));At(g,footer,row:1);}
-        return g;
+        foreach(var n in notes){var item=Stack(T(n.Title.Length==0?LocalizedText.Get("无标题"):n.Title,14,bold:true),T(n.Modified.ToString(LocalizedText.Get("M月d日 HH:mm")),10,"WidgetMuted"));var summary=new TextBlock{Text=n.Body,FontSize=12,TextWrapping=TextWrapping.Wrap,TextTrimming=TextTrimming.CharacterEllipsis,MaxHeight=d.Size.Rows>=4?40:33,Margin=new Thickness(0,5,0,0)};summary.SetResourceReference(TextBlock.ForegroundProperty,"WidgetMuted");item.Children.Add(summary);item.ToolTip=n.Title;item.MouseLeftButtonUp+=(_,e)=>{if(!data.Preview){if(n.WebUrl.Length>0){if(WidgetMicrosoftService.SafeNoteUrl(n.WebUrl))try{System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(n.WebUrl){UseShellExecute=true});}catch(Exception ex){MessageBox.Show(ex.Message,LocalizedText.Get("打开笔记"));}}else if(n.FilePath.Length>0){try{System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(n.FilePath){UseShellExecute=true});}catch(Exception ex){MessageBox.Show(ex.Message,LocalizedText.Get("打开笔记"));}}else data.EditNote?.Invoke(n.Id);}e.Handled=true;};p.Children.Add(item);p.Children.Add(Rule());}
+        if(notes.Length==0)p.Children.Add(Empty(data.Source.MicrosoftAccount?"OneNote":LocalizedText.Get("捕捉一个想法"),data.Source.MicrosoftAccount?(data.Error==null?LocalizedText.Get("暂无笔记"):""):LocalizedText.Get("添加笔记，或选择笔记文件夹")));At(g,p,row:1);return g;
     }
 }
 
@@ -206,8 +180,8 @@ internal sealed class WidgetClock : Grid
     internal WidgetClock(TimeZoneInfo zone,bool minimal)
     {
         _zone=zone;var face=new Grid{Width=144,Height=144};var view=new Viewbox{Stretch=Stretch.Uniform,Child=face};Children.Add(view);
-        for(int i=0;i<60;i++){if(minimal&&i%5!=0)continue;var tick=new Rectangle{Width=i%5==0?2:1,Height=i%5==0?7:3,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,2,0,0),Opacity=i%5==0?.8:.35};tick.SetResourceReference(Shape.FillProperty,"WidgetInk");var wrapper=new Grid{RenderTransform=new RotateTransform(i*6),RenderTransformOrigin=new Point(.5,.5)};wrapper.Children.Add(tick);face.Children.Add(wrapper);}
-        if(!minimal)for(int i=1;i<=12;i++){double angle=i*Math.PI/6;var label=new TextBlock{Text=i.ToString(),FontSize=11,FontFamily=new FontFamily("Segoe UI Variable"),Width=23,TextAlignment=TextAlignment.Center};label.SetResourceReference(TextBlock.ForegroundProperty,"WidgetInk");var c=new Canvas();Canvas.SetLeft(label,60.5+Math.Sin(angle)*52);Canvas.SetTop(label,64-Math.Cos(angle)*52);c.Children.Add(label);face.Children.Add(c);}
+        for(int i=0;i<60;i++){if(minimal&&i%5!=0)continue;var tick=new Rectangle{Width=i%5==0?3:1.6,Height=i%5==0?8:3.5,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,2,0,0),Opacity=i%5==0?.95:.55};tick.SetResourceReference(Shape.FillProperty,"WidgetInk");var wrapper=new Grid{RenderTransform=new RotateTransform(i*6),RenderTransformOrigin=new Point(.5,.5)};wrapper.Children.Add(tick);face.Children.Add(wrapper);}
+        if(!minimal)for(int i=1;i<=12;i++){double angle=i*Math.PI/6;var label=new TextBlock{Text=i.ToString(),FontSize=11,FontWeight=FontWeights.Bold,FontFamily=new FontFamily("Segoe UI Variable"),Width=23,TextAlignment=TextAlignment.Center};label.SetResourceReference(TextBlock.ForegroundProperty,"WidgetInk");var c=new Canvas();Canvas.SetLeft(label,60.5+Math.Sin(angle)*52);Canvas.SetTop(label,64-Math.Cos(angle)*52);c.Children.Add(label);face.Children.Add(c);}
         Hand(_hour,34,4,"WidgetInk");Hand(_minute,49,2.7,"WidgetInk");Hand(_second,56,1.1,"WidgetAccent");var dot=new Ellipse{Width=6,Height=6};dot.SetResourceReference(Shape.FillProperty,"WidgetAccent");face.Children.Add(dot);
         Loaded+=(_,_)=>Start();Unloaded+=(_,_)=>Stop();IsVisibleChanged+=(_,_)=>{if(IsVisible&&IsLoaded)Start();else Stop();};
         void Hand(RotateTransform rotate,double length,double width,string ink){var hand=new Grid{RenderTransform=rotate,RenderTransformOrigin=new Point(.5,.5)};var line=new Rectangle{Width=width,Height=length,RadiusX=width/2,RadiusY=width/2,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,72-length,0,0)};line.SetResourceReference(Shape.FillProperty,ink);hand.Children.Add(line);face.Children.Add(hand);}

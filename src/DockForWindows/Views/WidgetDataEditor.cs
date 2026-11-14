@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using DockForWindows.Services;
 using DockForWindows.Models;
 
 namespace DockForWindows.Views;
@@ -48,9 +49,11 @@ internal static class WidgetInstanceEditor
         var worlds=WidgetDataEditor.Field(body,LocalizedText.Get("世界时钟时区 ID（分号分隔）"),string.Join(";",copy.Source.WorldZones));worlds.TextChanged+=(_,_)=>{copy.Source.WorldZones=worlds.Text.Split(';',StringSplitOptions.TrimEntries|StringSplitOptions.RemoveEmptyEntries).ToList();copy.Source.Normalize();Refresh();};
         var list=WidgetDataEditor.Field(body,LocalizedText.Get("列表 / 笔记文件夹筛选（留空显示全部）"),copy.Source.List);list.TextChanged+=(_,_)=>{copy.Source.List=list.Text;Refresh();};
         var folder=WidgetDataEditor.Field(body,LocalizedText.Get("本地笔记文件夹（只读 .txt / .md）"),copy.Source.NotesFolder);folder.TextChanged+=(_,_)=>{copy.Source.NotesFolder=folder.Text;Refresh();};
+        var location=new CheckBox{Content=UiText.IsEnglish?"Use current location":"使用当前位置",IsChecked=copy.Source.UseCurrentLocation,Margin=new Thickness(0,8,0,4)};location.Checked+=(_,_)=>{copy.Source.UseCurrentLocation=true;Refresh();};location.Unchecked+=(_,_)=>{copy.Source.UseCurrentLocation=false;Refresh();};body.Children.Add(location);
+        var microsoft=new CheckBox{Content="Microsoft To Do / OneNote",IsChecked=copy.Source.MicrosoftAccount,Margin=new Thickness(0,8,0,4)};microsoft.Checked+=(_,_)=>{copy.Source.MicrosoftAccount=true;Refresh();};microsoft.Unchecked+=(_,_)=>{copy.Source.MicrosoftAccount=false;Refresh();};body.Children.Add(microsoft);
         var city=WidgetDataEditor.Field(body,LocalizedText.Get("天气城市"),copy.Source.City);var cityResults=new ComboBox{MinHeight=30,Margin=new Thickness(0,8,0,0)};body.Children.Add(cityResults);
         var search=new Button{Content=LocalizedText.Get("查找城市"),Padding=new Thickness(10,6,10,6),Margin=new Thickness(0,7,0,7)};body.Children.Add(search);search.Click+=async(_,_)=>{search.IsEnabled=false;try{cityResults.ItemsSource=await new Services.WidgetWeatherService().SearchAsync(city.Text,default);}catch(Exception e){MessageBox.Show(e.Message,LocalizedText.Get("查找城市"));}finally{search.IsEnabled=true;}};
-        cityResults.SelectionChanged+=(_,_)=>{if(cityResults.SelectedItem is Services.WidgetLocation location){copy.Source.City=location.Name;copy.Source.Latitude=location.Latitude;copy.Source.Longitude=location.Longitude;Refresh();}};
+        cityResults.SelectionChanged+=(_,_)=>{if(cityResults.SelectedItem is Services.WidgetLocation location){copy.Source.UseCurrentLocation=false;copy.Source.City=location.Name;copy.Source.Latitude=location.Latitude;copy.Source.Longitude=location.Longitude;Refresh();}};
         var bg=WidgetDataEditor.Field(body,LocalizedText.Get("背景 HEX（留空跟随模板）"),copy.Appearance.Background);var fg=WidgetDataEditor.Field(body,LocalizedText.Get("文字 HEX"),copy.Appearance.Foreground);var accent=WidgetDataEditor.Field(body,LocalizedText.Get("强调色 HEX"),copy.Appearance.Accent);var end=WidgetDataEditor.Field(body,LocalizedText.Get("渐变终点 HEX（可留空）"),copy.Appearance.GradientEnd);
         void Colors(){copy.Appearance.Background=bg.Text;copy.Appearance.Foreground=fg.Text;copy.Appearance.Accent=accent.Text;copy.Appearance.GradientEnd=end.Text;Refresh();}bg.TextChanged+=(_,_)=>Colors();fg.TextChanged+=(_,_)=>Colors();accent.TextChanged+=(_,_)=>Colors();end.TextChanged+=(_,_)=>Colors();
         Choice(LocalizedText.Get("数字字体"),new object[]{LocalizedText.Get("标准"),LocalizedText.Get("圆润"),LocalizedText.Get("空心"),LocalizedText.Get("艺术")},(int)copy.Appearance.NumberStyle,i=>copy.Appearance.NumberStyle=(WidgetNumberStyle)i);

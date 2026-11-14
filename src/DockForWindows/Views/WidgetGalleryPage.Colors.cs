@@ -40,7 +40,7 @@ internal sealed partial class WidgetGalleryPage
         void RefreshChips(){var host=Current();for(int i=0;i<3;i++)chips[i].Background=(Brush)host.Resources[i switch{0=>"WidgetBackground",1=>"WidgetInk",_=>"WidgetAccent"}];}
         void Apply(){var host=Current();host.SetExponent(_options.Exponent);host.SetMaterial(_options.Material,_options.CardColors.GetValueOrDefault(host.Definition.Id));RefreshChips();}
         var gradient=new CheckBox{Content=LocalizedText.Get("渐变背景"),Margin=new Thickness(0,4,0,0)};
-        ComboBox numberStyle=null!,textWeight=null!;Slider textScale=null!,panelScale=null!,shadow=null!,opacity=null!;TextBox gradientEnd=null!;ComboBox curvature=null!;
+        ComboBox numberStyle=null!,textWeight=null!;Slider textScale=null!,panelScale=null!,opacity=null!;TextBox gradientEnd=null!;ComboBox curvature=null!;
         AutomationProperties.SetAutomationId(gradient,"widget-color-gradient-"+category);
         void Refresh()
         {
@@ -52,7 +52,7 @@ internal sealed partial class WidgetGalleryPage
             preset.SelectedIndex=colors==null||!colors.HasColors?0:match>=0?match+2:1;
             numberStyle.SelectedIndex=(int)(colors?.NumberStyle??WidgetNumberStyle.Standard);textWeight.SelectedIndex=(int)(colors?.TextWeight??WidgetTextWeight.Automatic);
             textScale.Value=(colors?.TextScale??1)*100;panelScale.Value=(colors?.PanelScale??1)*100;
-            shadow.Value=(colors?.Shadow??1)*100;opacity.Value=(colors?.Opacity??1)*100;gradientEnd.Text=colors?.GradientEnd??"";curvature.SelectedIndex=colors?.Curvature==3?1:0;RefreshChips();hint.Text=LocalizedText.Get("外观已预览，保存后保留。");sync=false;
+            opacity.Value=(colors?.Opacity??1)*100;gradientEnd.Text=colors?.GradientEnd??"";curvature.SelectedIndex=colors?.Curvature==3?1:0;RefreshChips();hint.Text=LocalizedText.Get("外观已预览，保存后保留。");sync=false;
         }
         for(int i=0;i<3;i++){
             int slot=i;var row=new Grid{Margin=new Thickness(0,4,0,4)};
@@ -93,11 +93,11 @@ internal sealed partial class WidgetGalleryPage
             var slider=new Slider{Minimum=minimum,Maximum=maximum,Value=100,TickFrequency=5,IsSnapToTickEnabled=true};AutomationProperties.SetAutomationId(slider,id);AutomationProperties.SetName(slider,title);slider.ValueChanged+=(_,_)=>value.Text=$"{slider.Value:0}%";value.Text="100%";
             Grid.SetColumn(slider,1);row.Children.Add(slider);Grid.SetColumn(value,2);row.Children.Add(value);typography.Children.Add(row);return slider;
         }
-        textScale=Scale(LocalizedText.Get("文字大小"),"widget-text-scale-"+category,75,135);panelScale=Scale(LocalizedText.Get("卡片大小"),"widget-panel-scale-"+category,75,125);shadow=Scale(LocalizedText.Get("阴影强度"),"widget-shadow-"+category,0,200);opacity=Scale(LocalizedText.Get("不透明度"),"widget-opacity-"+category,10,100);curvature=Choice(LocalizedText.Get("卡片轮廓"),"widget-curvature-"+category,new[]{LocalizedText.Get("跟随整体轮廓"),LocalizedText.Get("饱满 · 3")});
+        textScale=Scale(LocalizedText.Get("文字大小"),"widget-text-scale-"+category,75,135);panelScale=Scale(LocalizedText.Get("卡片大小"),"widget-panel-scale-"+category,75,125);opacity=Scale(LocalizedText.Get("不透明度"),"widget-opacity-"+category,10,100);curvature=Choice(LocalizedText.Get("卡片轮廓"),"widget-curvature-"+category,new[]{LocalizedText.Get("跟随整体轮廓"),LocalizedText.Get("饱满 · 3")});
         void SetTypography(){if(sync)return;var id=Current().Definition.Id;var colors=_options.CardColors.GetValueOrDefault(id)??new();
-            colors.NumberStyle=(WidgetNumberStyle)Math.Max(0,numberStyle.SelectedIndex);colors.TextWeight=(WidgetTextWeight)Math.Max(0,textWeight.SelectedIndex);colors.TextScale=textScale.Value/100;colors.PanelScale=panelScale.Value/100;colors.Shadow=shadow.Value/100;colors.Opacity=opacity.Value/100;colors.Curvature=curvature.SelectedIndex==1?3:null;
+            colors.NumberStyle=(WidgetNumberStyle)Math.Max(0,numberStyle.SelectedIndex);colors.TextWeight=(WidgetTextWeight)Math.Max(0,textWeight.SelectedIndex);colors.TextScale=textScale.Value/100;colors.PanelScale=panelScale.Value/100;colors.Opacity=opacity.Value/100;colors.Curvature=curvature.SelectedIndex==1?3:null;
             if(colors.IsDefault)_options.CardColors.Remove(id);else _options.CardColors[id]=colors;Apply();hint.Text=LocalizedText.Get("外观已预览，保存后保留。");}
-        numberStyle.SelectionChanged+=(_,_)=>SetTypography();textWeight.SelectionChanged+=(_,_)=>SetTypography();textScale.ValueChanged+=(_,_)=>SetTypography();panelScale.ValueChanged+=(_,_)=>SetTypography();shadow.ValueChanged+=(_,_)=>SetTypography();opacity.ValueChanged+=(_,_)=>SetTypography();curvature.SelectionChanged+=(_,_)=>SetTypography();
+        numberStyle.SelectionChanged+=(_,_)=>SetTypography();textWeight.SelectionChanged+=(_,_)=>SetTypography();textScale.ValueChanged+=(_,_)=>SetTypography();panelScale.ValueChanged+=(_,_)=>SetTypography();opacity.ValueChanged+=(_,_)=>SetTypography();curvature.SelectionChanged+=(_,_)=>SetTypography();
         var reset=ActionButton(LocalizedText.Get("恢复默认外观"),()=>{_options.CardColors.Remove(Current().Definition.Id);Apply();Refresh();},"widget-color-reset-"+category);
         reset.HorizontalAlignment=HorizontalAlignment.Stretch;reset.Margin=new Thickness(0,12,0,6);root.Children.Add(reset);root.Children.Add(hint);
         preset.SelectionChanged+=(_,_)=>{

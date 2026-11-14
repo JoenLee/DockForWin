@@ -66,7 +66,7 @@ public static class WidgetRegistry
     public static WidgetInstance CreateInstance(string id, WidgetMaterial material, WidgetOptions? configuration = null)
     {
         var copy = configuration?.Copy() ?? new(); copy.Material = material; copy.Normalize();
-        return new WidgetInstance { DefinitionId=Get(id).Id, Material=material, Appearance=copy.CardColors.GetValueOrDefault(id)?.Copy()??new(), Source=new(){City=copy.City,Latitude=copy.Latitude,Longitude=copy.Longitude}, Size=Get(id).Size, Exponent=copy.Exponent };
+        return new WidgetInstance { DefinitionId=Get(id).Id, Material=material, Appearance=copy.CardColors.GetValueOrDefault(id)?.Copy()??new(), Source=copy.Sources.TryGetValue(id,out var source)?source.Copy():new(){City=copy.City,Latitude=copy.Latitude,Longitude=copy.Longitude,UseCurrentLocation=!copy.Latitude.HasValue}, Size=Get(id).Size, Exponent=copy.Exponent };
     }
 }
 

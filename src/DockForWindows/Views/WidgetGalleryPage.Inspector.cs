@@ -5,6 +5,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using DockForWindows.Services;
 using DockForWindows.Models;
 
 namespace DockForWindows.Views;
@@ -35,7 +36,7 @@ internal sealed partial class WidgetGalleryPage
             var preview=new Grid();preview.RowDefinitions.Add(new(){Height=GridLength.Auto});preview.RowDefinitions.Add(new(){Height=GridLength.Auto});preview.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});
             heading.Margin=new Thickness(0,0,0,8);preview.Children.Add(heading);title.Margin=new Thickness(0,0,0,4);Grid.SetRow(title,1);preview.Children.Add(title);
             carousel.UseInspectorLayout();Grid.SetRow(carousel,2);preview.Children.Add(carousel);
-            var previewSurface=new Border{Child=preview,Padding=new Thickness(12),CornerRadius=new CornerRadius(14)};previewSurface.SetResourceReference(Border.BackgroundProperty,"SettingsCard");
+            var previewSurface=new Border{Child=new WidgetPreviewFrame(preview),Padding=new Thickness(0),CornerRadius=new CornerRadius(14)};previewSurface.SetResourceReference(Border.BackgroundProperty,"SettingsCard");
             AutomationProperties.SetAutomationId(previewSurface,"widget-preview-"+key);previews.Children.Add(previewSurface);_categoryPreviews[key]=previewSurface;
             if(surface.Parent is Panel holder)holder.Children.Remove(surface);surface.Style=null;surface.Padding=new Thickness(0);surface.HorizontalAlignment=HorizontalAlignment.Stretch;surface.Margin=new Thickness(0);surface.Background=System.Windows.Media.Brushes.Transparent;surface.BorderThickness=new Thickness(0);parameters.Children.Add(surface);
         }
@@ -52,20 +53,24 @@ internal sealed partial class WidgetGalleryPage
     {
         bool syncing=false;var body=new StackPanel();var panel=new Expander{Header=LocalizedText.Get("数据源"),Content=body,Margin=new Thickness(0,10,0,0),FontSize=12};AutomationProperties.SetAutomationId(panel,"widget-source-"+category);
         WidgetHost Current()=>carousel.Hosts[carousel.SelectedIndex];
-        void Change(Action<WidgetSource> update){if(syncing)return;var host=Current();var source=Source(host.Definition).Copy();update(source);source.Normalize();_options.Sources[host.Definition.Id]=source;RenderHost(host);}
+        void Change(Action<WidgetSource> update){if(syncing)return;var host=Current();var source=Source(host.Definition).Copy();update(source);source.Normalize();_options.Sources[host.Definition.Id]=source;RenderHost(host);UpdateDataControls(category);}
         var zones=TimeZoneInfo.GetSystemTimeZones().ToArray();
         var clock=new StackPanel();body.Children.Add(clock);clock.Children.Add(Note(LocalizedText.Get("时区")));var zone=new ComboBox{ItemsSource=zones.Select(z=>z.DisplayName).ToArray(),MinHeight=30};AutomationProperties.SetAutomationId(zone,"widget-source-zone-"+category);clock.Children.Add(zone);zone.SelectionChanged+=(_,_)=>{if(zone.SelectedIndex>=0)Change(s=>s.TimeZone=zones[zone.SelectedIndex].Id);};
         TextBox Field(Panel owner,string title,string id,Action<string> change){owner.Children.Add(Note(title));var field=new TextBox{MinWidth=0,Margin=new Thickness(0,4,0,0),MaxLength=1024};AutomationProperties.SetAutomationId(field,id);AutomationProperties.SetName(field,title);field.TextChanged+=(_,_)=>change(field.Text);owner.Children.Add(field);return field;}
         var worlds=Field(clock,LocalizedText.Get("世界时钟时区 ID（分号分隔）"),"widget-source-worlds-"+category,text=>Change(s=>s.WorldZones=text.Split(';',StringSplitOptions.TrimEntries|StringSplitOptions.RemoveEmptyEntries).ToList()));
         var lists=new StackPanel();body.Children.Add(lists);var list=Field(lists,LocalizedText.Get("列表筛选（留空显示全部）"),"widget-source-list-"+category,text=>Change(s=>s.List=text));
+
         var notes=new StackPanel();body.Children.Add(notes);var folder=Field(notes,LocalizedText.Get("笔记文件夹（只读 .txt / .md）"),"widget-source-folder-"+category,text=>Change(s=>s.NotesFolder=text));
         var weather=new StackPanel();body.Children.Add(weather);var city=Field(weather,LocalizedText.Get("当前模板天气城市"),"widget-source-city-"+category,_=>{});var results=new ComboBox{MinHeight=30,Margin=new Thickness(0,5,0,0),Visibility=Visibility.Collapsed};weather.Children.Add(results);
+        var current=ActionButton(UiText.IsEnglish?"Use current location":"使用当前位置",async()=>{var id=Current().Definition.Id;Change(s=>s.UseCurrentLocation=true);if(_runtime!=null){await _runtime.LocateAsync();if(Current().Definition.Id==id&&IsLoaded)RenderHost(Current());}},"widget-source-location-"+category);weather.Children.Add(current);
         var status=Note("");var search=ActionButton(LocalizedText.Get("查找城市"),()=>{},"widget-source-search-"+category);search.Margin=new Thickness(0,6,0,0);weather.Children.Add(search);weather.Children.Add(status);string? requested=null;
+        void RuntimeStatus(WidgetKind? kind){if(kind!=WidgetKind.Weather||_runtime==null||!panel.IsVisible||weather.Visibility!=Visibility.Visible)return;var source=Source(Current().Definition);var result=_runtime.Weather(source);status.Text=result.Error??(result.Weather==null?LocalizedText.Get("正在更新天气…"):(UiText.IsEnglish?"Updated ":"更新于 ")+result.Weather.RetrievedAt.ToLocalTime().ToString("HH:mm"));}
+        SourceStatusChanged+=RuntimeStatus;panel.IsVisibleChanged+=(_,_)=>RuntimeStatus(WidgetKind.Weather);
         search.Click+=async(_,_)=>{var id=Current().Definition.Id;search.IsEnabled=false;status.Text=LocalizedText.Get("正在查找…");try{var locations=await _weatherService.SearchAsync(city.Text,_lifetime?.Token??CancellationToken.None);if(Current().Definition.Id!=id||!IsVisible)return;requested=id;results.ItemsSource=locations;results.Visibility=Visibility.Visible;status.Text=locations.Count==0?LocalizedText.Get("没有找到城市。"):LocalizedText.Get("请选择城市。");}catch(OperationCanceledException){}catch(Exception ex){status.Text=LocalizedText.Get("查找失败：")+ex.Message;}finally{search.IsEnabled=true;}};
-        results.SelectionChanged+=(_,_)=>{if(syncing||requested!=Current().Definition.Id||results.SelectedItem is not Services.WidgetLocation location)return;Change(s=>{s.City=location.Name;s.Latitude=location.Latitude;s.Longitude=location.Longitude;});city.Text=location.Name;status.Text=LocalizedText.Get("已更新当前模板的数据源。");};
+        results.SelectionChanged+=(_,_)=>{if(syncing||requested!=Current().Definition.Id||results.SelectedItem is not Services.WidgetLocation location)return;Change(s=>{s.City=location.Name;s.Latitude=location.Latitude;s.Longitude=location.Longitude;s.UseCurrentLocation=false;});city.Text=location.Name;status.Text=LocalizedText.Get("已更新当前模板的数据源。");};
         void Refresh(){syncing=true;var host=Current();var source=Source(host.Definition);zone.SelectedIndex=Array.FindIndex(zones,z=>z.Id==source.TimeZone);worlds.Text=string.Join(";",source.WorldZones);list.Text=source.List;folder.Text=source.NotesFolder;city.Text=source.City;results.Visibility=Visibility.Collapsed;requested=null;status.Text="";
-            clock.Visibility=host.Definition.Kind==WidgetKind.Clock?Visibility.Visible:Visibility.Collapsed;lists.Visibility=host.Definition.Kind is WidgetKind.Reminders or WidgetKind.Notes?Visibility.Visible:Visibility.Collapsed;notes.Visibility=host.Definition.Kind==WidgetKind.Notes?Visibility.Visible:Visibility.Collapsed;weather.Visibility=host.Definition.Kind==WidgetKind.Weather||host.Definition.Layout==WidgetLayout.CalendarWeather?Visibility.Visible:Visibility.Collapsed;
+            clock.Visibility=host.Definition.Kind==WidgetKind.Clock?Visibility.Visible:Visibility.Collapsed;lists.Visibility=host.Definition.Kind is WidgetKind.Reminders or WidgetKind.Notes?Visibility.Visible:Visibility.Collapsed;notes.Visibility=host.Definition.Kind==WidgetKind.Notes&&!source.MicrosoftAccount?Visibility.Visible:Visibility.Collapsed;weather.Visibility=host.Definition.Kind==WidgetKind.Weather||host.Definition.Layout==WidgetLayout.CalendarWeather?Visibility.Visible:Visibility.Collapsed;
             panel.Visibility=host.Definition.Kind==WidgetKind.Music||host.Definition.Kind==WidgetKind.Calendar&&host.Definition.Layout!=WidgetLayout.CalendarWeather?Visibility.Collapsed:Visibility.Visible;syncing=false;}
-        carousel.SelectionChanged+=_=>Refresh();Refresh();return panel;
+        if(category is "reminders" or "notes")body.Children.Insert(2,MicrosoftAccountEditor(category,enabled=>{Change(s=>s.MicrosoftAccount=enabled);Refresh();}));carousel.SelectionChanged+=_=>Refresh();Refresh();return panel;
     }
 }
