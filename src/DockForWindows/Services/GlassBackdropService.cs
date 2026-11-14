@@ -71,6 +71,44 @@ public sealed class GlassBackdropService : IDisposable
     // not changed keeps its pixels, and when no window under the sample changed the previous composite is
     // returned as it is (Changed=false), so a still background costs no copies, composition or upload.
     // Opaque windows are copied row by row; only windows with transparency are blended.
+    // The screen as it is now under the padded sample, in ReadPixels' layout. A fresh service needs 150-200 ms for
+    // its first ReadPixels (device, one capture session per window, PrintWindow until their first frames); one
+    // screen copy takes about 20 ms, so the control center opens on this while the window captures warm up. The
+    // caller's window must not be visible yet (the control center is still at opacity 0).
+    internal static PixelFrame? ReadScreen(Rectangle bounds,double dpi)
+    {
+        if(bounds.Width<=0||bounds.Height<=0)return null;
+        nint oldDpi=SetThreadDpiAwarenessContext(new nint(-4));
+        try
+        {
+            int pad=(int)Math.Ceiling(24*dpi);var sample=Rectangle.Inflate(bounds,pad,pad);
+            var valid=Rectangle.Intersect(sample,System.Windows.Forms.SystemInformation.VirtualScreen);if(valid.IsEmpty)return null;
+            int width=sample.Width,height=sample.Height;var pixels=new byte[checked(width*height*4)];
+            using(var bitmap=new Bitmap(valid.Width,valid.Height,PixelFormat.Format32bppArgb))
+            {
+                using(var graphics=Graphics.FromImage(bitmap))graphics.CopyFromScreen(valid.Left,valid.Top,0,0,valid.Size,CopyPixelOperation.SourceCopy);
+                var data=bitmap.LockBits(new Rectangle(0,0,valid.Width,valid.Height),ImageLockMode.ReadOnly,PixelFormat.Format32bppArgb);
+                try{int rowBytes=valid.Width*4;for(int y=0;y<valid.Height;y++)Marshal.Copy(data.Scan0+y*data.Stride,pixels,((y+valid.Top-sample.Top)*width+(valid.Left-sample.Left))*4,rowBytes);}
+                finally{bitmap.UnlockBits(data);}
+            }
+            var words=MemoryMarshal.Cast<byte,uint>(pixels.AsSpan());
+            for(int i=0;i<words.Length;i++)words[i]|=0xFF000000u;
+            if(valid!=sample)
+            {
+                int left=valid.Left-sample.Left,right=valid.Right-sample.Left-1,top=valid.Top-sample.Top,bottom=valid.Bottom-sample.Top-1;
+                for(int y=0;y<height;y++)
+                {
+                    int sourceY=Math.Clamp(y,top,bottom);var row=words.Slice(y*width,width);
+                    if(sourceY!=y)words.Slice(sourceY*width,width).CopyTo(row);
+                    if(left>0)row[..left].Fill(row[left]);
+                    if(right<width-1)row[(right+1)..].Fill(row[right]);
+                }
+            }
+            return new PixelFrame(pixels,width,height,true);
+        }
+        catch(Exception){return null;}
+        finally{SetThreadDpiAwarenessContext(oldDpi);}
+    }
     internal PixelFrame? ReadPixels(nint window,Rectangle bounds,double dpi)
     {
         if(_disposed||bounds.Width<=0||bounds.Height<=0)return null;

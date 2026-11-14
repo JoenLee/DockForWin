@@ -15,12 +15,20 @@ public sealed partial class ControlCenterWindow
     private double _revealPointer,_revealStart,_revealLast,_revealTime,_revealVelocity;
     private static readonly DependencyProperty RevealProperty=DependencyProperty.Register("Reveal",typeof(double),typeof(ControlCenterWindow),new PropertyMetadata(0d,(owner,_)=>((ControlCenterWindow)owner).ApplyReveal()));
     private double Reveal=>(double)GetValue(RevealProperty);
+    // The panel comes out of the taskbar it belongs to: from below over a bottom taskbar, from above under a top one.
+    // It travels a short way and grows from the tray corner while it fades in, and the cards follow row by row from
+    // the taskbar side (AnimateOpen). Leaving is quicker and does not overshoot: back toward the taskbar, slightly
+    // smaller, fading out.
+    private const double EnterTravel=30,ExitTravel=22,EnterScale=.94,ExitScale=.965;
+    private bool _fromBelow=true,_leaving;
+    private double TaskbarSide=>_fromBelow?1:-1;
     private void ApplyReveal()
     {
-        double progress=Reveal;_lastMotion=_runtime.Elapsed.TotalSeconds;_chromeDirty=true;
-        _entrance.Y=(progress-1)*RevealDistance;
+        double progress=Reveal,hidden=1-progress;_lastMotion=_runtime.Elapsed.TotalSeconds;_chromeDirty=true;
+        _entrance.Y=hidden*TaskbarSide*(_leaving?ExitTravel:EnterTravel);
+        double scale=1-hidden*(1-(_leaving?ExitScale:EnterScale));_scale.ScaleX=_scale.ScaleY=scale;
         // Fade the live material and content together; sampling and blur quality remain unchanged.
-        double alpha=Math.Clamp(progress/.85,0,1);Opacity=alpha*alpha*(3-2*alpha);
+        double alpha=Math.Clamp(progress/(_leaving?.8:.6),0,1);Opacity=alpha*alpha*(3-2*alpha);
     }
     private void SettleReveal(bool open,double? velocity=null)
     {
@@ -28,8 +36,9 @@ public sealed partial class ControlCenterWindow
         if(open){_dismissCompletion?.TrySetResult(false);_dismissCompletion=null;}else _dismissCompletion??=new(TaskCreationOptions.RunContinuationsAsynchronously);
         _dismissRequested=!open;PresentationChanged?.Invoke(open);
         if(!Animate){ControlMotion.Stop(this,RevealProperty,open?1:0);if(!open)FinishDismiss();return;}
-        _openingUntil=_runtime.Elapsed.TotalSeconds+.8;
-        ControlMotion.To(this,RevealProperty,open?1:0,speed:.82,damping:.82,initialVelocity:velocity,completed:()=>{if(!open&&_dismissRequested)FinishDismiss();});
+        _openingUntil=_runtime.Elapsed.TotalSeconds+.8;_leaving=!open;_root.RenderTransformOrigin=new Point(1,_fromBelow?1:0);
+        if(open)ControlMotion.To(this,RevealProperty,1,speed:1.1,damping:.76,initialVelocity:velocity);
+        else ControlMotion.To(this,RevealProperty,0,speed:1.5,damping:.95,initialVelocity:velocity,completed:()=>{if(_dismissRequested)FinishDismiss();});
     }
     public void TogglePresentation(){if(_closing)return;SettleReveal(_dismissRequested);}
     private void FinishDismiss()
@@ -48,8 +57,9 @@ public sealed partial class ControlCenterWindow
         header.PreviewMouseMove+=(_,e)=>{
             if(!_revealPressed||e.LeftButton!=MouseButtonState.Pressed)return;
             double y=e.GetPosition((UIElement)Content).Y;
-            if(!_revealDragging){if(Math.Abs(y-_revealPointer)<3)return;_revealDragging=true;_revealStart=_revealLast=Reveal;_revealTime=ControlMotion.Now;_revealVelocity=0;ControlMotion.Stop(this,RevealProperty,Reveal);header.CaptureMouse();_dismissRequested=false;}
-            double progress=_revealStart+(y-_revealPointer)/RevealDistance;
+            if(!_revealDragging){if(Math.Abs(y-_revealPointer)<3)return;_revealDragging=true;_revealStart=_revealLast=Reveal;_revealTime=ControlMotion.Now;_revealVelocity=0;ControlMotion.Stop(this,RevealProperty,Reveal);header.CaptureMouse();_dismissRequested=false;_leaving=false;}
+            // Pulling toward the taskbar puts the panel away; pulling away from it brings it out.
+            double progress=_revealStart-TaskbarSide*(y-_revealPointer)/RevealDistance;
             if(progress>1)progress=1+.12*(1-Math.Exp(-(progress-1)/.12));
             else if(progress<0)progress=-.12*(1-Math.Exp(progress/.12));
             double now=ControlMotion.Now,dt=now-_revealTime;

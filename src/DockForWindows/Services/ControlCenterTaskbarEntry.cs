@@ -20,7 +20,7 @@ internal sealed class ControlCenterTaskbarEntry:Window,IDisposable
         System.Windows.Automation.AutomationProperties.SetName(_button,LocalizedText.Get("控制中心开关"));_button.Click+=(_,_)=>toggle();_button.MouseEnter+=(_,_)=>_button.Opacity=.75;_button.MouseLeave+=(_,_)=>_button.Opacity=1;
         Content=_button;SetOpen(false);
         SourceInitialized+=(_,_)=>{var hwnd=new WindowInteropHelper(this).Handle;var style=NativeMethods.GetWindowLongPtr(hwnd,-20);SetWindowLongPtr(hwnd,-20,new nint((long)style|0x08000080));HwndSource.FromHwnd(hwnd)?.AddHook((nint h,int m,nint w,nint l,ref bool handled)=>{if(m==0x21){handled=true;return 3;}return 0;});};
-        ControlCenterEntryService.NetworkAnchorChanged+=Place;SystemEvents.UserPreferenceChanged+=Preferences;
+        ControlCenterEntryService.NetworkAnchorChanged+=Place;ControlCenterEntryService.AccessoryRaise+=Raise;SystemEvents.UserPreferenceChanged+=Preferences;
         Loaded+=(_,_)=>Place(ControlCenterEntryService.NetworkAnchor);
     }
     [System.Runtime.InteropServices.DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")]private static extern nint SetWindowLongPtr(nint hwnd,int index,nint value);
@@ -41,5 +41,7 @@ internal sealed class ControlCenterTaskbarEntry:Window,IDisposable
         double dpi=NativeMethods.GetDpiForWindow(hwnd)/96d;int width=(int)Math.Round(28*dpi),height=(int)Math.Min(anchor.Height-4,28*dpi),x=(int)Math.Round(anchor.Left-width-6*dpi),y=(int)Math.Round(anchor.Top+(anchor.Height-height)/2);
         NativeMethods.SetWindowPos(hwnd,new nint(-1),x,y,width,height,0x0010);ControlCenterEntryService.AccessoryBounds=new Rect(x,y,width,height);
     }
-    public void Dispose(){if(_disposed)return;_disposed=true;ControlCenterEntryService.NetworkAnchorChanged-=Place;SystemEvents.UserPreferenceChanged-=Preferences;ControlCenterEntryService.AccessoryBounds=Rect.Empty;Close();}
+    // The taskbar is topmost as well and rises over this window whenever it is clicked; put the button back on top.
+    private void Raise(){if(_disposed||Visibility!=Visibility.Visible)return;var hwnd=new WindowInteropHelper(this).Handle;if(hwnd!=0)NativeMethods.SetWindowPos(hwnd,new nint(-1),0,0,0,0,0x0213);}
+    public void Dispose(){if(_disposed)return;_disposed=true;ControlCenterEntryService.NetworkAnchorChanged-=Place;ControlCenterEntryService.AccessoryRaise-=Raise;SystemEvents.UserPreferenceChanged-=Preferences;ControlCenterEntryService.AccessoryBounds=Rect.Empty;Close();}
 }

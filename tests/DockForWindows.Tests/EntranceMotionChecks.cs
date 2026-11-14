@@ -52,7 +52,9 @@ internal static class EntranceMotionChecks
                     Check(!beforeBackdrop&&started>=0&&samples.Count>=4,mode+": entrance starts with a real background sample");
                     Check(samples.All(s=>s.CardOpacity.All(o=>Math.Abs(o-1)<.000001)),mode+": one window fade; no staggered card alpha pulses");
                     var active=samples.Where(s=>s.Seconds<.5).ToArray();
-                    Check(active.All(s=>s.Scale>=.984&&s.CardScale.All(v=>v>=.989)),mode+": subtle scale keeps slide as the dominant motion");
+                    double side=Field<bool>(center,"_fromBelow")?1:-1;
+                    Check(active.All(s=>s.Scale>=.939&&s.Scale<=1.02&&s.CardScale.All(v=>v>=.989))&&active.Count(s=>s.Scale<.99)>0,mode+": the panel grows a little from the tray corner, cards keep their size");
+                    Check(active.All(s=>side*s.Offset>=-3&&side*s.Offset<=31)&&active.Any(s=>side*s.Offset>5),mode+": the panel comes out of the taskbar side and travels a short way");
                     Check(samples.Zip(samples.Skip(1),(a,b)=>b.Opacity-a.Opacity).All(delta=>delta>-.002),mode+": entrance opacity never visibly reverses");
                     Check(center.Opacity>.999&&Math.Abs(Field<TranslateTransform>(center,"_entrance").Y)<.01&&Math.Abs(Field<ScaleTransform>(center,"_scale").ScaleX-1)<.0001,mode+": slide/scale/alpha settle cleanly");
                     traces.Add(new{mode=mode.ToString(),samples});center.Dismiss();await Task.Delay(650);Check(!center.IsVisible,mode+": normal dismiss closes cleanly");

@@ -82,8 +82,9 @@ public sealed partial class ControlCenterWindow : Window,IGlassBackdropHost
         foreach(var pair in new[]{(Slider:_volume,Kind:ControlModule.Volume),(Slider:_brightness,Kind:ControlModule.Brightness)}){var slider=pair.Slider;var kind=pair.Kind;_ = new ControlCenterElasticSlider(slider,()=>Animate,(stretch,release)=>StretchSlider(kind,stretch,release));slider.ValueChanged+=(_,_)=>{var card=_modules.FirstOrDefault(c=>c.Kind==kind);if(Animate&&slider.IsMouseCaptureWithin&&card is not null&&_runtime.Elapsed.TotalSeconds-card.SymbolFeedbackAt>.16){card.SymbolFeedbackAt=_runtime.Elapsed.TotalSeconds;if(card.Primary?.Content is ControlCenterIcon symbol)symbol.Feedback();}};}
         ApplyMaterialMode();
         _brightnessDelay.Tick+=async(_,_)=>{_brightnessDelay.Stop();await WriteBrightness();};_poll.Tick+=async(_,_)=>await PollSystem();_stateRefresh.Tick+=async(_,_)=>{_stateRefresh.Stop();await PollSystem();};_connectivity.Changed+=SystemChanged;_media.Changed+=MediaChanged;
+        StartEarlyReadings();
         PreviewMouseDown+=HandleCenterDown;AddHandler(Mouse.PreviewMouseUpEvent,new MouseButtonEventHandler(HandleCenterUp),true);PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Escape){if(_resizing||_drag is not null)EndDrag();else if(_detailVisible)BackDetails();else Dismiss();e.Handled=true;}};
-        Loaded+=async(_,_)=>{_ready=true;UpdateLayout();RefreshChrome();PositionAtTray(true);CompositionTarget.Rendering+=OnRendering;_poll.Start();_mediaPoll.Tick+=async(_,_)=>await RefreshMedia();_mediaPoll.Start();_ = CaptureLoop();await Safe(()=>_connectivity.Initialize());await Safe(()=>_media.Initialize());await PollSystem();if(ShowFrameStats){_stats.Visibility=Visibility.Visible;_statsTimer.Tick+=(_,_)=>_stats.Text=_perf.Describe();_statsTimer.Start();}};
+        Loaded+=async(_,_)=>{_ready=true;UpdateLayout();RefreshChrome();PositionAtTray(true);CompositionTarget.Rendering+=OnRendering;_poll.Start();_mediaPoll.Tick+=async(_,_)=>await RefreshMedia();_mediaPoll.Start();_ = SeedFromScreen();_ = CaptureLoop();await Safe(()=>_connectivity.Initialize());await Safe(()=>_media.Initialize());await PollSystem();if(ShowFrameStats){_stats.Visibility=Visibility.Visible;_statsTimer.Tick+=(_,_)=>_stats.Text=_perf.Describe();_statsTimer.Start();}};
         SourceInitialized+=(_,_)=>InstallComposedTransparency();
         SourceInitialized+=(_,_)=>HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook((nint h,int message,nint w,nint l,ref bool handled)=>{if(message is 0x7E or 0x2E0)Dispatcher.BeginInvoke(()=>PositionAtTray());return 0;});
         SizeChanged+=(_,_)=>{if(_ready){PositionAtTray();UpdateInputRegion();RequestSample();}};LocationChanged+=(_,_)=>RequestSample();Closing+=(_,e)=>{if(!_allowClose){e.Cancel=true;Dismiss();}};
@@ -130,7 +131,8 @@ public sealed partial class ControlCenterWindow : Window,IGlassBackdropHost
         if(_entranceStarted||_closing||_dismissRequested)return;_entranceStarted=true;
         if(!Animate){ControlMotion.Stop(this,RevealProperty,1);return;}
         foreach(var card in _modules){ControlMotion.Stop(card.Root,OpacityProperty,1);ControlMotion.Stop(card.Enter,TranslateTransform.YProperty,0);ControlMotion.Stop(card.Scale,ScaleTransform.ScaleXProperty,1);ControlMotion.Stop(card.Scale,ScaleTransform.ScaleYProperty,1);}
-        double top=double.NaN;int row=-1;foreach(var card in _modules.OrderBy(c=>c.Target.Top)){if(double.IsNaN(top)||Math.Abs(top-card.Target.Top)>1){top=card.Target.Top;row++;}ControlMotion.To(card.Enter,TranslateTransform.YProperty,0,-34,speed:.95,delay:Math.Min(.24,row*.042),damping:.82);}
+        // Rows follow from the taskbar side, a little behind the panel.
+        double top=double.NaN;int row=-1;foreach(var card in _fromBelow?_modules.OrderByDescending(c=>c.Target.Top):_modules.OrderBy(c=>c.Target.Top)){if(double.IsNaN(top)||Math.Abs(top-card.Target.Top)>1){top=card.Target.Top;row++;}ControlMotion.To(card.Enter,TranslateTransform.YProperty,0,TaskbarSide*16,speed:1.2,delay:Math.Min(.15,row*.03),damping:.8);}
         SettleReveal(true);
     }
     public void Dismiss()
