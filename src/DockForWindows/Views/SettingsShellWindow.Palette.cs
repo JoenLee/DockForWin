@@ -35,20 +35,42 @@ internal partial class SettingsShellWindow
         Resources["SettingsControlShadowOpacity"] = p.Dark ? .45 : .12; Resources["SettingsFloatingShadowOpacity"] = p.Dark ? .55 : .16;
         Set("SettingsPrimaryTint", DesignSystem.WithAlpha(p.Accent, p.Dark ? .2 : .14)); Set("SettingsPrimaryRim", DesignSystem.WithAlpha(p.Accent, p.Dark ? .34 : .28));
         Set("SettingsAccentInk", p.Dark ? DesignSystem.Hex("#7CB8FF") : DesignSystem.Hex("#0A6AD6"));
-        // Flat: an opaque off-white (graphite) card, rows a step darker (lighter), no edges, no sheen.
-        Set("SettingsCanvas", p.Dark ? DesignSystem.Hex("#1C1C1E") : DesignSystem.Hex("#F7F7F8"));
-        Set("SettingsCard", p.Dark ? DesignSystem.Hex("#2A2A2D") : DesignSystem.Hex("#EDEEF1"));
-        Set("SettingsLine", p.Dark ? DesignSystem.Hex("#17FFFFFF") : DesignSystem.Hex("#12000000"));
-        // Flat cards still need an edge to read against the canvas: a 1 px line, a touch lighter along the top in dark.
-        Gradient("SettingsGroupEdge", p.Dark ? DesignSystem.Hex("#14FFFFFF") : DesignSystem.Hex("#0D000000"), p.Dark ? DesignSystem.Hex("#0AFFFFFF") : DesignSystem.Hex("#0D000000"), .3);
-        var canvas = p.Dark ? DesignSystem.Hex("#1C1C1E") : DesignSystem.Hex("#F7F7F8");
+        // Flat, cool and calm (UI_UX_Audit_And_Elevation.md, blueprint §2): white surfaces float on a mist-blue canvas;
+        // in dark, ink-blue graphite with the same hue. Every grey carries the same ~218° tint, so nothing reads as
+        // dead plastic grey. Blue only means "on / value / primary / focus"; "selected" is a raised white pill.
+        var c = (string light, string dark) => DesignSystem.Hex(p.Dark ? dark : light);
+        var canvas = c("#EEF1F5", "#15171B");
+        Set("SettingsCanvas", canvas);
+        Set("SettingsCard", c("#FFFFFF", "#1F2228"));
+        Set("SettingsLine", c("#EBEEF3", "#2C3038"));
+        // Flat cards keep a 1 px edge; in dark the top edge is the lit one.
+        Gradient("SettingsGroupEdge", c("#E2E7EE", "#12FFFFFF"), c("#E2E7EE", "#08FFFFFF"), .3);
         Gradient("SettingsCanvasFade", canvas, DesignSystem.WithAlpha(canvas, 0));
-        Set("SettingsScrollThumb", p.Dark ? DesignSystem.Hex("#47FFFFFF") : DesignSystem.Hex("#40000000"));
-        Set("SettingsTertiary", p.Dark ? DesignSystem.Hex("#7C7C82") : p.TertiaryLabel);
-        if (p.Dark) { Set("SettingsTrack", DesignSystem.Hex("#29FFFFFF")); Set("SettingsSwitchOff", DesignSystem.Hex("#38FFFFFF")); Set("SettingsHover", DesignSystem.Hex("#14FFFFFF")); Set("SettingsPressed", DesignSystem.Hex("#24FFFFFF")); }
-        Set("SettingsControlFill", p.Dark ? DesignSystem.Hex("#3A3A3E") : DesignSystem.Hex("#FFFFFF"));
+        Gradient("SettingsCanvasFadeUp", DesignSystem.WithAlpha(canvas, 0), canvas);
+        Set("SettingsInk", c("#18202D", "#E8EBF0")); Set("SettingsSidebarInk", c("#18202D", "#E8EBF0")); Set("SettingsSidebarSelectionInk", c("#18202D", "#E8EBF0"));
+        Set("SettingsMuted", c("#5A6576", "#A3ABB8")); Set("SettingsTertiary", c("#97A1AF", "#6E7684"));
+        Set("SettingsTrack", c("#E3E8EF", "#343944")); Set("SettingsSwitchOff", c("#D5DCE5", "#3A404B"));
+        Set("SettingsHover", c("#0A18202D", "#0FFFFFFF")); Set("SettingsPressed", c("#1418202D", "#1AFFFFFF"));
+        Set("SettingsAccent", c("#2F8FFF", "#3D8EF0")); Set("SettingsAccentHover", c("#4A9CFF", "#5A9EF5")); Set("SettingsAccentPressed", c("#1C7FF0", "#2F7FE0"));
+        Set("SettingsAccentInk", c("#1F6FE0", "#8CC0FF"));
+        Set("SettingsFocusRing", c("#6B2F8FFF", "#D98CC0FF"));
+        // Raised: the selected pill of tabs, segments and lists; Quiet: the trough it sits in.
+        Set("SettingsRaised", c("#FFFFFF", "#30353E")); Set("SettingsRaisedEdge", c("#0F0A1A33", "#14FFFFFF"));
+        Set("SettingsQuiet", c("#E9EDF2", "#191B20")); Set("SettingsHero", c("#E9EDF2", "#191B20"));
+        Set("SettingsField", c("#F3F5F8", "#191B20"));
+        Set("SettingsControlFill", c("#F3F5F8", "#2A2E35")); Set("SettingsControlStroke", c("#E2E7EE", "#14FFFFFF"));
+        Set("SettingsKnob", c("#FFFFFF", "#E9ECF1"));
+        Set("SettingsMenu", c("#FFFFFF", "#2A2E35")); Set("SettingsMenuStroke", c("#E2E7EE", "#1AFFFFFF"));
+        Set("SettingsScrollThumb", c("#380A1A33", "#42FFFFFF"));
+        Set("SettingsPrimaryTint", DesignSystem.WithAlpha(DesignSystem.Hex(p.Dark ? "#3D8EF0" : "#2F8FFF"), p.Dark ? .22 : .13));
+        Set("SettingsPrimaryRim", DesignSystem.WithAlpha(DesignSystem.Hex(p.Dark ? "#3D8EF0" : "#2F8FFF"), p.Dark ? .4 : .28));
+        Set("SettingsDanger", c("#C9302C", "#FF6B66"));
+        Resources["SettingsShadowColor"] = p.Dark ? Colors.Black : DesignSystem.Hex("#0B1730");
         Resources["SettingsControlSheen"] = Brushes.Transparent;
-        Resources["SettingsControlShadowOpacity"] = p.Dark ? .3 : .07;
+        Resources["SettingsControlShadowOpacity"] = p.Dark ? .3 : .06;
+        Resources["SettingsRaisedShadowOpacity"] = p.Dark ? .35 : .1;
+        Resources["SettingsFloatingShadowOpacity"] = p.Dark ? .55 : .14;
+        _tabMarker.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 6, ShadowDepth = 1, Direction = 270, Color = p.Dark ? Colors.Black : DesignSystem.Hex("#0B1730"), Opacity = p.Dark ? .35 : .1 };
         ApplyGlassPalette(p);
         if (SystemParameters.HighContrast)
         {

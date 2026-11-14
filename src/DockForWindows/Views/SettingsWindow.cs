@@ -46,10 +46,10 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         if(_draft.Theme is DockTheme.System or DockTheme.Light or DockTheme.Dark){var resolved=new Palette(_draft);var baseColor=((SolidColorBrush)resolved.Surface).Color;var indicator=((SolidColorBrush)resolved.Indicator).Color;_draft.Appearance.BackgroundColor=$"#{baseColor.R:X2}{baseColor.G:X2}{baseColor.B:X2}";_draft.Appearance.IndicatorColor=$"#{indicator.R:X2}{indicator.G:X2}{indicator.B:X2}";}
         if(draft is null)try{_draft.StartWithWindows=StartupRegistration.ReadCommand() is not null;}catch{ }
         ApplySettingsPalette(palette);Icon=IosStyles.AppIcon();
-        Title="程序坞设置 · DockForWindows";FontFamily=DesignSystem.TextFont;UseLayoutRounding=true;SnapsToDevicePixels=true;
+        Title="设置 · DockForWin";FontFamily=DesignSystem.TextFont;UseLayoutRounding=true;SnapsToDevicePixels=true;
         // Wide and low, like a player's mini window (see SettingsShellWindow).
-        Width=Math.Min(880,SystemParameters.WorkArea.Width-48);Height=Math.Min(620,SystemParameters.WorkArea.Height-48);
-        MinWidth=Math.Min(760,Width);MinHeight=Math.Min(520,Height);WindowStartupLocation=WindowStartupLocation.CenterScreen;
+        Width=Math.Min(880,SystemParameters.WorkArea.Width-48);Height=Math.Min(680,SystemParameters.WorkArea.Height-48);
+        MinWidth=Math.Min(760,Width);MinHeight=Math.Min(560,Height);WindowStartupLocation=WindowStartupLocation.CenterScreen;
         // Background, dark title colours and the Mica sidebar are handled by SettingsShellWindow.ApplyBackdrop.
         var pages=new List<ScrollViewer>();
         StackPanel Page(){var body=new StackPanel{Margin=new Thickness(0,0,0,12)};pages.Add(new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});return body;}
@@ -79,7 +79,7 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         Range(finish,"边框强度","border-opacity",0,100,_draft.Appearance.BorderOpacity*100,"0'%'",v=>_draft.Appearance.BorderOpacity=v/100,1,false);Require(_ranges["border-opacity"],()=>!Glass&&_draft.Appearance.BorderThickness>0);
         _shadow=Toggle(finish,"底板悬浮阴影","shadow-enabled",_draft.Appearance.ShadowEnabled,v=>_draft.Appearance.ShadowEnabled=v);
         Range(finish,"阴影强度","shadow-opacity",0,65,_draft.Appearance.ShadowOpacity*100,"0'%'",v=>_draft.Appearance.ShadowOpacity=v/100,1,false);
-        Range(finish,"阴影柔和度","shadow-blur",0,40,_draft.Appearance.ShadowBlur,"0' px'",v=>_draft.Appearance.ShadowBlur=v,1,false);
+        Range(finish,"阴影模糊","shadow-blur",0,40,_draft.Appearance.ShadowBlur,"0' px'",v=>_draft.Appearance.ShadowBlur=v,1,false);
         Require(_ranges["shadow-opacity"],()=>_draft.Appearance.ShadowEnabled);Require(_ranges["shadow-blur"],()=>_draft.Appearance.ShadowEnabled);
         ColorField(finish,"运行点自定义颜色","indicator-color",_draft.Appearance.IndicatorColor,()=>!Glass);
         var reset=SettingsButton("恢复默认主题",(_,_)=>{_draft.Theme=DockTheme.System;_draft.Appearance=new();_draft.GlassIntensity=.55;_draft.GlassOpacity=1;_draft.GlassFrost=.1;RefreshAppearanceControls();QueuePreview();});AutomationProperties.SetAutomationId(reset,"reset-theme");reset.HorizontalAlignment=HorizontalAlignment.Left;reset.Margin=new Thickness(0,0,0,8);appearance.Children.Add(reset);
@@ -88,7 +88,7 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         Range(sizing,"图标尺寸","icon-size",32,72,_draft.IconSize,"0' px'",v=>_draft.IconSize=v,1,false);Range(sizing,"图标间距","icon-spacing",2,18,_draft.Spacing,"0' px'",v=>_draft.Spacing=v,1,false);
         var reflection=Section(icons,"倒影","只在没有底板（底板透明度 100%）时可用；关闭倒影后，上面的参数停用。");
         var reflections=Toggle(reflection,"显示倒影","reflections",_draft.Reflections,v=>_draft.Reflections=v);Require(reflections,()=>AppearancePolicy.ReflectionsAllowed(_draft));
-        Range(reflection,"倒影强度","reflection-opacity",0,100,_draft.ReflectionOpacity*100,"0'%'",v=>_draft.ReflectionOpacity=v/100,1,false);Range(reflection,"倒影长度","reflection-length",5,100,_draft.ReflectionLength*100,"0'%'",v=>_draft.ReflectionLength=v/100,1,false);Range(reflection,"与图标间距","reflection-gap",0,12,_draft.ReflectionGap,"0' px'",v=>_draft.ReflectionGap=v,1,false);Range(reflection,"倒影柔和度","reflection-blur",0,8,_draft.ReflectionBlur,"0.0' px'",v=>_draft.ReflectionBlur=v,.5,false);
+        Range(reflection,"倒影强度","reflection-opacity",0,100,_draft.ReflectionOpacity*100,"0'%'",v=>_draft.ReflectionOpacity=v/100,1,false);Range(reflection,"倒影长度","reflection-length",5,100,_draft.ReflectionLength*100,"0'%'",v=>_draft.ReflectionLength=v/100,1,false);Range(reflection,"倒影间距","reflection-gap",0,12,_draft.ReflectionGap,"0' px'",v=>_draft.ReflectionGap=v,1,false);Range(reflection,"倒影柔和度","reflection-blur",0,8,_draft.ReflectionBlur,"0.0' px'",v=>_draft.ReflectionBlur=v,.5,false);
         foreach(var id in new[]{"reflection-opacity","reflection-length","reflection-gap","reflection-blur"})Require(_ranges[id],()=>AppearancePolicy.ReflectionsAllowed(_draft)&&_draft.Reflections);
         var animation=Section(motion,"波浪与弹跳","鼠标经过时向外放大，底板保持贴边；点击应用时弹跳。关闭动画或系统减少动画时，上面的参数停用。");
         Toggle(animation,"启用动画","animations",_draft.Animations,v=>_draft.Animations=v);
@@ -104,7 +104,7 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         var monitor=Choice(placement,"显示器","dock-monitor",screens.Select((s,i)=>$"显示器 {i+1}{(s.Primary?" · 主屏幕":"")} · {s.Bounds.Width} × {s.Bounds.Height}").ToArray(),selectedMonitor);monitor.SelectionChanged+=(_,_)=>{if(_ready&&monitor.SelectedIndex>=0){_draft.MonitorDevice=screens[monitor.SelectedIndex].DeviceName;QueuePreview();}};
         Range(placement,"距离屏幕边缘","edge-distance",0,160,_draft.EdgeDistance,"0' px'",v=>_draft.EdgeDistance=v,1,false);
         var hiding=Section(behavior,"自动隐藏","桌面上默认一直显示；普通窗口、桌面和全屏三种情况分别设置。");
-        Toggle(hiding,"普通窗口下自动隐藏","auto-hide",_draft.AutoHide,v=>_draft.AutoHide=v);Toggle(hiding,"桌面上也自动隐藏","desktop-auto-hide",_draft.HideOnDesktop,v=>_draft.HideOnDesktop=v);Toggle(hiding,"最大化或全屏时退下","fullscreen-hide",_draft.HideWhenFullscreen,v=>_draft.HideWhenFullscreen=v);
+        Toggle(hiding,"普通窗口下自动隐藏","auto-hide",_draft.AutoHide,v=>_draft.AutoHide=v);Toggle(hiding,"桌面上也自动隐藏","desktop-auto-hide",_draft.HideOnDesktop,v=>_draft.HideOnDesktop=v);Toggle(hiding,"最大化或全屏时隐藏","fullscreen-hide",_draft.HideWhenFullscreen,v=>_draft.HideWhenFullscreen=v);
         var interfaceCard=Section(interfacePage,"窗口外观","设置窗口可以跟随系统，也可以固定为浅色或深色。程序坞的材质在“程序坞”标签里单独设置。");
         var interfaceTheme=Choice(interfaceCard,"界面外观","interface-theme",new[]{"跟随系统","浅色","深色"},(int)_draft.InterfaceTheme);interfaceTheme.SelectionChanged+=(_,_)=>{if(!_ready||interfaceTheme.SelectedIndex<0)return;_draft.InterfaceTheme=(InterfaceTheme)interfaceTheme.SelectedIndex;Dispatcher.BeginInvoke(()=>_dock.ReopenSettings(_draft,CurrentSettingsSection));};
         var startup=Section(system,"登录","保存设置后生效，只影响当前账户；取消本次设置不会修改开机启动项。");
@@ -146,8 +146,8 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
         Loaded+=(_,_)=>RefreshSample();_scene.Loaded+=(_,_)=>{if(_sampleDirty)RefreshSample();};_scene.IsVisibleChanged+=(_,_)=>{if(_scene.IsVisible&&_sampleDirty)RefreshSample();};
     }
     private DispatcherTimer _commitTimer=null!;
-    private void CommitDraft(){_commitTimer.Stop();if(!ValidateColors())return;_draft.Widgets.MergeLive(_widgetBaseline,_dock.Model.Settings.Widgets);_draft.Normalize();if(_dock.CommitSettings(_draft))_widgetBaseline=_draft.Widgets.Copy();}
-    private void SaveSettings(){FlushPreview();if(!ValidateColors())return;_draft.Widgets.MergeLive(_widgetBaseline,_dock.Model.Settings.Widgets);_draft.Normalize();if(_dock.CommitSettings(_draft)){_widgetBaseline=_draft.Widgets.Copy();_validation.Text="设置已保存";}}
+    private void CommitDraft(){_commitTimer.Stop();ValidateColors();_draft.Widgets.MergeLive(_widgetBaseline,_dock.Model.Settings.Widgets);_draft.Normalize();if(_dock.CommitSettings(_draft)){_widgetBaseline=_draft.Widgets.Copy();ShowStatus("已保存");}}
+    private void SaveSettings(){FlushPreview();ValidateColors();_draft.Widgets.MergeLive(_widgetBaseline,_dock.Model.Settings.Widgets);_draft.Normalize();if(_dock.CommitSettings(_draft)){_widgetBaseline=_draft.Widgets.Copy();_validation.Text="设置已保存";}}
     // Inset group: title above, porcelain/graphite surface, footnote below.
     private StackPanel Section(Panel parent,string title,string help)
     {
@@ -184,16 +184,22 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
     // Colour row: a swatch button that opens the picker, and the hex value beside it.
     private void ColorField(Panel panel,string title,string id,string value,Func<bool> available)
     {
-        var edit=new TextBox{Text=value,FontSize=13,Width=96,MaxLength=7,FontFamily=new FontFamily("Cascadia Mono, Consolas, Segoe UI")};AutomationProperties.SetAutomationId(edit,id);AutomationProperties.SetName(edit,title);
+        var edit=new TextBox{Text=value,FontSize=12.5,Width=96,MaxLength=7};System.Windows.Documents.Typography.SetNumeralAlignment(edit,FontNumeralAlignment.Tabular);AutomationProperties.SetAutomationId(edit,id);AutomationProperties.SetName(edit,title);
         var swatch=new SquircleBorder{Width=18,Height=18,CornerRadius=new CornerRadius(7),Background=Palette.Brush(value),BorderThickness=new Thickness(1)};swatch.SetResourceReference(Border.BorderBrushProperty,"SettingsControlStroke");
         var choose=SettingsButton("",(_,_)=>{using var dialog=new Forms.ColorDialog{FullOpen=true,Color=System.Drawing.ColorTranslator.FromHtml(ThemeAppearance.TryColor(edit.Text,out var hex)?hex:value)};if(dialog.ShowDialog()==Forms.DialogResult.OK)edit.Text=$"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";});
         var chip=new StackPanel{Orientation=Orientation.Horizontal};chip.Children.Add(swatch);chip.Children.Add(new TextBlock{Text="选色",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(7,0,0,0)});choose.Content=chip;choose.Padding=new Thickness(9,4,12,4);choose.Margin=new Thickness(8,0,0,0);AutomationProperties.SetAutomationId(choose,"pick-"+id);
         _colors[id]=edit;_swatches[id]=swatch;edit.TextChanged+=(_,_)=>{if(!_ready||_updating)return;if(ThemeAppearance.TryColor(edit.Text,out var hex)){if(id=="background-color")_draft.Appearance.BackgroundColor=hex;else if(id=="border-color")_draft.Appearance.BorderColor=hex;else _draft.Appearance.IndicatorColor=hex;swatch.Background=Palette.Brush(hex);if(id is "background-color" or "indicator-color")MarkCustom(id=="background-color");}ValidateColors();QueuePreview();};
         var field=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right};field.Children.Add(edit);field.Children.Add(choose);
         var row=LabeledRow(title,field);AddSettingsRow(panel,row);Require(row,available);
+        // The error sits under the field it belongs to, not in a footer that follows the user around (audit S05-01).
+        var error=new TextBlock{Text="请输入颜色，例如 #242B38",FontSize=12,Margin=new Thickness(0,-6,0,10),HorizontalAlignment=HorizontalAlignment.Right,Visibility=Visibility.Collapsed};error.SetResourceReference(TextBlock.ForegroundProperty,"SettingsDanger");
+        panel.Children.Add(error);_colorErrors[id]=error;
     }
+    private readonly Dictionary<string,TextBlock> _colorErrors=new();
     private void MarkCustom(bool preserveColor=false){if(!Glass&&!Custom&&!preserveColor){var color=((SolidColorBrush)new Palette(_draft).Surface).Color;_draft.Appearance.BackgroundColor=$"#{color.R:X2}{color.G:X2}{color.B:X2}";_updating=true;_colors["background-color"].Text=_draft.Appearance.BackgroundColor;_swatches["background-color"].Background=Palette.Brush(_draft.Appearance.BackgroundColor);_updating=false;}if(!Glass)_draft.Theme=DockTheme.Custom;_updating=true;_theme.SelectedIndex=(int)_draft.Theme;_preset.SelectedIndex=0;_updating=false;}
-    private bool ValidateColors(){bool valid=_colors.Values.All(c=>ThemeAppearance.TryColor(c.Text,out _));foreach(var edit in _colors.Values){if(ThemeAppearance.TryColor(edit.Text,out _))edit.SetResourceReference(Control.BorderBrushProperty,"SettingsControlStroke");else edit.BorderBrush=DesignSystem.Brush(Design.Red);}_validation.Text=valid?"":"颜色格式应为 #RRGGBB。";_save.IsEnabled=valid;return valid;}
+    // An invalid colour never reaches the draft (ColorField only writes valid values), so it marks its own field and
+    // does not hold back saving everything else (audit S05-02).
+    private bool ValidateColors(){bool valid=true;foreach(var (id,edit) in _colors){bool ok=ThemeAppearance.TryColor(edit.Text,out _);valid&=ok;if(ok)edit.SetResourceReference(Control.BorderBrushProperty,"SettingsControlStroke");else edit.BorderBrush=DesignSystem.Brush(Design.Red);if(_colorErrors.TryGetValue(id,out var error))error.Visibility=ok?Visibility.Collapsed:Visibility.Visible;}_validation.Text="";return valid;}
     private void RefreshAppearanceControls()
     {
         _updating=true;_theme.SelectedIndex=(int)_draft.Theme;

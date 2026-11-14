@@ -23,7 +23,18 @@ internal partial class SettingsShellWindow
         _pages.Register("general",11,"通用设置",false,()=>{
             // The tab names the page; preferences that are a single control live right here instead of a page each.
             var (page,body)=Page("通用","");body.Margin=new Thickness(DesignSystem.PageInset,18,DesignSystem.PageInset,28);var group=Group(body,"偏好");BuildGeneralPreferences(group);
-            var more=Group(body,"关于与诊断");OverviewLink(more,"性能","当前进程的内存快照","performance");OverviewLink(more,"关于 DockForWin","版本 "+typeof(SettingsShellWindow).Assembly.GetName().Version?.ToString(3),"about");return page;
+            // Diagnostics and data inline (audit P32-01/03): the memory figure and the data folder are one row each
+            // instead of pages of their own; the about page stays one link away for licences.
+            var diagnostics=Group(body,"诊断与数据");
+            var memory=new TextBlock{FontSize=12.5,VerticalAlignment=VerticalAlignment.Center};memory.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");System.Windows.Documents.Typography.SetNumeralAlignment(memory,FontNumeralAlignment.Tabular);
+            void Sample(){using var process=Process.GetCurrentProcess();memory.Text=$"私有 {process.PrivateMemorySize64/1048576d:0} MB · 工作集 {process.WorkingSet64/1048576d:0} MB";}
+            var refresh=Button("刷新",Sample,"general-memory-refresh");refresh.Margin=new Thickness(12,0,0,0);refresh.MinHeight=26;refresh.Padding=new Thickness(12,2,12,2);
+            var memoryCell=new StackPanel{Orientation=Orientation.Horizontal};memoryCell.Children.Add(memory);memoryCell.Children.Add(refresh);
+            AddRow(diagnostics,LabeledRow("内存",memoryCell));_overviewRefresh.Add(Sample);Sample();
+            if(DataDirectory is { } folder)Link(diagnostics,"打开数据目录",folder,"general-data-folder",()=>{try{Process.Start(new ProcessStartInfo("explorer.exe","\""+folder+"\""){UseShellExecute=true});}catch{}});
+            OverviewLink(diagnostics,"性能详情","当前进程的内存快照","performance");
+            body.Children.Add(AboutBlock());
+            return page;
         });
         _pages.Register("about",12,"关于",true,BuildAbout);
         _pages.Navigated+=()=>{foreach(var refresh in _overviewRefresh)refresh();};
@@ -111,6 +122,24 @@ internal partial class SettingsShellWindow
         return page;
     }
     protected void OverviewLink(Panel group,string title,string subtitle,string route)=>Link(group,title,subtitle,"overview-"+route,()=>_pages.Navigate(route));
+    // Where settings, logs and managed shortcuts live (the full settings window knows it from the Dock's model).
+    protected virtual string? DataDirectory=>null;
+    // The page closes with who we are: icon, name, version, and the way to licences (audit P32-06, P34).
+    private FrameworkElement AboutBlock()
+    {
+        var block=new StackPanel{HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,28,0,8)};AutomationProperties.SetAutomationId(block,"general-about");
+        var glow=new Grid{Width=240,Height=96};
+        var light=new System.Windows.Shapes.Ellipse{Width=200,Height=96,IsHitTestVisible=false};light.Fill=new RadialGradientBrush(Color.FromArgb(Design.Dark?(byte)28:(byte)20,47,143,255),Color.FromArgb(0,47,143,255));glow.Children.Add(light);
+        glow.Children.Add(new Image{Source=IosStyles.AppIcon(),Width=56,Height=56,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Effect=new DropShadowEffect{BlurRadius=18,ShadowDepth=4,Direction=270,Opacity=Design.Dark?.5:.16}});
+        block.Children.Add(glow);
+        block.Children.Add(new TextBlock{Text="DockForWin",FontFamily=DesignSystem.DisplayFont,FontSize=17,FontWeight=FontWeights.SemiBold,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,4,0,4)});
+        var line=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Center};
+        var version=new TextBlock{Text="版本 "+typeof(SettingsShellWindow).Assembly.GetName().Version?.ToString(3),FontSize=12,VerticalAlignment=VerticalAlignment.Center};version.SetResourceReference(TextBlock.ForegroundProperty,"SettingsMuted");System.Windows.Documents.Typography.SetNumeralAlignment(version,FontNumeralAlignment.Tabular);line.Children.Add(version);
+        var badge=new Border{CornerRadius=new CornerRadius(8),Padding=new Thickness(7,1,7,1),Margin=new Thickness(8,0,0,0),VerticalAlignment=VerticalAlignment.Center,Child=new TextBlock{Text="开发预览",FontSize=11}};badge.SetResourceReference(Border.BackgroundProperty,"SettingsPrimaryTint");((TextBlock)badge.Child).SetResourceReference(TextBlock.ForegroundProperty,"SettingsAccentInk");line.Children.Add(badge);
+        block.Children.Add(line);
+        var about=Button("关于与许可",()=>_pages.Navigate("about"),"overview-about");about.Background=Brushes.Transparent;about.BorderThickness=new Thickness(0);about.Margin=new Thickness(0,8,0,0);about.HorizontalAlignment=HorizontalAlignment.Center;about.SetResourceReference(Control.ForegroundProperty,"SettingsAccentInk");block.Children.Add(about);
+        return block;
+    }
     private static Geometry NavigationGeometry(Drawing drawing)
     {
         var geometry=new GeometryGroup();

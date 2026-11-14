@@ -289,7 +289,7 @@ public sealed partial class DockWindow : Window
             tile.MouseEnter+=(_,_)=>QueueWindowPreviews(tile);
             tile.PreviewMouseWheel+=(_,e)=>{if(_windowPreviews?.IsOpen==true&&_previewCandidate==tile){_windowPreviews.Scroll(e.Delta);e.Handled=true;}};
             tile.Invoked += () => ActivateItem(item, tile);
-            tile.ContextMenu = BuildItemMenu(item);
+            tile.ContextMenu = BuildItemMenu(item); DockMenuStyle.PlaceBeside(tile.ContextMenu, ViewSettings.Edge, tile);
             tile.PreviewMouseLeftButtonDown += (_, e) => { _dragStart = e.GetPosition(this); _dragSource = item; };
             tile.QueryContinueDrag += (_, e) =>
             {
@@ -387,14 +387,14 @@ public sealed partial class DockWindow : Window
     }
     private ContextMenu NewMenu()
     {
-        var menu = new ContextMenu { Background = _palette.WindowBackground, Foreground = _palette.Text, Padding = new Thickness(6), FontSize = 13 };
+        var menu = new ContextMenu { Padding = new Thickness(0) }; DockMenuStyle.Apply(menu);
         menu.Opened += (_, _) => { CloseWindowPreviews();_openDockMenu=menu;_menuOpen = true; _hideDelay.Stop();WatchPopupClicks(); };
         menu.Closed += (_, _) => { if(_openDockMenu==menu)_openDockMenu=null;WatchPopupClicks();_menuOpen = false; if (ViewSettings.AutoHide && !IsMouseOver) _hideDelay.Start(); };
         return menu;
     }
     private static void AddMenu(ContextMenu menu, string label, Action action)
     {
-        var entry = new MenuItem { Header = label, Padding = new Thickness(10, 6, 10, 6) };
+        var entry = new MenuItem { Header = label };
         entry.Click += (_, _) => action(); menu.Items.Add(entry);
     }
     private ContextMenu BuildBackgroundMenu()
@@ -403,35 +403,35 @@ public sealed partial class DockWindow : Window
         AddMenu(menu, "添加应用与文件…", AddApplication);
         AddMenu(menu, "添加文件夹…", AddFolder);
         AddMenu(menu, "重新加载图标", () => _ = _model.LoadIconsAsync(true));
-        AddMenu(menu, "外观与设置…", OpenSettings);
-        AddMenu(menu, "液态玻璃控制中心", ToggleControlCenter);
+        menu.Items.Add(new Separator());
+        AddMenu(menu, "程序坞设置…", OpenSettings);
+        AddMenu(menu, "打开控制中心", ToggleControlCenter);
         menu.Items.Add(new Separator());
         AddMenu(menu, "退出程序坞", () => Application.Current.Shutdown());
         return menu;
     }
     private ContextMenu BuildItemMenu(DockItem item)
     {
-        var menu = NewMenu();
-        // Populate window choices when opened so the list cannot remain stale.
+        var menu = NewMenu(); DockMenuStyle.PlaceBeside(menu, ViewSettings.Edge);
+        // Populate window choices when opened so the list cannot remain stale. Order as on a Mac: the windows, then
+        // what to do with the app, then this icon's options, then the Dock's settings (audit W03-01).
         menu.Opened += (_, _) =>
         {
             menu.Items.Clear();
-            AddMenu(menu, "打开", () => { try { _launcher.Launch(item.Pin); } catch (Exception ex) { ShowError(ex.Message); } });
-            if(LaunchService.CanCreateNewWindow(item.Pin))AddMenu(menu,"新建窗口",()=>NewApplicationWindow(item));
             foreach (var window in item.Windows)
             {
-                string label = window.Title.Length > 55 ? window.Title[..52] + "…" : window.Title;
-                AddMenu(menu, "切换到：" + label, () => { if (!WindowTracker.Activate(window)) ShowError("Windows 暂未允许激活此窗口。"); });
+                string label = window.Title.Length > 40 ? window.Title[..18] + "…" + window.Title[^18..] : window.Title;
+                AddMenu(menu, label, () => { if (!WindowTracker.Activate(window)) ShowError("Windows 暂未允许激活此窗口。"); });
             }
-            if (item.IsRunning)
-            {
-                menu.Items.Add(new Separator());
-                AddMenu(menu, "请求关闭这些窗口", () => { foreach (var window in item.Windows) WindowTracker.Close(window); });
-            }
+            if (item.IsRunning) menu.Items.Add(new Separator());
+            AddMenu(menu, "打开", () => { try { _launcher.Launch(item.Pin); } catch (Exception ex) { ShowError(ex.Message); } });
+            if(LaunchService.CanCreateNewWindow(item.Pin))AddMenu(menu,"新建窗口",()=>NewApplicationWindow(item));
+            if (item.IsRunning) AddMenu(menu, item.Windows.Count == 1 ? "关闭窗口" : $"关闭全部 {item.Windows.Count} 个窗口", () => { foreach (var window in item.Windows) WindowTracker.Close(window); });
             menu.Items.Add(new Separator());
             if (item.Pin.Kind != ItemKind.RecycleBin) AddMenu(menu, item.IsPinned ? "从程序坞取消固定" : "固定到程序坞", () => { if (item.IsPinned) _model.Remove(item); else _model.Pin(item); });
-            if (File.Exists(item.Pin.Target)) AddMenu(menu, "在资源管理器中定位", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "/select,\"" + item.Pin.Target + "\"") { UseShellExecute = true }));
-            AddMenu(menu, "外观与设置…", OpenSettings);
+            if (File.Exists(item.Pin.Target)) AddMenu(menu, "在资源管理器中显示", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "/select,\"" + item.Pin.Target + "\"") { UseShellExecute = true }));
+            menu.Items.Add(new Separator());
+            AddMenu(menu, "程序坞设置…", OpenSettings);
         };
         return menu;
     }

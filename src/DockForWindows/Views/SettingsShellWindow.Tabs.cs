@@ -19,7 +19,9 @@ internal partial class SettingsShellWindow
     internal const double TabBarHeight = 52;
     private static readonly (string Title, string Key)[] Tabs = { ("程序坞", "appearance"), ("控制中心", "control-center"), ("小组件", "widgets"), ("通用", "general") };
     private readonly List<(Button Button, TextBlock Text)> _tabs = new();
-    private readonly Border _tabMarker = new() { Height = 3, Width = 0, CornerRadius = new CornerRadius(1.5), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false, RenderTransform = new TranslateTransform(), Margin = new Thickness(0, 0, 0, 5) };
+    // The chosen tab sits on a raised pill (white in light, lifted graphite in dark) — the same "selected" language as
+    // the segmented controls, so blue is left to mean "on" and "value".
+    private readonly Border _tabMarker = new() { Height = 30, Width = 0, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(.75), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, RenderTransform = new TranslateTransform() };
     private Grid _tabStrip = null!; private int _selectedTab = -1; private readonly Border _tabLine = new() { Height = 1, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false, SnapsToDevicePixels = true, Opacity = 0 };
     // Sections 0–4 are the Dock's own pages; the control center, widgets, and everything general follow.
     private static int TabFor(int section) => section switch { >= 0 and <= 4 => 0, 7 => 1, 9 => 2, _ => 3 };
@@ -27,27 +29,43 @@ internal partial class SettingsShellWindow
     private FrameworkElement BuildTabBar()
     {
         var bar = new Grid();
-        var strip = _tabStrip = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(DesignSystem.PageInset - 12, 0, 0, 0) };
+        var strip = _tabStrip = new Grid { HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(DesignSystem.PageInset - 14, 0, 0, 0) };
         var row = new StackPanel { Orientation = Orientation.Horizontal }; strip.Children.Add(row);
         for (int i = 0; i < Tabs.Length; i++)
         {
             int index = i;
-            var text = new TextBlock { Text = Tabs[i].Title, FontSize = 15, VerticalAlignment = VerticalAlignment.Center };
-            var button = new Button { Content = text, Template = TabTemplate(), Padding = new Thickness(12, 0, 12, 0), Height = TabBarHeight, Cursor = Cursors.Hand, FocusVisualStyle = null };
+            var text = new TextBlock { Text = Tabs[i].Title, FontSize = 15, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            // A hidden SemiBold copy reserves the bold width, so choosing a tab never shifts its neighbours.
+            var label = new Grid(); label.Children.Add(new TextBlock { Text = Tabs[i].Title, FontSize = 15, FontWeight = FontWeights.SemiBold, Visibility = Visibility.Hidden }); label.Children.Add(text);
+            var button = new Button { Content = label, Template = TabTemplate(), Padding = new Thickness(14, 0, 14, 0), Height = TabBarHeight, Cursor = Cursors.Hand, FocusVisualStyle = null };
             AutomationProperties.SetAutomationId(button, "settings-tab-" + Tabs[i].Key); AutomationProperties.SetName(button, Tabs[i].Title);
             WindowChrome.SetIsHitTestVisibleInChrome(button, true);
             button.Click += (_, _) => NavigateTab(index);
             row.Children.Add(button); _tabs.Add((button, text));
         }
-        _tabMarker.SetResourceReference(Border.BackgroundProperty, "SettingsAccent"); strip.Children.Add(_tabMarker);
+        _tabMarker.SetResourceReference(Border.BackgroundProperty, "SettingsRaised"); _tabMarker.SetResourceReference(Border.BorderBrushProperty, "SettingsRaisedEdge");
+        strip.Children.Insert(0, _tabMarker); // its soft lift is set with the palette (ApplySettingsPalette)
         bar.Children.Add(strip);
         var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) };
+        // Changes save themselves; this quiet line says so for a moment (audit S03-01).
+        _status.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted"); controls.Children.Add(_status);
         controls.Children.Add(WindowButton("最小化", "settings-shell-window-minimize", "M0.5,5.5 H10.5", () => WindowState = WindowState.Minimized));
         controls.Children.Add(WindowButton("关闭", "settings-shell-window-close", "M0.5,0.5 L10.5,10.5 M10.5,0.5 L0.5,10.5", Close));
         bar.Children.Add(controls);
         // Like a macOS toolbar, the hairline under the tabs only appears once the page has scrolled under it.
         _tabLine.SetResourceReference(Border.BackgroundProperty, "SettingsLine"); bar.Children.Add(_tabLine);
         return bar;
+    }
+    private readonly TextBlock _status = new() { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0), Opacity = 0, IsHitTestVisible = false };
+    protected void ShowStatus(string text)
+    {
+        _status.Text = "✓ " + text;
+        if (!SystemParameters.ClientAreaAnimation || SystemParameters.HighContrast) { _status.BeginAnimation(OpacityProperty, null); _status.Opacity = 1; return; }
+        var fade = new DoubleAnimationUsingKeyFrames();
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(.15))));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.75))));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(2.15))));
+        _status.BeginAnimation(OpacityProperty, fade, HandoffBehavior.SnapshotAndReplace);
     }
     // A tab always lands on its own top page, also when one of its detail pages is showing.
     private void NavigateTab(int index)
@@ -64,7 +82,7 @@ internal partial class SettingsShellWindow
             for (int i = 0; i < _tabs.Count; i++)
             {
                 var text = _tabs[i].Text; bool on = i == index;
-                text.SetResourceReference(TextBlock.ForegroundProperty, on ? "SettingsAccent" : "SettingsInk");
+                text.SetResourceReference(TextBlock.ForegroundProperty, on ? "SettingsInk" : "SettingsMuted");
                 text.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
             }
         }
@@ -75,10 +93,10 @@ internal partial class SettingsShellWindow
     {
         if (_selectedTab < 0 || _selectedTab >= _tabs.Count || !_tabStrip.IsLoaded) return;
         var (button, text) = _tabs[_selectedTab];
-        if (text.ActualWidth <= 0) return;
-        double x = text.TranslatePoint(new Point(), _tabStrip).X, width = text.ActualWidth;
+        if (button.ActualWidth <= 0) return;
+        double x = button.TranslatePoint(new Point(), _tabStrip).X, width = button.ActualWidth;
         bool motion = animate && _tabMarker.Width > 0 && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast;
-        double seconds = motion ? .26 : 0;
+        double seconds = motion ? .24 : 0;
         SettingsSwitchMotion.Move((TranslateTransform)_tabMarker.RenderTransform, TranslateTransform.XProperty, x, seconds);
         if (seconds > 0) _tabMarker.BeginAnimation(WidthProperty, new DoubleAnimation(width, TimeSpan.FromSeconds(seconds)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
         else { _tabMarker.BeginAnimation(WidthProperty, null); _tabMarker.Width = width; }
@@ -87,7 +105,7 @@ internal partial class SettingsShellWindow
     private static ControlTemplate TabTemplate()
     {
         var wash = new FrameworkElementFactory(typeof(Border)) { Name = "Wash" };
-        wash.SetValue(Border.BackgroundProperty, Brushes.Transparent); wash.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+        wash.SetValue(Border.BackgroundProperty, Brushes.Transparent); wash.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
         wash.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 11, 0, 11));
         wash.SetBinding(Border.PaddingProperty, new System.Windows.Data.Binding("Padding") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent });
         var presenter = new FrameworkElementFactory(typeof(ContentPresenter)); presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center); wash.AppendChild(presenter);
@@ -104,7 +122,7 @@ internal partial class SettingsShellWindow
         AutomationProperties.SetAutomationId(button, id); AutomationProperties.SetName(button, name); WindowChrome.SetIsHitTestVisibleInChrome(button, true);
         if (id.EndsWith("close", StringComparison.Ordinal))
         {
-            // Close turns Windows red under the pointer, with a white cross, so it is never mistaken for minimise.
+            // Close turns the Windows 11 caption red under the pointer, with a white cross, so it is never mistaken for minimise.
             button.Template = CloseTemplate();
             button.MouseEnter += (_, _) => path.Stroke = Brushes.White;
             button.MouseLeave += (_, _) => path.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "SettingsMuted");
@@ -126,8 +144,8 @@ internal partial class SettingsShellWindow
         wash.SetValue(Border.BackgroundProperty, Brushes.Transparent); wash.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
         var presenter = new FrameworkElementFactory(typeof(ContentPresenter)); presenter.SetBinding(FrameworkElement.MarginProperty, new System.Windows.Data.Binding("Padding") { RelativeSource = System.Windows.Data.RelativeSource.TemplatedParent }); wash.AppendChild(presenter);
         var template = new ControlTemplate(typeof(Button)) { VisualTree = wash };
-        var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true }; over.Setters.Add(new Setter(Border.BackgroundProperty, DesignSystem.Brush(DesignSystem.Hex("#E81123")), "Wash")); template.Triggers.Add(over);
-        var pressed = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true }; pressed.Setters.Add(new Setter(Border.BackgroundProperty, DesignSystem.Brush(DesignSystem.Hex("#C50F1F")), "Wash")); template.Triggers.Add(pressed);
+        var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true }; over.Setters.Add(new Setter(Border.BackgroundProperty, DesignSystem.Brush(DesignSystem.Hex("#C42B1C")), "Wash")); template.Triggers.Add(over);
+        var pressed = new Trigger { Property = System.Windows.Controls.Primitives.ButtonBase.IsPressedProperty, Value = true }; pressed.Setters.Add(new Setter(Border.BackgroundProperty, DesignSystem.Brush(DesignSystem.Hex("#B3261A")), "Wash")); template.Triggers.Add(pressed);
         return template;
     }
 }

@@ -14,9 +14,10 @@ internal sealed partial class SettingsWindow
 {
     // 通用 › 偏好: 开机自启 and 窗口外观 are single controls, so they sit on the 通用 page itself. Each one drives the
     // detailed control with the same meaning, so the draft is written (and saved) exactly once.
+    protected override string? DataDirectory => _dock.Model.DataDirectory;
     protected override void BuildGeneralPreferences(Panel group)
     {
-        var startup = new CheckBox { Content = "开机自启（保存后生效）", IsChecked = _draft.StartWithWindows };
+        var startup = new CheckBox { Content = "开机自启", IsChecked = _draft.StartWithWindows };
         System.Windows.Automation.AutomationProperties.SetAutomationId(startup, "general-startup"); System.Windows.Automation.AutomationProperties.SetName(startup, "开机自启");
         void Startup() { if (!_ready || _updating) return; if (Setting<CheckBox>("start-with-windows") is { } detail) detail.IsChecked = startup.IsChecked; }
         startup.Checked += (_, _) => Startup(); startup.Unchecked += (_, _) => Startup();

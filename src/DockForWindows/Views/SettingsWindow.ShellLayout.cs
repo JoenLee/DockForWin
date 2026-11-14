@@ -26,7 +26,8 @@ internal sealed partial class SettingsWindow
             int section=i;var page=pages[i];var body=(StackPanel)page.Content;
             body.Margin=new Thickness(DesignSystem.PageInset,4,DesignSystem.PageInset,28);
             // Top-level pages are named by their tab; only the pages one level down carry a title.
-            if(i!=7)body.Children.Insert(0,PageHeader(i,FullTitles[i],subtitles[i]));else body.Margin=new Thickness(DesignSystem.PageInset,18,DesignSystem.PageInset,28);
+            // The Dock's categories sit in the master–detail page under their own title, without a second line.
+            if(i!=7)body.Children.Insert(0,PageHeader(i,FullTitles[i],i is >=1 and <=4?"":subtitles[i]));else body.Margin=new Thickness(DesignSystem.PageInset,18,DesignSystem.PageInset,28);
             var groups=_settingsSections.Where(s=>ReferenceEquals(s.Parent,body)).ToArray();
             SetSettingsSearch(i,string.Join(" ",groups.Select(g=>g.Title+" "+g.Help)));
             if(i==0){
@@ -37,51 +38,54 @@ internal sealed partial class SettingsWindow
                     if(group.Outer.Children.Count>0&&group.Outer.Children[0] is TextBlock groupTitle)groupTitle.Visibility=Visibility.Collapsed;
                     var detailBody=PageBody();detailBody.Children.Add(PageHeader(i,group.Title,""));detailBody.Children.Add(group.Outer);
                     if(g==0){var resetButton=body.Children.OfType<Button>().FirstOrDefault();if(resetButton is not null){body.Children.Remove(resetButton);detailBody.Children.Add(resetButton);}}
-                    RegisterFullPage(key,section,group.Title,true,new ScrollViewer{Content=detailBody,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});details[g]=key;
+                    RegisterAdvancedPage(key,section,group.Title,new ScrollViewer{Content=detailBody,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});details[g]=key;
                 }
                 RegisterFullPage(FullKeys[0],0,FullTitles[0],false,(ScrollViewer)BuildAppearanceInspector(g=>details.TryGetValue(g,out var k)?k:null));
-                RegisterFullPage("dock-advanced",0,"高级设置",true,BuildDockAdvanced(details,groups.Select(g=>g.Title).ToArray()));
+                RegisterSettingsPage("dock-advanced",0,"高级设置",true,BuildAdvancedPane);
                 continue;
             }
             // A group named like its page would only repeat the title above it.
             foreach(var group in groups)if((group.Title==FullTitles[i]||group.Title=="控制中心"&&i==7)&&group.Outer.Children.Count>0&&group.Outer.Children[0] is TextBlock repeated)repeated.Visibility=Visibility.Collapsed;
             // The Dock's detail pages (sections 1–6) are already one level down: everything stays on the page.
-            if(i is >=1 and <=6){RegisterFullPage(FullKeys[i],i,FullTitles[i],true,page);continue;}
+            if(i is >=1 and <=4){RegisterAdvancedPage(FullKeys[i],i,FullTitles[i],page);continue;}
+            if(i is 5 or 6){RegisterFullPage(FullKeys[i],i,FullTitles[i],true,page);continue;}
             // The control center keeps its first group inline; the rest become rows of one list that open detail pages.
-            StackPanel? more=null;
-            StackPanel More(int at){if(more is not null)return more;more=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(more);surface.Margin=new Thickness(0,0,0,26);body.Children.Insert(at,surface);body.Children.Insert(at,GroupTitle("布局与材质"));return more;}
-            if(i==0)OverviewLink(More(groups.Length>0?body.Children.IndexOf(groups[0].Outer)+1:1),"图标与倒影","统一尺寸、间距和倒影效果","icons");
+            StackPanel? more=null;Border? moreSurface=null;TextBlock? moreTitle=null;
+            StackPanel More(int at){if(more is not null)return more;more=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=moreSurface=GroupSurface(more);surface.Margin=new Thickness(0,0,0,26);body.Children.Insert(at,surface);body.Children.Insert(at,moreTitle=GroupTitle("布局与细节"));return more;}
+            // Only the control center's three detailed groups become pages; 外观, 打开方式 and 任务栏 stay on the page.
+            string[] detailed={"模块与排列","大小与圆角","液态玻璃参数"};
             for(int g=1;g<groups.Length;g++){
-                var group=groups[g];string key=$"settings-section-{i}-{g}";int at=body.Children.IndexOf(group.Outer);body.Children.Remove(group.Outer);
+                var group=groups[g];if(!detailed.Contains(group.Title))continue;string key=$"settings-section-{i}-{g}";int at=body.Children.IndexOf(group.Outer);body.Children.Remove(group.Outer);
                 // On its own page the header already names the group, so the group's own title steps aside.
                 if(group.Outer.Children.Count>0&&group.Outer.Children[0] is TextBlock groupTitle)groupTitle.Visibility=Visibility.Collapsed;
                 var detailBody=PageBody();detailBody.Children.Add(PageHeader(i,group.Title,""));detailBody.Children.Add(group.Outer);
                 var detail=new ScrollViewer{Content=detailBody,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
                 RegisterFullPage(key,section,group.Title,true,detail);
                 var summary=group.Help.Split('。')[0];if(summary.Length>48)summary=summary[..48]+"…";
-                AddRow(More(at),LinkRow(group.Title,summary,key,()=>NavigateSettingsPage(key)));
+                var link=LinkRow(group.Title,summary,key,()=>NavigateSettingsPage(key));AddRow(More(at),link);
+                // The link's second line reports the current state instead of describing the page (audit P14-06).
+                if(link.Content is Grid linkContent&&linkContent.Children[0] is StackPanel lines&&lines.Children.Count>1&&lines.Children[1] is TextBlock line)_liveSummaries.Add((line,group.Title));
             }
+            // The list of detail pages closes the page.
+            if(moreSurface is not null&&moreTitle is not null){body.Children.Remove(moreTitle);body.Children.Remove(moreSurface);body.Children.Add(moreTitle);body.Children.Add(moreSurface);moreSurface.Margin=new Thickness(0);}
+            RefreshLiveSummaries();PageHost.Navigated+=RefreshLiveSummaries;
             RegisterFullPage(FullKeys[i],i,FullTitles[i],i is >=1 and <=6,page);
         }
         preview.Margin=new Thickness(DesignSystem.PageInset,4,DesignSystem.PageInset,28);var previewPage=new ScrollViewer{Content=preview,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
         for(int section=0;section<8;section++)RegisterFullPage("settings-preview-"+section,section,"预览",true,previewPage);
-        PageHost.Navigated+=RestoreCurrentScroll;PageHost.Navigated+=()=>{if(PageHost.CurrentKey==FullKeys[0])SyncDockInspector();};
+        PageHost.Navigated+=RestoreCurrentScroll;PageHost.Navigated+=()=>{if(PageHost.CurrentKey==FullKeys[0])SyncDockInspector();if(_advanced.Any(c=>c.Key==PageHost.CurrentKey))SelectAdvanced(PageHost.CurrentKey,false);};
         Loaded+=(_,_)=>RestoreCurrentScroll();
         CompleteSettingsShell(footer,selected);
     }
-    // 程序坞 › 高级设置: every detailed Dock control, one link away from the inspector.
-    private ScrollViewer BuildDockAdvanced(Dictionary<int,string> details,string[] titles)
+    private readonly List<(TextBlock Line,string Title)> _liveSummaries=new();
+    private void RefreshLiveSummaries()
     {
-        var body=PageBody();body.Children.Add(PageHeader(0,"高级设置","材质、图标、动画与位置"));
-        StackPanel Group(string title){body.Children.Add(GroupTitle(title));var rows=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(rows);surface.Margin=new Thickness(0,0,0,22);body.Children.Add(surface);return rows;}
-        string[] hints={"主题、配色、透明度与圆角","折射、磨砂、高光与暗边","边框、阴影与运行点颜色"};
-        var material=Group("材质");
-        for(int g=0;g<titles.Length;g++)if(details.TryGetValue(g,out var found)){string key=found;AddRow(material,LinkRow(titles[g],g<hints.Length?hints[g]:"","advanced-material-"+g,()=>NavigateSettingsPage(key)));}
-        var dock=Group("程序坞");
-        foreach(var (key,title,hint) in new[]{("icons","图标与倒影","尺寸、间距与倒影"),("motion","动画与交互","波浪、弹跳与反馈"),("apps","应用与文件","固定项目、运行与最近使用"),("placement","位置与隐藏","屏幕边缘、显示器与自动隐藏")})
-        {string route=key;AddRow(dock,LinkRow(title,hint,"advanced-"+key,()=>NavigateSettingsPage(route)));}
-
-        return new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=false};
+        var options=_draft.ControlCenter;
+        foreach(var (line,title) in _liveSummaries)line.Text=title switch{
+            "模块与排列"=>$"显示 {options.Modules.Count(m=>m.Visible)} 个 · 共 {options.Modules.Count} 个",
+            "大小与圆角"=>$"面板 {options.Geometry.PanelScale*100:0}% · 间距 {options.Geometry.Gap:0} px",
+            "液态玻璃参数"=>options.MaterialMode!=Models.ControlCenterMaterialMode.LiquidGlass?"仅液态玻璃材质可用":options.OverrideMaterial?"单独设置":"跟随程序坞",
+            _=>line.Text};
     }
     private void RegisterFullPage(string key,int section,string title,bool detail,ScrollViewer page)
     {

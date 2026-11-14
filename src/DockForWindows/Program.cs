@@ -52,7 +52,7 @@ public static class Program
             using var widgets=new WidgetDesktopService(model);
             tracker.WindowsChanged += model.UpdateWindows;
             using var trayIcon = CreateTrayIcon();
-            using var tray = new Forms.NotifyIcon { Text = "DockForWindows · 程序坞", Icon = trayIcon, Visible = true };
+            using var tray = new Forms.NotifyIcon { Text = "DockForWin · 程序坞", Icon = trayIcon, Visible = true };
             var faults = new UiFaultPolicy();
             app.DispatcherUnhandledException += (_, e) =>
             {
