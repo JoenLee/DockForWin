@@ -34,6 +34,10 @@ public sealed partial class DockWindow : Window
     private readonly DispatcherTimer _hideDelay;
     private readonly DispatcherTimer _glassTimer;
     private readonly GlassBackdropService _glassBackdrop = new();
+    // One bitmap, rewritten in place when the pixels under the Dock change: a new ~1 MB bitmap per changed frame
+    // landed on the large-object heap and cost a full (gen 2) collection every few frames while a video or a
+    // scrolling page sat behind the Dock.
+    private System.Windows.Media.Imaging.WriteableBitmap? _dockBitmap;
     private bool _glassBusy;
     private bool _glassErrorLogged;
     private readonly ScaleTransform _fitTransform = new(1, 1);
@@ -76,6 +80,7 @@ public sealed partial class DockWindow : Window
     public DockWindow(DockViewModel model, WindowTracker tracker)
     {
         _model = model; _tracker = tracker; _palette = new(model.Settings);
+        _tracker.Log = (_, error) => _model.LogDiagnostic(LocalizedText.Get("刷新窗口列表失败"), error);
         Title = "DockForWindows";
         WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true; Background = Brushes.Transparent;
@@ -175,7 +180,18 @@ public sealed partial class DockWindow : Window
         try
         {
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
-            var frame = await Task.Run(() => _glassBackdrop.Render(handle, rectangle, radius, amount, dpi, raw: true));
+            // The control center's capture path: windows front to back, nothing read or composited under an opaque
+            // window, no GDI+, and "unchanged" without copying when nothing under the Dock changed.
+            var read = await Task.Run(() => _glassBackdrop.ReadPixels(handle, rectangle, dpi));
+            System.Windows.Media.Imaging.BitmapSource? frame = null; bool pixelsChanged = false;
+            if (read is { } pixels)
+            {
+                // The pixels are borrowed until the next read, which cannot start before this tick ends (_glassBusy).
+                if (_dockBitmap is null || _dockBitmap.PixelWidth != pixels.Width || _dockBitmap.PixelHeight != pixels.Height)
+                { _dockBitmap = new System.Windows.Media.Imaging.WriteableBitmap(pixels.Width, pixels.Height, 96, 96, PixelFormats.Bgra32, null); pixelsChanged = true; }
+                if (pixels.Changed || pixelsChanged) { _dockBitmap.WritePixels(new Int32Rect(0, 0, pixels.Width, pixels.Height), pixels.Pixels, pixels.Width * 4, 0); pixelsChanged = true; }
+                frame = _dockBitmap;
+            }
             _glassCaptureMs = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             if (!_closing && ViewSettings.Theme == DockTheme.Glass && frame is not null)
             {
@@ -186,7 +202,7 @@ public sealed partial class DockWindow : Window
                 // GlassBackdropService returns the same frame object while nothing under the Dock changed.
                 // Keep refreshing for a moment so the adaptive tint (0.4 s time constant) fully settles, then stop
                 // re-arranging and re-rendering an identical image; a new frame resumes updates immediately.
-                bool same = ReferenceEquals(frame, _surface.Backdrop) && screenBounds == _surface.BackdropScreenBounds;
+                bool same = !pixelsChanged && ReferenceEquals(frame, _surface.Backdrop) && screenBounds == _surface.BackdropScreenBounds;
                 if (!same) _glassChangedAt = now;
                 if (!same || now - _glassChangedAt < GlassSettleSeconds)
                 {

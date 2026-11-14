@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
@@ -23,7 +24,11 @@ public sealed class ControlCenterEntryService : IDisposable
     internal static event Action<Rect>? NetworkAnchorChanged;
     internal static bool IsDedicatedButton(Point point)=>!AccessoryBounds.IsEmpty&&AccessoryBounds.Contains(point);
     // Written on the UI thread, read on the hook thread.
-    private volatile Rect[] _targets=Array.Empty<Rect>();private volatile bool _intercept;
+    private volatile Rect[] _targets=Array.Empty<Rect>(),_bars=Array.Empty<Rect>();private volatile bool _intercept;
+    // The UI Automation walk of the taskbars costs explorer and this process tens of milliseconds each time. It runs
+    // every few seconds in the background, and again (at most once a second) while the pointer is on a taskbar, so
+    // the click targets are fresh when they can actually be clicked.
+    private static readonly TimeSpan BackgroundScan=TimeSpan.FromSeconds(5);private long _lastScan;private int _hoverScanQueued;
     private bool _disposed,_busy,_swallowUp;
     public bool HotkeyRegistered {get;private set;}
     public bool MouseHookActive=>_mouse.Active;public int TaskbarTargetCount=>_targets.Length;
@@ -34,26 +39,27 @@ public sealed class ControlCenterEntryService : IDisposable
         _messages.AddHook((nint h,int message,nint w,nint l,ref bool handled)=>{if(message==0x312&&w==0xD0C){handled=true;_toggle();}return 0;});
         UpdateHotkey();
         _mouse=new LowLevelMouseHook(OnMouse,"DockForWindows.TrayClicks");
-        _refresh=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1.5)};_refresh.Tick+=async(_,_)=>await RefreshTargets();_refresh.Start();_ = RefreshTargets();
+        _refresh=new DispatcherTimer{Interval=BackgroundScan};_refresh.Tick+=async(_,_)=>await RefreshTargets();_refresh.Start();_ = RefreshTargets();
     }
     private async Task RefreshTargets()
     {
-        if(_busy||_disposed)return;UpdateHotkey();_intercept=_enabled();_busy=true;
+        if(_busy||_disposed)return;UpdateHotkey();_intercept=_enabled();_busy=true;Volatile.Write(ref _lastScan,Environment.TickCount64);
         try
         {
             var rects=await Task.Run(()=>
             {
-                var list=new List<Rect>();var network=Rect.Empty;var occupied=new List<Rect>();
+                var list=new List<Rect>();var network=Rect.Empty;var occupied=new List<Rect>();var bars=new List<Rect>();
                 // One cached round trip per taskbar instead of one cross-process call per property per element.
                 var cache=new CacheRequest{AutomationElementMode=AutomationElementMode.None};cache.Add(AutomationElement.ClassNameProperty);cache.Add(AutomationElement.NameProperty);cache.Add(AutomationElement.BoundingRectangleProperty);
                 foreach(AutomationElement taskbar in AutomationElement.RootElement.FindAll(TreeScope.Children,new OrCondition(new PropertyCondition(AutomationElement.ClassNameProperty,"Shell_TrayWnd"),new PropertyCondition(AutomationElement.ClassNameProperty,"Shell_SecondaryTrayWnd"))))
                 { var handle=new nint(taskbar.Current.NativeWindowHandle);if(handle==0)continue;
+                if(NativeMethods.GetWindowRect(handle,out var barRect))bars.Add(new Rect(barRect.Left,barRect.Top,Math.Max(0,barRect.Right-barRect.Left),Math.Max(0,barRect.Bottom-barRect.Top)));
                 try{var bar=AutomationElement.FromHandle(handle);AutomationElementCollection elements;using(cache.Activate())elements=bar.FindAll(TreeScope.Descendants,System.Windows.Automation.Condition.TrueCondition);
                     foreach(AutomationElement element in elements){var current=element.Cached;if(!current.ClassName.StartsWith("SystemTray.",StringComparison.Ordinal))continue;string name=current.Name;if(!current.BoundingRectangle.IsEmpty)occupied.Add(current.BoundingRectangle);if(network.IsEmpty&&(name.StartsWith("网络",StringComparison.Ordinal)||name.StartsWith("Network",StringComparison.OrdinalIgnoreCase)))network=current.BoundingRectangle;
                     if(name.StartsWith("网络",StringComparison.Ordinal)||name.StartsWith("音量",StringComparison.Ordinal)||name.StartsWith("电源",StringComparison.Ordinal)||name.StartsWith("Network",StringComparison.OrdinalIgnoreCase)||name.StartsWith("Speakers",StringComparison.OrdinalIgnoreCase)||name.StartsWith("Volume",StringComparison.OrdinalIgnoreCase)||name.StartsWith("Battery",StringComparison.OrdinalIgnoreCase))
                     {var r=current.BoundingRectangle;if(!r.IsEmpty&&r.Width>0)list.Add(r);}}
-                }catch(ElementNotAvailableException){}catch(InvalidOperationException){} } if(!network.IsEmpty){double previous=double.NegativeInfinity;foreach(var r in occupied)if(r.Right<=network.Left&&r.Right>previous)previous=r.Right;if(network.Left-previous<network.Height*1.25)network=Rect.Empty;}return (Normal:list.ToArray(),Anchor:network);
-            });if(!_disposed){_targets=rects.Normal;if(NetworkAnchor!=rects.Anchor){NetworkAnchor=rects.Anchor;NetworkAnchorChanged?.Invoke(rects.Anchor);}}
+                }catch(ElementNotAvailableException){}catch(InvalidOperationException){} } if(!network.IsEmpty){double previous=double.NegativeInfinity;foreach(var r in occupied)if(r.Right<=network.Left&&r.Right>previous)previous=r.Right;if(network.Left-previous<network.Height*1.25)network=Rect.Empty;}return (Normal:list.ToArray(),Anchor:network,Bars:bars.ToArray());
+            });if(!_disposed){_targets=rects.Normal;_bars=rects.Bars;if(NetworkAnchor!=rects.Anchor){NetworkAnchor=rects.Anchor;NetworkAnchorChanged?.Invoke(rects.Anchor);}}
         }
         catch{}finally{_busy=false;}
     }
@@ -61,6 +67,10 @@ public sealed class ControlCenterEntryService : IDisposable
     private bool OnMouse(int message,int x,int y)
     {
         if(_disposed)return false;
+        if(message==0x200){
+            if(Environment.TickCount64-Volatile.Read(ref _lastScan)>1000){var point=new Point(x,y);foreach(var bar in _bars)if(bar.Contains(point)&&Interlocked.Exchange(ref _hoverScanQueued,1)==0){_dispatcher.BeginInvoke(async()=>{Interlocked.Exchange(ref _hoverScanQueued,0);await RefreshTargets();});break;}}
+            return false;
+        }
         if(message==0x202&&_swallowUp){_swallowUp=false;return true;}
         if(message==0x201&&_intercept&&GetAsyncKeyState(0x11)>=0)
         {var point=new Point(x,y);foreach(var target in _targets)if(target.Contains(point)){_swallowUp=true;_dispatcher.BeginInvoke(_toggle);return true;}}

@@ -101,7 +101,7 @@ internal sealed partial class SettingsWindow
         {
             if (category.Page.Parent is Panel oldPanel) oldPanel.Children.Remove(category.Page);
             else if (category.Page.Parent is Border oldBorder) oldBorder.Child = null;
-            if (category.Page.Content is FrameworkElement body) body.Margin = new Thickness(20, 0, DesignSystem.PageInset, 28);
+            if (category.Page.Content is FrameworkElement body) { body.Margin = new Thickness(20, 0, DesignSystem.PageInset, 28); SettingsPageHost.TrimTrailingSpace(body); }
             category.Page.Visibility = Visibility.Visible; category.Page.IsHitTestVisible = true; category.Page.Opacity = 1; category.Page.RenderTransform = Transform.Identity;
             _advancedHost.Child = category.Page; category.Page.ScrollToTop();
             if (animate && SystemParameters.ClientAreaAnimation && !SystemParameters.HighContrast)

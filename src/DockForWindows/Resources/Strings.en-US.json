@@ -962,5 +962,6 @@
   "保留开始按钮与托盘；任务栏由辅助工具接管，工具不可用时不会生效。": "Keep Start and the system tray; taskbar control requires the helper tool.",
   "自动": "Auto",
   "快捷键": "Shortcut",
-  "任务栏": "Taskbar"
+  "任务栏": "Taskbar",
+  "刷新窗口列表失败": "Refreshing the window list failed"
 }

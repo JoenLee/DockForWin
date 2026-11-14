@@ -23,7 +23,7 @@ internal partial class SettingsShellWindow
         _pages.Register("performance",10,LocalizedText.Get("性能"),true,BuildPerformance);
         _pages.Register("general",11,LocalizedText.Get("通用设置"),false,()=>{
             // The tab names the page; preferences that are a single control live right here instead of a page each.
-            var (page,body)=Page(LocalizedText.Get("通用"),"");body.Margin=new Thickness(DesignSystem.PageInset,18,DesignSystem.PageInset,28);var group=Group(body,LocalizedText.Get("偏好"));BuildGeneralPreferences(group);
+            var (page,body)=Page(LocalizedText.Get("通用"),"");body.Margin=new Thickness(DesignSystem.PageInset,10,DesignSystem.PageInset,28);var group=Group(body,LocalizedText.Get("偏好"));BuildGeneralPreferences(group);
             var more=Group(body,LocalizedText.Get("关于与诊断"));OverviewLink(more,LocalizedText.Get("性能"),LocalizedText.Get("当前进程的内存快照"),"performance");OverviewLink(more,LocalizedText.Get("关于 DockForWin"),LocalizedText.Get("版本 ")+typeof(SettingsShellWindow).Assembly.GetName().Version?.ToString(3),"about");return page;
         });
         _pages.Register("about",12,LocalizedText.Get("关于"),true,BuildAbout);

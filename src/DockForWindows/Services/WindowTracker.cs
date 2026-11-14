@@ -20,14 +20,17 @@ public sealed class WindowTracker : IDisposable
     private bool _busy;
     private bool _disposed;
     private int _queued;
+    private long _pendingSince = -1;
     public event Action<IReadOnlyList<TrackedWindow>>? WindowsChanged;
+    // Failures of a refresh are reported here instead of escaping an async void into the dispatcher.
+    public Action<string, Exception>? Log { get; set; }
     public WindowTracker(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;
         _callback = OnNativeEvent;
         _refresh = new DispatcherTimer(TimeSpan.FromSeconds(5), DispatcherPriority.Background, (_, _) => Refresh(), dispatcher);
         _debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
-        _debounce.Tick += (_, _) => { _debounce.Stop(); Refresh(); };
+        _debounce.Tick += (_, _) => { _debounce.Stop(); _pendingSince = -1; Refresh(); };
     }
     public void Start()
     {
@@ -44,7 +47,13 @@ public sealed class WindowTracker : IDisposable
         _dispatcher.BeginInvoke(() =>
         {
             Interlocked.Exchange(ref _queued, 0);
-            if (!_disposed && !_debounce.IsEnabled) _debounce.Start();
+            if (_disposed) return;
+            // Debounce: refresh 180 ms after the events stop, but never wait longer than a second while they keep coming
+            // (a window being dragged), so a burst costs one enumeration instead of one every 180 ms.
+            long now = Environment.TickCount64;
+            if (_pendingSince < 0) _pendingSince = now;
+            if (now - _pendingSince >= 1000) { _debounce.Stop(); _pendingSince = -1; Refresh(); return; }
+            _debounce.Stop(); _debounce.Start();
         });
     }
     public async void Refresh()
@@ -56,6 +65,7 @@ public sealed class WindowTracker : IDisposable
             var windows = await Task.Run(Snapshot);
             if (!_disposed) WindowsChanged?.Invoke(windows);
         }
+        catch (Exception ex) { Log?.Invoke("refresh", ex); }
         finally { _busy = false; }
     }
     public static IReadOnlyList<TrackedWindow> Snapshot()

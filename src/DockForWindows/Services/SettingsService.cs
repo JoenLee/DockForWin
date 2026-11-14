@@ -87,9 +87,16 @@ public sealed class SettingsService
     {
         settings.Normalize();
         var temporary = SettingsPath + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(settings, Options), new UTF8Encoding(false));
-        if (File.Exists(SettingsPath)) File.Replace(temporary, SettingsPath, SettingsPath + ".bak");
-        else File.Move(temporary, SettingsPath);
+        try
+        {
+            // Flushed to disk before the swap: after a power loss the file is either the old or the new settings,
+            // never an empty one that Load would treat as corrupt and replace with defaults.
+            var bytes = new UTF8Encoding(false).GetBytes(JsonSerializer.Serialize(settings, Options));
+            using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None)) { stream.Write(bytes); stream.Flush(true); }
+            if (File.Exists(SettingsPath)) File.Replace(temporary, SettingsPath, SettingsPath + ".bak");
+            else File.Move(temporary, SettingsPath);
+        }
+        catch { try { File.Delete(temporary); } catch { } throw; }
     }
 
     // Background workers (capture, WLAN, audio) log too; concurrent appends used to lose lines to sharing violations.

@@ -92,7 +92,7 @@ internal partial class SettingsShellWindow
     private static StackPanel Group(Panel body,string title)
     {
         body.Children.Add(GroupTitle(title));
-        var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(content);surface.Margin=new Thickness(0,0,0,26);body.Children.Add(surface);return content;
+        var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(content);surface.Margin=new Thickness(0,0,0,22);body.Children.Add(surface);return content;
     }
     protected static Border RowSeparator(){var line=new Border{Height=1,SnapsToDevicePixels=true};line.SetResourceReference(Border.BackgroundProperty,"SettingsLine");return line;}
     protected static void AddRow(Panel group,UIElement child)
@@ -131,7 +131,7 @@ internal partial class SettingsShellWindow
     // Navigation row: title, optional one-line summary and a chevron; the whole row highlights on hover.
     protected static Button LinkRow(string title,string subtitle,string id,Action action)
     {
-        var text=new StackPanel{Margin=new Thickness(0,11,0,11),VerticalAlignment=VerticalAlignment.Center};text.Children.Add(new TextBlock{Text=title,FontSize=DesignSystem.Body});if(!string.IsNullOrWhiteSpace(subtitle))text.Children.Add(Muted(subtitle,new Thickness(0,2,18,0)));
+        var text=new StackPanel{Margin=new Thickness(0,9,0,9),VerticalAlignment=VerticalAlignment.Center};text.Children.Add(new TextBlock{Text=title,FontSize=DesignSystem.Body});if(!string.IsNullOrWhiteSpace(subtitle))text.Children.Add(Muted(subtitle,new Thickness(0,2,18,0)));
         var content=new Grid{MinHeight=DesignSystem.RowHeight};content.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});content.ColumnDefinitions.Add(new(){Width=GridLength.Auto});content.Children.Add(text);
         var chevron=new System.Windows.Shapes.Path{Data=Geometry.Parse("M1,1 L5.5,5.5 L1,10"),StrokeThickness=1.7,StrokeStartLineCap=PenLineCap.Round,StrokeEndLineCap=PenLineCap.Round,StrokeLineJoin=PenLineJoin.Round,Width=7,Height=11,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,2,0)};chevron.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty,"SettingsTertiary");Grid.SetColumn(chevron,1);content.Children.Add(chevron);
         var button=new Button{Content=content,HorizontalContentAlignment=HorizontalAlignment.Stretch,Template=LinkTemplate(),Padding=new Thickness(DesignSystem.RowInset-8,0,DesignSystem.RowInset-8,0),Margin=new Thickness(-DesignSystem.RowInset,0,-DesignSystem.RowInset,0)};AutomationProperties.SetAutomationId(button,id);AutomationProperties.SetName(button,title);button.Click+=(_,_)=>action();return button;

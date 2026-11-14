@@ -1,5 +1,7 @@
 # Windows Liquid Glass 控制中心项目交接
 
+> 性能与后端审查（2026-11-14）：见 `docs/PERF-REVIEW-2026-11-14.md`。设置窗口整窗遮罩改为 Clip、滚动期间整页缓存、阴影缓存挂在父级；`LiquidGlassEffect` 每个实例自带 PixelShader（修复关闭后的整窗泄漏）；程序坞采集改走 `ReadPixels` 并复用位图；刷新率试用不再写注册表；任务栏 UIA 扫描降频。设置页去掉页尾叠加留白、收紧间距、默认窗口高 640，默认大小下装得下的页面不再出现滚动条。
+
 > 控制中心性能（2026-11-13）：见 `docs/CONTROL-CENTER-PERFORMANCE-2026-11-13.md`。控制中心改为非分层窗口（DWM 透明）；背景采集改走 `GlassBackdropService.ReadPixels`（从上到下遮挡剔除、无变化不上传、静止降频）；控制中心玻璃板用单个合并着色器（`LiquidGlass.Fused.hlsl`），只处理板下区域，静止才缓存。测量用 `--measure-control-center-perf`。下文"背景采样与坐标"中控制中心部分以该说明为准。
 
 > 最新视觉修正：按用户图二改为小连续圆角，轮播内滚轮不再滚动页面，卡片边缘统一约22 DIP间距。71项定向检查通过；详见 docs/APP-WIDGET-CORNERS-2026-11-11.md。该说明优先于下文完整超椭圆及边界滚轮冒泡的旧设计。

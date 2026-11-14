@@ -8,18 +8,23 @@ namespace DockForWindows.Views;
 
 public sealed class LiquidGlassEffect : ShaderEffect
 {
-    private static readonly PixelShader Shader = new() { UriSource = new Uri("pack://application:,,,/DockForWindows;component/Shaders/LiquidGlass.ps") };
-    private static PixelShader? _controlCenterLighting, _fused;
+    // Each effect owns its PixelShader objects. WPF subscribes every ShaderEffect to its shader's (internal)
+    // bytecode-changed event whether or not the shader is frozen, so one static shader shared by all effects kept
+    // every effect ever created reachable, and through it the element and the whole window (each dismissed control
+    // center stayed alive, about 10-25 MB each).
+    private const string StandardFile="LiquidGlass.ps",FusedFile="LiquidGlass.Fused.ps",LightingFile="LiquidGlass.ControlCenterLighting.ps";
+    private PixelShader? _standard,_fusedShader,_lightingShader;
+    private static PixelShader Load(string file)=>new(){UriSource=new Uri("pack://application:,,,/DockForWindows;component/Shaders/"+file)};
     // The control center's plate in one pass (Shaders/LiquidGlass.Fused.hlsl) instead of this refraction pass
     // followed by a separate frost and lighting pass.
     internal void SetFused(bool fused)
     {
-        var shader=fused?(_fused??=new PixelShader{UriSource=new Uri("pack://application:,,,/DockForWindows;component/Shaders/LiquidGlass.Fused.ps")}):Shader;
+        var shader=fused?(_fusedShader??=Load(FusedFile)):(_standard??=Load(StandardFile));
         if(PixelShader!=shader)PixelShader=shader;
     }
     internal void SetControlCenterLighting(bool enabled)
     {
-        var shader=enabled?(_controlCenterLighting??=new PixelShader{UriSource=new Uri("pack://application:,,,/DockForWindows;component/Shaders/LiquidGlass.ControlCenterLighting.ps")}):Shader;
+        var shader=enabled?(_lightingShader??=Load(LightingFile)):(_standard??=Load(StandardFile));
         if(PixelShader!=shader)PixelShader=shader;
     }
     public static readonly DependencyProperty InputProperty = RegisterPixelShaderSamplerProperty(nameof(Input), typeof(LiquidGlassEffect), 0, SamplingMode.Bilinear);
@@ -56,7 +61,7 @@ public sealed class LiquidGlassEffect : ShaderEffect
     public Point4D Frost { get => (Point4D)GetValue(FrostProperty); set { if (Frost != value) SetValue(FrostProperty, value); } }
     public LiquidGlassEffect()
     {
-        PixelShader = Shader;
+        PixelShader = _standard = Load(StandardFile);
         foreach (var property in new[] { InputProperty, ClearInputProperty, SourceSizeProperty, PlateOriginProperty, PlateSizeProperty, ShapeProperty, MaterialProperty, TextureProperty, WorldOriginProperty, LightingProperty, SidesProperty, LightingOnlyProperty, TintProperty, ControlProfileProperty, FrostProperty }) UpdateShaderValue(property);
     }
 }

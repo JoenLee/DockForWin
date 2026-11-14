@@ -37,19 +37,21 @@ public static class DisplayControlService
             return rates.ToArray();
         }finally{Marshal.FreeHGlobal(p);}
     }
-    private static void SetRate(string device,int rate)
+    // persist=false changes the mode for this session only (no CDS_UPDATEREGISTRY): a trial that is never confirmed,
+    // including one cut short by a crash or a killed process, leaves the saved mode untouched.
+    private static void SetRate(string device,int rate,bool persist)
     {
         var p=ModeBuffer();try{
             if(!EnumDisplaySettingsEx(device,-1,p,0))throw new Win32Exception(Marshal.GetLastWin32Error());Marshal.WriteInt32(p,72,Marshal.ReadInt32(p,72)|0x400000);Marshal.WriteInt32(p,184,rate);
-            int test=ChangeDisplaySettingsEx(device,p,0,2,0);if(test!=0)throw new InvalidOperationException(LocalizedText.Format($"显示器拒绝此刷新率（{test}）。"));int result=ChangeDisplaySettingsEx(device,p,0,1,0);if(result!=0)throw new InvalidOperationException(LocalizedText.Format($"未能切换刷新率（{result}）。"));
+            int test=ChangeDisplaySettingsEx(device,p,0,2,0);if(test!=0)throw new InvalidOperationException(LocalizedText.Format($"显示器拒绝此刷新率（{test}）。"));int result=ChangeDisplaySettingsEx(device,p,0,persist?1u:0u,0);if(result!=0)throw new InvalidOperationException(LocalizedText.Format($"未能切换刷新率（{result}）。"));
         }finally{Marshal.FreeHGlobal(p);}
     }
     public sealed class RateTrial:IDisposable
     {
-        private readonly object _sync=new();private readonly string _device;private readonly int _original;private readonly Timer _timer;private bool _finished;public DateTimeOffset Deadline{get;}=DateTimeOffset.UtcNow.AddSeconds(15);public Exception? RestoreError{get;private set;}
-        internal RateTrial(string device,int rate){_device=device;_original=ReadRefreshRate(device);if(!RefreshRates(device).Contains(rate))throw new InvalidOperationException(LocalizedText.Get("该显示器未报告支持此刷新率。"));SetRate(device,rate);_timer=new Timer(_=>Dispose(),null,TimeSpan.FromSeconds(15),Timeout.InfiniteTimeSpan);}
-        public void Confirm(){lock(_sync){if(_finished)throw new InvalidOperationException(LocalizedText.Get("显示设置已恢复，请重新选择。"));_finished=true;_timer.Dispose();}}
-        public void Dispose(){lock(_sync){if(_finished)return;_finished=true;_timer.Dispose();try{SetRate(_device,_original);}catch(Exception ex){RestoreError=ex;}}}
+        private readonly object _sync=new();private readonly string _device;private readonly int _original,_rate;public Exception? PersistError{get;private set;}private readonly Timer _timer;private bool _finished;public DateTimeOffset Deadline{get;}=DateTimeOffset.UtcNow.AddSeconds(15);public Exception? RestoreError{get;private set;}
+        internal RateTrial(string device,int rate){_device=device;_original=ReadRefreshRate(device);_rate=rate;if(!RefreshRates(device).Contains(rate))throw new InvalidOperationException(LocalizedText.Get("该显示器未报告支持此刷新率。"));SetRate(device,rate,false);_timer=new Timer(_=>Dispose(),null,TimeSpan.FromSeconds(15),Timeout.InfiniteTimeSpan);}
+        public void Confirm(){lock(_sync){if(_finished)throw new InvalidOperationException(LocalizedText.Get("显示设置已恢复，请重新选择。"));_finished=true;_timer.Dispose();try{SetRate(_device,_rate,true);}catch(Exception ex){PersistError=ex;}}}
+        public void Dispose(){lock(_sync){if(_finished)return;_finished=true;_timer.Dispose();try{SetRate(_device,_original,false);}catch(Exception ex){RestoreError=ex;}}}
     }
     public static RateTrial TryRefreshRate(string device,int rate)=>new(device,rate);
     private static Target FindTarget(string device)

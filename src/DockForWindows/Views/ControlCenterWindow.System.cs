@@ -48,7 +48,9 @@ public sealed partial class ControlCenterWindow
             }finally{_updating=false;}
             var light=await brightness;if(_closing)return;_updating=true;
             _brightness.IsEnabled=light.Value.HasValue;if(light.Value is byte b){if(!_brightness.IsMouseCaptureWithin&&!_brightnessDelay.IsEnabled&&!_brightnessBusy)_brightness.Value=b;Status(ControlModule.Brightness,$"{_brightness.Value:0}%");}else{Status(ControlModule.Brightness,LocalizedText.Get("显示器不支持调节"));_brightness.ToolTip=light.Error??LocalizedText.Get("内置屏幕使用 WMI；未提供亮度接口的外接屏幕请使用显示器按键。");}
-            try{Status(ControlModule.Focus,MediaControlService.ReadFocus()==true?LocalizedText.Get("专注中"):LocalizedText.Get("Windows 专注"));}catch{Status(ControlModule.Focus,LocalizedText.Get("Windows 专注"));}try{Status(ControlModule.Projection,await Task.Run(ProjectionService.ReadTopology));}catch{Status(ControlModule.Projection,LocalizedText.Get("投影与无线显示"));}
+            // A WinRT query: off the UI thread like the other readings of this poll.
+            var focus=await Task.Run(()=>{try{return MediaControlService.ReadFocus();}catch{return (bool?)null;}});if(_closing)return;
+            Status(ControlModule.Focus,focus==true?LocalizedText.Get("专注中"):LocalizedText.Get("Windows 专注"));try{Status(ControlModule.Projection,await Task.Run(ProjectionService.ReadTopology));}catch{Status(ControlModule.Projection,LocalizedText.Get("投影与无线显示"));}
             await UpdateExtraState();if(_closing)return;
             _ = RefreshMedia();
         }
@@ -70,9 +72,12 @@ public sealed partial class ControlCenterWindow
         }
         catch(Exception ex){Report(ex);}finally{_networkPolling=false;}
     }
+    private static string? _loggedNetworkError;
     private void SetNetworkError(string? message,Exception? error)
     {
         if(message==_networkError)return;_networkError=message;
+        // Once per process for the same condition: every opening of the panel used to log the same location notice again.
+        if(message==_loggedNetworkError)return;_loggedNetworkError=message;
         if(message is not null)_log?.Invoke(error is null?LocalizedText.Get("读取 Wi-Fi：")+message:LocalizedText.Get("读取 Wi-Fi"),error);
     }
     private void UpdateWifiStatus()

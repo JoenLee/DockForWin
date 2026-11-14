@@ -42,12 +42,21 @@ public static class SystemControlService
     public static void SetMicrophoneMute(bool muted)=>Audio(v=>{var context=Guid.Empty;v.SetMute(muted,ref context);return true;},1);
     private static void Release(object? value){if(value is not null&&Marshal.IsComObject(value))Marshal.FinalReleaseComObject(value);}
 
+    // The control center reads brightness every poll (900 ms); one connected WMI scope is reused instead of
+    // connecting to root\wmi on every reading, and rebuilt after a failure (e.g. the WMI service restarted).
+    private static System.Management.ManagementScope? _wmi;
+    private static readonly object WmiGate=new();
+    private static System.Management.ManagementScope Wmi(){lock(WmiGate){if(_wmi is null){var scope=new System.Management.ManagementScope(@"root\wmi");scope.Connect();_wmi=scope;}return _wmi;}}
     public static byte? ReadBrightness()
     {
-        using var search=new System.Management.ManagementObjectSearcher(@"root\wmi","SELECT CurrentBrightness FROM WmiMonitorBrightness WHERE Active=True");
-        using var results=search.Get();
-        foreach(System.Management.ManagementObject item in results){using(item)return Convert.ToByte(item["CurrentBrightness"]);}
-        return null;
+        try
+        {
+            using var search=new System.Management.ManagementObjectSearcher(Wmi(),new System.Management.ObjectQuery("SELECT CurrentBrightness FROM WmiMonitorBrightness WHERE Active=True"));
+            using var results=search.Get();
+            foreach(System.Management.ManagementObject item in results){using(item)return Convert.ToByte(item["CurrentBrightness"]);}
+            return null;
+        }
+        catch{lock(WmiGate)_wmi=null;throw;}
     }
     public static bool SetBrightness(double percent)
     {

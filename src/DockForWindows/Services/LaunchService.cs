@@ -77,7 +77,17 @@ public sealed class LaunchService
         }
         return pin;
     }
+    // Walking shell:AppsFolder is hundreds of cross-process COM calls on the single icon/shell worker. A pin whose
+    // target no longer exists asked for it on every start and every icon reload; remember the answer (a miss only
+    // for ten minutes, so an app installed later is still found).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Id, long At)> ApplicationIds = new(StringComparer.OrdinalIgnoreCase);
     public static string FindApplicationId(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "";
+        if (ApplicationIds.TryGetValue(name, out var known) && (known.Id.Length > 0 || Environment.TickCount64 - known.At < 600_000)) return known.Id;
+        string found = FindApplicationIdCore(name); ApplicationIds[name] = (found ?? "", Environment.TickCount64); return found ?? "";
+    }
+    private static string FindApplicationIdCore(string name)
     {
         object? shell = null, folder = null, items = null;
         try
@@ -85,7 +95,8 @@ public sealed class LaunchService
             shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!);
             folder = ((dynamic)shell!).NameSpace("shell:AppsFolder");
             items = ((dynamic)folder!).Items();
-            for (int i = 0; i < (int)((dynamic)items).Count; i++)
+            int count = (int)((dynamic)items).Count;
+            for (int i = 0; i < count; i++)
             {
                 object? item = null;
                 try

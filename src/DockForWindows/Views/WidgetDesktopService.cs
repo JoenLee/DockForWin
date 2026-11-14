@@ -75,9 +75,12 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     }
     internal async Task Place(WidgetDesktopWindow window,Point physical)
     {
-        try{var draft=_model.Settings.Widgets.Copy();var item=draft.Instances.FirstOrDefault(x=>x.InstanceId==window.Instance.InstanceId);if(item==null)return;
+        try{var id=window.Instance.InstanceId;if(!_model.Settings.Widgets.Instances.Any(x=>x.InstanceId==id))return;
             var screen=Forms.Screen.FromPoint(new System.Drawing.Point((int)physical.X,(int)physical.Y));double dpi=WidgetDesktopLayout.Dpi(screen),pitch=(WidgetSize.Unit+WidgetSize.Gap)*dpi/96;
-            var occupied=(await WidgetDesktopLayout.Icons()).Concat(OtherBounds(item.InstanceId)).ToArray();if(_disposed)return;
+            var icons=await WidgetDesktopLayout.Icons();if(_disposed)return;
+            // Copied after the await (up to seconds while desktop icons are read), so a save made meanwhile is not overwritten.
+            var draft=_model.Settings.Widgets.Copy();var item=draft.Instances.FirstOrDefault(x=>x.InstanceId==id);if(item==null)return;
+            var occupied=icons.Concat(OtherBounds(item.InstanceId)).ToArray();
             int desiredX=(int)Math.Round((physical.X-screen.WorkingArea.Left)/pitch),desiredY=(int)Math.Round((physical.Y-screen.WorkingArea.Top)/pitch);
             if(!WidgetDesktopLayout.FindSpace(item,screen,dpi,occupied,out int col,out int row,desiredX,desiredY))throw new InvalidOperationException(LocalizedText.Get("没有合适的空位，位置已恢复。"));
             item.Column=col;item.Row=row;item.Monitor=screen.DeviceName;if(!_model.TrySaveWidgets(draft))window.Position();
@@ -138,7 +141,7 @@ internal sealed class WidgetDesktopWindow : Window
         PreviewMouseLeftButtonDown+=(_,e)=>{if(Instance.Locked||Interactive(e.OriginalSource as DependencyObject))return;GetCursorPos(out var p);_press=new(p.X,p.Y);_origin=PhysicalTopLeft();_dragging=false;};
         PreviewMouseMove+=(_,e)=>{if(_press==null||e.LeftButton!=MouseButtonState.Pressed)return;GetCursorPos(out var cursor);var delta=new Point(cursor.X-_press.Value.X,cursor.Y-_press.Value.Y);
             if(!_dragging&&Math.Abs(delta.X)+Math.Abs(delta.Y)<7)return;if(!_dragging){_dragging=true;CaptureMouse();_host.SetGestureActive(true);}MovePhysical(_origin.X+delta.X,_origin.Y+delta.Y);e.Handled=true;};
-        PreviewMouseLeftButtonUp+=async(_,e)=>{if(_press==null)return;bool moved=_dragging;_press=null;_dragging=false;if(IsMouseCaptured)ReleaseMouseCapture();_host.SetGestureActive(false);if(moved){var at=PhysicalTopLeft();await service.Place(this,at);e.Handled=true;}};
+        PreviewMouseLeftButtonUp+=async(_,e)=>{if(_press==null)return;bool moved=_dragging;_press=null;_dragging=false;if(IsMouseCaptured)ReleaseMouseCapture();_host.SetGestureActive(false);if(moved){e.Handled=true;var at=PhysicalTopLeft();await service.Place(this,at);}};
         LostMouseCapture+=(_,_)=>{if(_dragging){_dragging=false;_press=null;Position();_host.SetGestureActive(false);}};
         Closed+=(_,_)=>{_press=null;if(IsMouseCaptured)ReleaseMouseCapture();};
     }

@@ -39,9 +39,9 @@ internal sealed partial class SettingsWindow
 
     private FrameworkElement BuildAppearanceInspector(Func<int, string?> detailKey,FrameworkElement advanced)
     {
-        var page = new StackPanel { Margin = new Thickness(DesignSystem.PageInset, 18, DesignSystem.PageInset, 18) };
+        var page = new StackPanel { Margin = new Thickness(DesignSystem.PageInset, 10, DesignSystem.PageInset, 18) };
 
-        if(_live.Parent is Panel previewParent)previewParent.Children.Remove(_live);_live.Margin=new Thickness(0,0,0,18);page.Children.Add(_live);
+        if(_live.Parent is Panel previewParent)previewParent.Children.Remove(_live);_live.Margin=new Thickness(0,0,0,10);page.Children.Add(_live);
 
         _material = Segmented(new[] { LocalizedText.IsEnglish ? "Glass" : LocalizedText.Get("液态玻璃"), LocalizedText.Get("浅色"), LocalizedText.Get("深色") }, 0); _material.SelectedIndex = MaterialIndex();
         AutomationProperties.SetAutomationId(_material, "dock-material"); AutomationProperties.SetName(_material, LocalizedText.Get("材质"));
@@ -121,7 +121,7 @@ internal sealed partial class SettingsWindow
         {
             value.Text = $"{slider.Value:0}%"; if (!_ready || _updating) return;
             _draft.Appearance.CornerRadius = slider.Value; _updating = true; _ranges["corner-radius"].Value = slider.Value; _updating = false;
-            _glassOnlyPreview = false; QueuePreview(); RefreshStage();
+            _glassOnlyPreview = false; QueuePreview(); RefreshStageMaterial();
         };
         _quickSync.Add(() => slider.Value = _draft.Appearance.CornerRadius);
         return Cell(LocalizedText.Get("圆角"), slider, value);
@@ -240,17 +240,7 @@ internal sealed partial class SettingsWindow
         // The desktop picture itself when it can be read, screen-aligned; the bundled picture otherwise.
         _stageBrush.ImageSource = frost?.Sharp ?? (ImageSource)_wallpaper; _stageCover = Rect.Empty; // a still picture: the whole desktop, centred
         RenderOptions.SetBitmapScalingMode(_stageBrush, BitmapScalingMode.HighQuality); _stageWall.Fill = _stageBrush;
-        var p = new Palette(_draft); bool glass = Glass; var tint = GlassTint.Resolve(_draft);
-        foreach (var surface in new[] { _stageDock, _stageCenter })
-        {
-            surface.Fill = p.Surface; surface.Stroke = p.Line; surface.StrokeWidth = glass ? 0 : p.BorderThickness; surface.UseGlass = glass;
-            surface.GlassIntensity = p.GlassIntensity; surface.GlassOpacity = _draft.GlassOpacity; surface.GlassFrost = _draft.GlassFrost; surface.GlassDistortion = _draft.GlassDistortion;
-            surface.GlassHighlight = _draft.GlassHighlight; surface.GlassHighlightWidth = _draft.GlassHighlightWidth; surface.GlassSideDarkness = _draft.GlassSideDarkness; surface.GlassTint = _draft.GlassTint; surface.GlassTintColor = tint;
-            surface.InvalidateVisual();
-        }
-        _stageDock.Radius = p.CornerRadius; _stageCenter.Radius = 26;
-        _stageDock.Effect = p.ShadowEnabled ? new DropShadowEffect { BlurRadius = p.ShadowBlur, ShadowDepth = 4, Opacity = p.ShadowOpacity } : null;
-        _stageCenter.Effect = new DropShadowEffect { BlurRadius = 24, ShadowDepth = 6, Direction = 270, Opacity = .22 };
+        var p = ApplyStageMaterial();
         _stageIcons.Children.Clear(); var sample = _draft.Copy();
         var items = _dock.Model.DisplayItems.Where(i => i.IsPinned).Take(8).ToArray();
         foreach (var item in items) _stageIcons.Children.Add(new DockTile(item, p, sample) { IsHitTestVisible = false, Focusable = false });
@@ -261,6 +251,33 @@ internal sealed partial class SettingsWindow
         _stageFit.MaxWidth=Math.Max(1,_stage.ActualWidth-40);_stageFit.MaxHeight=StageHeight-44;
         Dispatcher.BeginInvoke(RefreshStageBackdrop, DispatcherPriority.Render);
     }
+    // While a slider is dragged only the plates' material follows the pointer; the icons, the backdrop pictures and
+    // the desktop preview are rebuilt by the 60 ms preview flush (FlushPreview -> RefreshStage).
+    private void RefreshStageMaterial() { if (_ready && _stage.IsLoaded) ApplyStageMaterial(); }
+    private Palette ApplyStageMaterial()
+    {
+        var p = new Palette(_draft); bool glass = Glass; var tint = GlassTint.Resolve(_draft);
+        foreach (var surface in new[] { _stageDock, _stageCenter })
+        {
+            surface.Fill = p.Surface; surface.Stroke = p.Line; surface.StrokeWidth = glass ? 0 : p.BorderThickness; surface.UseGlass = glass;
+            surface.GlassIntensity = p.GlassIntensity; surface.GlassOpacity = _draft.GlassOpacity; surface.GlassFrost = _draft.GlassFrost; surface.GlassDistortion = _draft.GlassDistortion;
+            surface.GlassHighlight = _draft.GlassHighlight; surface.GlassHighlightWidth = _draft.GlassHighlightWidth; surface.GlassSideDarkness = _draft.GlassSideDarkness; surface.GlassTint = _draft.GlassTint; surface.GlassTintColor = tint;
+            surface.InvalidateVisual();
+        }
+        _stageDock.Radius = p.CornerRadius; _stageCenter.Radius = 26;
+        // Shadows are updated in place: a new effect object is a new GPU resource on every call.
+        if (!p.ShadowEnabled) _stageDock.Effect = null;
+        else
+        {
+            if (_stageDock.Effect is not DropShadowEffect dock) _stageDock.Effect = dock = new DropShadowEffect { ShadowDepth = 4 };
+            if (dock.BlurRadius != p.ShadowBlur) dock.BlurRadius = p.ShadowBlur;
+            if (dock.Opacity != p.ShadowOpacity) dock.Opacity = p.ShadowOpacity;
+        }
+        if (_stageCenter.Effect is not DropShadowEffect) _stageCenter.Effect = new DropShadowEffect { BlurRadius = 24, ShadowDepth = 6, Direction = 270, Opacity = .22 };
+        return p;
+    }
+    // The last picture given to each plate; an unchanged crop at an unchanged size is not rendered again.
+    private readonly Dictionary<DockSurface, (BitmapSource Picture, Rect Viewbox, int Width, int Height)> _stageBackdrops = new();
     // Maps the stage's screen rectangle into the picture, then gives each glass object the piece of the picture
     // behind it (padded so the lens can bend light in from beyond its edge) at its own pixel size.
     private void RefreshStageBackdrop()
@@ -283,9 +300,11 @@ internal sealed partial class SettingsWindow
             var brush = new ImageBrush(picture) { ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill };
             if (_stageCover.IsEmpty) { var whole = Map(origin, far); brush.Viewbox = new Rect(whole.X + (a.X - origin.X) / (far.X - origin.X) * whole.Width, whole.Y + (a.Y - origin.Y) / (far.Y - origin.Y) * whole.Height, whole.Width * w / (far.X - origin.X), whole.Height * h / (far.Y - origin.Y)); }
             else brush.Viewbox = Map(a, b);
+            if (surface.Backdrop is not null && _stageBackdrops.TryGetValue(surface, out var last) && ReferenceEquals(last.Picture, picture) && last.Viewbox == brush.Viewbox && last.Width == w && last.Height == h)
+            { surface.BackdropScreenBounds = new Rect(a.X, a.Y, w, h); continue; }
             var visual = new DrawingVisual(); using (var dc = visual.RenderOpen()) dc.DrawRectangle(brush, null, new Rect(0, 0, w, h));
             var bitmap = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32); bitmap.Render(visual); bitmap.Freeze();
-            surface.BackdropScreenBounds = new Rect(a.X, a.Y, w, h); surface.Backdrop = bitmap;
+            surface.BackdropScreenBounds = new Rect(a.X, a.Y, w, h); surface.Backdrop = bitmap; _stageBackdrops[surface] = (picture, brush.Viewbox, w, h);
         }
     }
     // The bundled picture, cropped to cover a w×h area (UniformToFill), in its own pixels.
