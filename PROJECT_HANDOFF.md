@@ -469,3 +469,9 @@ GUI 检查可能打开置顶测试窗口、操作鼠标、访问实际系统状�
 - 任务栏小按钮在任务栏被点击后重新置顶，按下由鼠标钩子直接处理，网络按钮单次扫描丢失不再隐藏。
 - 设置窗口改为 WS_POPUP + DWM 透明合成，自管命中测试和缩放（`SettingsShellWindow.Composition.cs`），不再用 WindowChrome；代价是没有边缘贴靠和 Win+方向键。
 - 入场帧率瓶颈是核显上 WPF 的玻璃效果层本身，不是着色器算法；测量和待定方案见 docs/PERF-REVIEW-2026-11-14.md 第二轮。
+
+## 34. 2026-11-15 桌面小组件：新式桌面可见、控制中心玻璃映出小组件
+
+- 新式桌面（Win11 26H2 等，GetShellWindow 带 WS_EX_NOREDIRECTIONBITMAP 0x200000）不会绘制其他进程挂进 Progman 的子窗口：小组件建好了、能命中测试，但屏幕上看不见。`WidgetDesktopWindow.Attach` 在这种桌面上改成独立的 toolwindow 顶层窗口，始终放在桌面窗口正上方：点击不激活（WM_MOUSEACTIVATE 返回 MA_NOACTIVATE），WM_WINDOWPOSCHANGING 拦截上提，前台窗口切换和 5 秒定时器都会把它放回桌面上方。旧式桌面仍然走原来的 WS_CHILD + SetParent，代码路径不变。
+- 旧式桌面上，桌面的 WGC 捕获和 PrintWindow 都不含小组件，所以控制中心/Dock 玻璃映出的是壁纸。现在每个子窗口小组件把自己渲染的像素发布到 `DesktopWidgetLayers`，`GlassBackdropService.ReadPixels` 把它们叠在桌面层上；新式桌面的独立窗口本来就能直接被采到，不登记。
+- 检查：`--verify-widget-desktop` 新增层次检查（独立窗口紧贴桌面上方）或采样检查（玻璃样本里有小组件像素）；`--verify-widget-desktop-visual` 需要人按 Win+D 让桌面露出来，再比对屏幕像素。新式桌面在屏幕上是否可见只靠用户目测确认，Win+D 下的自动检查没有成功过。

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -26,6 +27,10 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     private bool _disposed;
     private bool _validating;
     private int _shellTicks;
+    // Desktop widgets that are top-level windows (see WidgetDesktopWindow.Attach) follow the desktop in z-order;
+    // "show desktop" (Win+D) raises the desktop, so they are moved back above it whenever the foreground changes.
+    private readonly WinEventProc _foregroundChanged;
+    private nint _foregroundHook;
     internal WidgetRuntime Runtime {get;}
     internal static WidgetDesktopService? Current {get;private set;}
     public bool IsAvailable=>!_disposed&&WidgetDesktopLayout.DesktopParent()!=0;
@@ -35,9 +40,14 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     {
         _model=model;Current=this;Runtime=new(Application.Current.Dispatcher,()=>model.Settings.Widgets,model.TrySaveWidgets,System.IO.Path.Combine(model.DataDirectory,"widget-media"));
         Runtime.Changed+=Refresh;model.WidgetSettingsChanged+=Reconcile;
-        _shellCheck=new DispatcherTimer(TimeSpan.FromSeconds(5),DispatcherPriority.Background,(_,_)=>{if(_windows.Values.Any(w=>!w.Attached))Reconcile();foreach(var w in _windows.Values)w.RefreshOcclusion();if(++_shellTicks%6==0)_ =ValidatePositions();},Application.Current.Dispatcher);
+        _shellCheck=new DispatcherTimer(TimeSpan.FromSeconds(5),DispatcherPriority.Background,(_,_)=>{if(_windows.Values.Any(w=>!w.Attached))Reconcile();foreach(var w in _windows.Values){w.FollowDesktop();w.RefreshOcclusion();}if(++_shellTicks%6==0)_ =ValidatePositions();},Application.Current.Dispatcher);
+        _foregroundChanged=(_,_,_,_,_,_,_)=>{foreach(var w in _windows.Values)w.FollowDesktop();};
+        _foregroundHook=SetWinEventHook(3,3,0,_foregroundChanged,0,0,0);
         Reconcile();_ =ValidatePositions();_shellCheck.Start();
     }
+    private delegate void WinEventProc(nint hook,uint @event,nint window,int objectId,int childId,uint thread,uint time);
+    [DllImport("user32.dll")]private static extern nint SetWinEventHook(uint min,uint max,nint module,WinEventProc callback,uint process,uint thread,uint flags);
+    [DllImport("user32.dll")]private static extern bool UnhookWinEvent(nint hook);
     public bool TryRequest(WidgetPlacementRequest request,out string message)
     {
         if(!IsAvailable){message=LocalizedText.Get("Windows 桌面容器不可用，未添加组件。");return false;}
@@ -120,10 +130,10 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     }
     internal void EditTask(Guid id)=>WidgetDataEditor.Task(_model.Settings.Widgets,id,options=>{var latest=_model.Settings.Widgets.Copy();var item=options.Tasks.FirstOrDefault(x=>x.Id==id);if(item==null||!latest.Tasks.Any(x=>x.Id==id))return false;latest.Tasks.RemoveAll(x=>x.Id==id);latest.Tasks.Add(item.Copy());return _model.TrySaveWidgets(latest);});
     internal void EditNote(Guid id)=>WidgetDataEditor.Note(_model.Settings.Widgets,id,options=>{var latest=_model.Settings.Widgets.Copy();var item=options.Notes.FirstOrDefault(x=>x.Id==id);if(item==null||!latest.Notes.Any(x=>x.Id==id))return false;latest.Notes.RemoveAll(x=>x.Id==id);latest.Notes.Add(item.Copy());return _model.TrySaveWidgets(latest);});
-    public void Dispose(){if(_disposed)return;_disposed=true;_model.WidgetSettingsChanged-=Reconcile;Runtime.Changed-=Refresh;Runtime.Dispose();_shellCheck.Stop();foreach(var w in _windows.Values.ToArray())w.Close();_windows.Clear();if(Current==this)Current=null;Changed=null;}
+    public void Dispose(){if(_disposed)return;_disposed=true;if(_foregroundHook!=0){UnhookWinEvent(_foregroundHook);_foregroundHook=0;}_model.WidgetSettingsChanged-=Reconcile;Runtime.Changed-=Refresh;Runtime.Dispose();_shellCheck.Stop();foreach(var w in _windows.Values.ToArray())w.Close();_windows.Clear();if(Current==this)Current=null;Changed=null;}
 }
 
-internal sealed class WidgetDesktopWindow : Window
+internal sealed class WidgetDesktopWindow : Window,DesktopWidgetLayers.ISource
 {
     private readonly WidgetDesktopService _service;
     private WidgetHost _host=null!;
@@ -131,9 +141,15 @@ internal sealed class WidgetDesktopWindow : Window
     private Point _origin;
     private bool _dragging;
     private nint _handle,_parent;
+    private bool _floating;
     internal WidgetInstance Instance {get;private set;}
     internal bool ContentActive {get;private set;}=true;
-    internal bool Attached=>_handle!=0&&IsWindow(_handle)&&_parent!=0&&IsWindow(_parent)&&GetParent(_handle)==_parent;
+    private DesktopWidgetLayers.Snapshot? _snapshot;
+    private long _snapshotVersion,_snapshotTime=long.MinValue/2;
+    private int _snapshotQueued;
+    nint DesktopWidgetLayers.ISource.Handle=>_handle;
+    DesktopWidgetLayers.Snapshot? DesktopWidgetLayers.ISource.Latest=>Volatile.Read(ref _snapshot);
+    internal bool Attached=>_handle!=0&&IsWindow(_handle)&&_parent!=0&&IsWindow(_parent)&&(_floating?GetShellWindow()==_parent:GetParent(_handle)==_parent);
     internal WidgetDesktopWindow(WidgetDesktopService service,WidgetInstance instance)
     {
         _service=service;Instance=instance;WindowStyle=WindowStyle.None;AllowsTransparency=true;Background=Brushes.Transparent;ShowInTaskbar=false;ShowActivated=false;ResizeMode=ResizeMode.NoResize;
@@ -143,22 +159,63 @@ internal sealed class WidgetDesktopWindow : Window
             if(!_dragging&&Math.Abs(delta.X)+Math.Abs(delta.Y)<7)return;if(!_dragging){_dragging=true;CaptureMouse();_host.SetGestureActive(true);}MovePhysical(_origin.X+delta.X,_origin.Y+delta.Y);e.Handled=true;};
         PreviewMouseLeftButtonUp+=async(_,e)=>{if(_press==null)return;bool moved=_dragging;_press=null;_dragging=false;if(IsMouseCaptured)ReleaseMouseCapture();_host.SetGestureActive(false);if(moved){e.Handled=true;var at=PhysicalTopLeft();await service.Place(this,at);}};
         LostMouseCapture+=(_,_)=>{if(_dragging){_dragging=false;_press=null;Position();_host.SetGestureActive(false);}};
-        Closed+=(_,_)=>{_press=null;if(IsMouseCaptured)ReleaseMouseCapture();};
+        Closed+=(_,_)=>{_press=null;if(IsMouseCaptured)ReleaseMouseCapture();DesktopWidgetLayers.Remove(this);Volatile.Write(ref _snapshot,null);};
     }
     private static bool Interactive(DependencyObject? node){while(node!=null){if(node is ButtonBase)return true;node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node);}return false;}
     internal void Attach()
     {
         _handle=new WindowInteropHelper(this).Handle;_parent=WidgetDesktopLayout.DesktopParent();if(_parent==0)throw new InvalidOperationException(LocalizedText.Get("Explorer 桌面不可用。"));
-        long style=GetWindowLongPtr(_handle,-16).ToInt64();SetWindowLongPtr(_handle,-16,new nint((style&~0x80000000L)|0x40000000L));
-        SetParent(_handle,_parent);if(GetParent(_handle)!=_parent)throw new Win32Exception(Marshal.GetLastWin32Error());Position();
+        // Since Windows 11 24H2 the desktop window has no redirection surface (WS_EX_NOREDIRECTIONBITMAP) and only
+        // composes Explorer's own children: a child window from another process is laid out and hit-tested but never
+        // drawn. There the widget stays a top-level tool window kept directly above the desktop in z-order instead.
+        _floating=_parent==GetShellWindow()&&(GetWindowLongPtr(_parent,-20).ToInt64()&0x200000L)!=0;
+        if(_floating)
+        {
+            SetWindowLongPtr(_handle,-20,new nint(GetWindowLongPtr(_handle,-20).ToInt64()|0x80L));
+            // Clicks must not activate the widget (it would rise over other windows); WM_MOUSEACTIVATE -> MA_NOACTIVATE.
+            // WS_EX_NOACTIVATE is not used: glass sampling skips such windows. Every z-order change lands above the desktop.
+            HwndSource.FromHwnd(_handle)?.AddHook((nint h,int message,nint w,nint l,ref bool handled)=>{
+                if(message==0x21){handled=true;return 3;}
+                if(message==0x46){uint flags=(uint)Marshal.ReadInt32(l,IntPtr.Size*2+16);if((flags&0x4)==0){nint above=AboveDesktop();if(above==_handle)Marshal.WriteInt32(l,IntPtr.Size*2+16,(int)(flags|0x4));else Marshal.WriteIntPtr(l,IntPtr.Size,above);}}
+                return 0;});
+        }
+        else
+        {
+            long style=GetWindowLongPtr(_handle,-16).ToInt64();SetWindowLongPtr(_handle,-16,new nint((style&~0x80000000L)|0x40000000L));
+            SetParent(_handle,_parent);if(GetParent(_handle)!=_parent)throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        Position();
+        // A top-level widget is sampled like any other window; only a desktop child needs its pixels published.
+        if(!_floating){DesktopWidgetLayers.Add(this);QueueSnapshot();}
     }
+    // Glass over the desktop asks for this while it samples the widget: a clock hand or a drag keeps it current
+    // a few times a second, a widget nobody samples costs nothing.
+    void DesktopWidgetLayers.ISource.RequestRefresh(){if(Environment.TickCount64-Interlocked.Read(ref _snapshotTime)>=200)QueueSnapshot();}
+    private void QueueSnapshot()
+    {
+        if(Interlocked.Exchange(ref _snapshotQueued,1)==1)return;
+        try{Dispatcher.BeginInvoke(DispatcherPriority.Background,Snapshot);}catch{_snapshotQueued=0;}
+    }
+    // The window's own pixels at its physical bounds, premultiplied BGRA like a compositor frame.
+    private void Snapshot()
+    {
+        _snapshotQueued=0;Interlocked.Exchange(ref _snapshotTime,Environment.TickCount64);
+        if(_floating||!Attached||!IsVisible||Content is not Visual content||!GetWindowRect(_handle,out var rect)){Volatile.Write(ref _snapshot,null);return;}
+        int width=rect.Right-rect.Left,height=rect.Bottom-rect.Top;if(width<=0||height<=0||(long)width*height>16_000_000){Volatile.Write(ref _snapshot,null);return;}
+        var dpi=VisualTreeHelper.GetDpi(this);var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(width,height,96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);
+        bitmap.Render(content);var pixels=new byte[width*height*4];bitmap.CopyPixels(pixels,width*4,0);
+        Volatile.Write(ref _snapshot,new DesktopWidgetLayers.Snapshot(pixels,new System.Drawing.Rectangle(rect.Left,rect.Top,width,height),++_snapshotVersion));
+    }
+    // The window directly above the desktop, so inserting after it puts this widget just over the wallpaper.
+    private nint AboveDesktop(){nint shell=GetShellWindow();nint above=GetWindow(shell,3);return above==0?new nint(1):above;}
+    internal void FollowDesktop(){if(_floating&&Attached)SetWindowPos(_handle,AboveDesktop(),0,0,0,0,0x0001|0x0002|0x0010);}
     internal void Update(WidgetInstance item)
     {
         Instance=item;var definition=WidgetRegistry.Get(item.DefinitionId) with {Size=item.Size};
         if(_host==null||_host.Definition!=definition){_host=new(definition,item.Exponent);Content=new Border{Padding=new Thickness(24),Child=_host};}
         Width=item.Size.Width*item.Appearance.PanelScale+48;Height=item.Size.Height*item.Appearance.PanelScale+48;_host.SetExponent(item.Exponent);Render();Menu();if(Attached)Position();
     }
-    internal void Render(){var data=_service.Data(Instance);_host.SetWeather(data.Weather);_host.SetMaterial(Instance.Material,Instance.Appearance);_host.SetContent(WidgetContent.Render(_host.Definition,data));}
+    internal void Render(){var data=_service.Data(Instance);_host.SetWeather(data.Weather);_host.SetMaterial(Instance.Material,Instance.Appearance);_host.SetContent(WidgetContent.Render(_host.Definition,data));if(_handle!=0)QueueSnapshot();}
     internal void RefreshOcclusion()
     {
         if(!Attached||!IsVisible)return;GetWindowRect(_handle,out var rect);bool active=false;
@@ -175,17 +232,19 @@ internal sealed class WidgetDesktopWindow : Window
     internal void Position()
     {
         var screen=Forms.Screen.AllScreens.FirstOrDefault(s=>s.DeviceName==Instance.Monitor)??Forms.Screen.PrimaryScreen!;var bounds=WidgetDesktopLayout.Bounds(Instance,screen,WidgetDesktopLayout.Dpi(screen));double pad=24*WidgetDesktopLayout.Dpi(screen)/96;
-        var point=new WidgetDesktopLayout.PointI{X=(int)Math.Round(bounds.X-pad),Y=(int)Math.Round(bounds.Y-pad)};ScreenToClient(_parent,ref point);
-        SetWindowPos(_handle,0,point.X,point.Y,(int)Math.Round(bounds.Width+pad*2),(int)Math.Round(bounds.Height+pad*2),0x0010|0x0040);
+        var point=new WidgetDesktopLayout.PointI{X=(int)Math.Round(bounds.X-pad),Y=(int)Math.Round(bounds.Y-pad)};if(!_floating)ScreenToClient(_parent,ref point);
+        SetWindowPos(_handle,_floating?AboveDesktop():0,point.X,point.Y,(int)Math.Round(bounds.Width+pad*2),(int)Math.Round(bounds.Height+pad*2),0x0010|0x0040);QueueSnapshot();
     }
     private Point PhysicalTopLeft(){GetWindowRect(_handle,out var rect);var dpi=NativeMethods.GetDpiForWindow(_handle);double pad=24*(dpi==0?96:dpi)/96;return new(rect.Left+pad,rect.Top+pad);}
-    private void MovePhysical(double x,double y){var point=new WidgetDesktopLayout.PointI{X=(int)Math.Round(x-24*VisualTreeHelper.GetDpi(this).DpiScaleX),Y=(int)Math.Round(y-24*VisualTreeHelper.GetDpi(this).DpiScaleY)};ScreenToClient(_parent,ref point);SetWindowPos(_handle,0,point.X,point.Y,0,0,0x0010|0x0001);}
+    private void MovePhysical(double x,double y){var point=new WidgetDesktopLayout.PointI{X=(int)Math.Round(x-24*VisualTreeHelper.GetDpi(this).DpiScaleX),Y=(int)Math.Round(y-24*VisualTreeHelper.GetDpi(this).DpiScaleY)};if(!_floating)ScreenToClient(_parent,ref point);SetWindowPos(_handle,0,point.X,point.Y,0,0,0x0010|0x0001|(_floating?0x0004u:0u));}
     [StructLayout(LayoutKind.Sequential)]private struct RectI{public int Left,Top,Right,Bottom;}
     [DllImport("user32.dll")]private static extern bool GetCursorPos(out WidgetDesktopLayout.PointI point);
     [DllImport("user32.dll")]private static extern bool GetWindowRect(nint h,out RectI rect);
     [DllImport("user32.dll")]private static extern bool ScreenToClient(nint h,ref WidgetDesktopLayout.PointI point);
     [DllImport("user32.dll",SetLastError=true)]private static extern nint SetParent(nint h,nint parent);
     [DllImport("user32.dll")]private static extern nint GetParent(nint h);
+    [DllImport("user32.dll")]private static extern nint GetShellWindow();
+    [DllImport("user32.dll")]private static extern nint GetWindow(nint h,uint command);
     [DllImport("user32.dll")]private static extern bool IsWindow(nint h);
     [DllImport("user32.dll")]private static extern nint WindowFromPoint(WidgetDesktopLayout.PointI point);
     [DllImport("user32.dll")]private static extern bool IsChild(nint parent,nint child);

@@ -29,7 +29,7 @@ internal static class WidgetSystemChecks
     {
         SetProcessDpiAwarenessContext(-4);Output=args[0];Directory.CreateDirectory(Output);var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};
         if(args.Contains("--preview")){app.Startup+=(_,_)=>Preview(app);return app.Run();}
-        app.Startup+=async(_,_)=>{try{if(args.Contains("--desktop-only"))await Desktop(new());else await Run(args.Contains("--desktop"));if(args.Contains("--live")){var service=new WidgetWeatherService();var snapshot=await service.ReadAsync(39.9042,116.4074,default);var cached=await service.ReadAsync(39.9042,116.4074,default);Check(snapshot.Hours.Count>12&&snapshot.Days.Count==5,"live Open-Meteo includes real hourly and daily forecasts");Check(ReferenceEquals(snapshot,cached),"weather requests reuse the shared location cache");File.WriteAllText(Path.Combine(Output,"live-weather.json"),JsonSerializer.Serialize(snapshot));}}catch(Exception e){Failed++;Console.WriteLine(e);File.WriteAllText(Path.Combine(Output,"exception.txt"),e.ToString());}finally{File.WriteAllText(Path.Combine(Output,"result.json"),JsonSerializer.Serialize(new{Passed,Failed}));app.Shutdown(Failed>0?1:0);}};
+        Visual=args.Contains("--visual");app.Startup+=async(_,_)=>{try{if(args.Contains("--desktop-only"))await Desktop(new());else await Run(args.Contains("--desktop"));if(args.Contains("--live")){var service=new WidgetWeatherService();var snapshot=await service.ReadAsync(39.9042,116.4074,default);var cached=await service.ReadAsync(39.9042,116.4074,default);Check(snapshot.Hours.Count>12&&snapshot.Days.Count==5,"live Open-Meteo includes real hourly and daily forecasts");Check(ReferenceEquals(snapshot,cached),"weather requests reuse the shared location cache");File.WriteAllText(Path.Combine(Output,"live-weather.json"),JsonSerializer.Serialize(snapshot));}}catch(Exception e){Failed++;Console.WriteLine(e);File.WriteAllText(Path.Combine(Output,"exception.txt"),e.ToString());}finally{File.WriteAllText(Path.Combine(Output,"result.json"),JsonSerializer.Serialize(new{Passed,Failed}));app.Shutdown(Failed>0?1:0);}};
         return app.Run();
     }
     static async void Preview(Application app)
@@ -71,6 +71,46 @@ internal static class WidgetSystemChecks
         if(desktop)await Desktop(options);
     }
     static void Capture(FrameworkElement target,string file){var bitmap=new RenderTargetBitmap((int)Math.Ceiling(target.ActualWidth),(int)Math.Ceiling(target.ActualHeight),96,96,PixelFormats.Pbgra32);bitmap.Render(target);var e=new PngBitmapEncoder();e.Frames.Add(BitmapFrame.Create(bitmap));using var f=File.Create(Path.Combine(Output,file));e.Save(f);}
+    // Glass over the desktop must show the widget, not the wallpaper behind it: the desktop window's own capture leaves
+    // its layered child windows out, so the widget's published pixels are drawn over it.
+    static bool Visual;
+    [System.Runtime.InteropServices.DllImport("user32.dll")]static extern nint WindowFromPoint(System.Drawing.Point point);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]static extern nint GetAncestor(nint window,uint flags);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]static extern bool GetWindowRect(nint window,out System.Drawing.Rectangle rect);
+    // Hardware check: waits (up to 3 min) for someone to show the desktop, then compares the screen with the widget.
+    static async Task OnScreen(object window)
+    {
+        nint handle=(nint)window.GetType().GetField("_handle",All)!.GetValue(window)!;Console.WriteLine("floating="+window.GetType().GetField("_floating",All)!.GetValue(window));
+        GetWindowRect(handle,out var r);var centre=new System.Drawing.Point((r.Left+r.Width)/2,(r.Top+r.Height)/2);Console.WriteLine("SHOW THE DESKTOP NOW");
+        var deadline=DateTime.UtcNow.AddMinutes(3);bool uncovered=false;
+        while(DateTime.UtcNow<deadline){await Task.Delay(250);var hit=WindowFromPoint(centre);if(hit==handle||GetAncestor(hit,2)==handle||GetAncestor(hit,2)==(nint)GetShellWindow()){uncovered=true;break;}}
+        Check(uncovered,"desktop at the widget was shown within 3 minutes");if(!uncovered)return;await Task.Delay(800);
+        var e=(FrameworkElement)((Window)window).Content;var dpi=VisualTreeHelper.GetDpi(e);int w=r.Width-r.Left,h=r.Height-r.Top;
+        var rtb=new RenderTargetBitmap(w,h,96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);rtb.Render(e);var own=new byte[4];rtb.CopyPixels(new Int32Rect(w/2,h/2,1,1),own,4,0);
+        using var screen=new System.Drawing.Bitmap(1,1);using(var g=System.Drawing.Graphics.FromImage(screen))g.CopyFromScreen(centre,System.Drawing.Point.Empty,new System.Drawing.Size(1,1));var s=screen.GetPixel(0,0);
+        using var shot=new System.Drawing.Bitmap(w,h);using(var g=System.Drawing.Graphics.FromImage(shot))g.CopyFromScreen(r.Left,r.Top,0,0,new System.Drawing.Size(w,h));shot.Save(Path.Combine(Output,"on-screen.png"));
+        Console.WriteLine($"widget centre {own[2]},{own[1]},{own[0]} screen {s.R},{s.G},{s.B}");
+        Check(Math.Abs(own[2]-s.R)+Math.Abs(own[1]-s.G)+Math.Abs(own[0]-s.B)<12,"the widget is actually drawn on the screen, not only laid out");
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll")]static extern nint GetShellWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")]static extern nint GetWindow(nint window,uint command);
+    static async Task BackdropSeesWidget(object window)
+    {
+        nint handle=(nint)window.GetType().GetField("_handle",All)!.GetValue(window)!;DesktopWidgetLayers.Snapshot? snapshot=null;
+        // On a desktop that cannot draw other processes' children the widget is a top-level window just above the
+        // desktop, sampled like any window; only the z-order is checked here.
+        if((bool)window.GetType().GetField("_floating",All)!.GetValue(window)!){await Task.Delay(300);nint above=handle;while(above!=0&&above!=GetShellWindow())above=GetWindow(above,2);int gap=0;for(nint w=GetWindow(handle,2);w!=0&&w!=GetShellWindow();w=GetWindow(w,2))gap++;Console.WriteLine("windows between widget and desktop: "+gap);Check(above==GetShellWindow()&&GetAncestor(handle,2)==handle,"top-level desktop widget stays above the desktop window");return;}
+        for(int i=0;i<40&&snapshot==null;i++){await Task.Delay(50);snapshot=DesktopWidgetLayers.Sources.FirstOrDefault(s=>s.Handle==handle)?.Latest;}
+        Check(snapshot!=null,"desktop widget publishes its rendered pixels for glass sampling");if(snapshot==null)return;
+        var b=snapshot.Bounds;var area=new System.Drawing.Rectangle(b.Left+b.Width/4,b.Top+b.Height/4,b.Width/2,b.Height/2);
+        uint Centre(byte[] pixels,int width,int x,int y)=>BitConverter.ToUInt32(pixels,(y*width+x)*4);
+        uint widget=Centre(snapshot.Pixels,b.Width,b.Width/2,b.Height/2);
+        async Task<uint?> Sample(){using var glass=new GlassBackdropService();for(int i=0;i<20;i++){if(glass.ReadPixels(0,area,1) is {} frame){int pad=24;return Centre(frame.Pixels,frame.Width,pad+area.Width/2,pad+area.Height/2);}await Task.Delay(50);}return null;}
+        var with=await Sample();var source=DesktopWidgetLayers.Sources.First(s=>s.Handle==handle);DesktopWidgetLayers.Remove(source);var without=await Sample();DesktopWidgetLayers.Add(source);
+        Console.WriteLine($"widget centre {widget:X8}, sampled with widget {with:X8}, desktop only {without:X8}");
+        Check(widget>>24==255&&with==widget,"glass sampling the desktop shows the widget's own pixels");
+        Check(without!=null&&without!=widget,"the desktop capture alone does not contain the widget (the case this layer fixes)");
+    }
     static async Task Desktop(WidgetOptions seed)
     {
         string? startup=StartupRegistration.ReadCommand();var store=new SettingsService(Path.Combine(Output,"profile"));var settings=new DockSettings{StartWithWindows=startup!=null};settings.Widgets.Tasks=seed.Tasks.Select(t=>t.Copy()).ToList();settings.Widgets.Notes=seed.Notes.Select(n=>n.Copy()).ToList();using var icons=new IconService();var model=new DockViewModel(settings,store,icons);
@@ -80,6 +120,7 @@ internal static class WidgetSystemChecks
             var layout=App.GetType("DockForWindows.Services.WidgetDesktopLayout")!;var bounds=await(Task<IReadOnlyList<Rect>>)layout.GetMethod("Icons",All)!.Invoke(null,null)!;Check(bounds.Count>=0,"actual Explorer desktop icon bounds queried");
             var widget=WidgetRegistry.CreateInstance("clock-classic",WidgetMaterial.Light);bool added=await(Task<bool>)Call(service,"AddAsync",widget)!;Check(added&&model.Settings.Widgets.Instances.Count==1,"actual desktop child widget added and saved");if(!added)return;
             var windows=(System.Collections.IDictionary)service.GetType().GetField("_windows",All)!.GetValue(service)!;var first=windows[widget.InstanceId]!;Check((bool)Prop(first,"Attached")!,"widget HWND parent belongs to Explorer desktop");
+            if(Visual)await OnScreen(first);else await BackdropSeesWidget(first);
             Call(service,"Duplicate",model.Settings.Widgets.Instances[0]);await Task.Delay(500);Check(model.Settings.Widgets.Instances.Count==2,"duplicate creates an independent desktop instance");
             var current=model.Settings.Widgets.Copy();current.Instances[0].Locked=true;current.Instances[0].Source.TimeZone="GMT Standard Time";model.TrySaveWidgets(current);Check(((WidgetInstance)Prop(first,"Instance")!).Locked,"instance settings propagate without replacing Dock");
             var beforeRestore=model.Settings.Widgets.Copy();((IDisposable)service).Dispose();var restoredStore=new SettingsService(Path.Combine(Output,"profile"));var restored=restoredStore.Load();Check(restored.Widgets.Instances.Count==2&&restored.Widgets.Instances[0].Locked&&restored.Widgets.Instances[0].Source.TimeZone=="GMT Standard Time","independent instance settings and positions survive profile reload");

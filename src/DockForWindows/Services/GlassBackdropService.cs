@@ -22,6 +22,7 @@ public sealed class GlassBackdropService : IDisposable
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumCallback callback, nint parameter);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(nint window, out NativeRect rectangle);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint window);
+    [DllImport("user32.dll")] private static extern nint GetWindow(nint window, uint command);
     [DllImport("user32.dll")] private static extern bool IsIconic(nint window);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetClassNameW")] private static extern int GetClassNameChars(nint window, [Out] char[] name, int count);
     [ThreadStatic] private static char[]? _className;
@@ -57,7 +58,8 @@ public sealed class GlassBackdropService : IDisposable
     // Borrowed until the next read; callers retaining a frame must copy before requesting another.
     // Changed=false: the same pixels as the frame the previous read returned.
     internal readonly record struct PixelFrame(byte[] Pixels,int Width,int Height,bool Changed=true);
-    private sealed class LayerSample{public byte[] Pixels=Array.Empty<byte>();public Rectangle Bounds;public bool Opaque;public WindowFrameCapture.FrameStamp? Stamp;public NativeRect Window;public long Confirmed=long.MinValue/2,LastUsed;}
+    private sealed class LayerSample{public byte[] Pixels=Array.Empty<byte>();public Rectangle Bounds;public bool Opaque;public WindowFrameCapture.FrameStamp? Stamp;public NativeRect Window;public long Confirmed=long.MinValue/2,LastUsed,Version=-1;}
+    private readonly Dictionary<nint,DesktopWidgetLayers.ISource> _widgetLayers=new();
     private readonly Dictionary<nint,LayerSample> _layerSamples=new();
     private readonly List<LayerSample> _visible=new();
     private readonly List<Rectangle> _uncovered=new(),_pieces=new();
@@ -118,6 +120,7 @@ public sealed class GlassBackdropService : IDisposable
             // Pad the source so light can bend pixels from outside the glass edge inward.
             int pad=(int)Math.Ceiling(24*dpi);var sample=Rectangle.Inflate(bounds,pad,pad);
             nint desktop=GetShellWindow();var layers=Layers(window,desktop,sample);
+            AddWidgetLayers(desktop,sample,layers);
             if(desktop!=0&&GetWindowRect(desktop,out var shell))layers.Add((desktop,Rectangle.FromLTRB(shell.Left,shell.Top,shell.Right,shell.Bottom)));
             long now=Environment.TickCount64;bool changed=false;
             _visible.Clear();_uncovered.Clear();_uncovered.Add(sample);
@@ -127,7 +130,7 @@ public sealed class GlassBackdropService : IDisposable
                 if(_disposed)return null;
                 bool exposed=false;foreach(var open in _uncovered)if(open.IntersectsWith(rectangle)){exposed=true;break;}
                 if(!exposed)continue;
-                var layer=AcquireLayer(handle,sample,now,out bool fresh);if(layer is null)continue;
+                bool fresh;var layer=_widgetLayers.TryGetValue(handle,out var widget)?WidgetLayer(handle,widget,now,out fresh):AcquireLayer(handle,sample,now,out fresh);if(layer is null)continue;
                 _visible.Add(layer);changed|=fresh;_layerKey.Append('|').Append(handle).Append(':').Append(layer.Bounds).Append(layer.Opaque?'o':'t');
                 if(layer.Opaque)Uncover(layer.Bounds);
                 if(_uncovered.Count==0)break;
@@ -171,6 +174,27 @@ public sealed class GlassBackdropService : IDisposable
             return new PixelFrame(_front,width,height,true);
         }
         finally{if(initialized>=0)RoUninitialize();SetThreadDpiAwarenessContext(oldDpi);}
+    }
+    // Desktop widgets sit between the windows above the desktop and the desktop itself, in the desktop's child order.
+    private void AddWidgetLayers(nint desktop,Rectangle sample,List<(nint Window,Rectangle Bounds)> layers)
+    {
+        _widgetLayers.Clear();var sources=DesktopWidgetLayers.Sources;if(desktop==0||sources.Length==0)return;
+        for(nint child=GetWindow(desktop,5);child!=0;child=GetWindow(child,2))
+        {
+            DesktopWidgetLayers.ISource? source=null;foreach(var candidate in sources)if(candidate.Handle==child){source=candidate;break;}
+            if(source is null||!IsWindowVisible(child)||!GetWindowRect(child,out var r))continue;
+            var rectangle=Rectangle.FromLTRB(r.Left,r.Top,r.Right,r.Bottom);if(!rectangle.IntersectsWith(sample))continue;
+            _widgetLayers[child]=source;layers.Add((child,rectangle));
+        }
+    }
+    private LayerSample? WidgetLayer(nint handle,DesktopWidgetLayers.ISource source,long now,out bool fresh)
+    {
+        fresh=false;source.RequestRefresh();if(source.Latest is not {} snapshot)return null;
+        if(!_layerSamples.TryGetValue(handle,out var layer)){layer=new LayerSample();_layerSamples.Add(handle,layer);}
+        layer.LastUsed=layer.Confirmed=now;
+        if(layer.Version==snapshot.Version&&ReferenceEquals(layer.Pixels,snapshot.Pixels))return layer;
+        // The snapshot's array is shared, never written: only the compositor path writes into Pixels, and a widget never takes it.
+        layer.Pixels=snapshot.Pixels;layer.Bounds=snapshot.Bounds;layer.Opaque=false;layer.Stamp=null;layer.Version=snapshot.Version;fresh=true;return layer;
     }
     private LayerSample? AcquireLayer(nint handle,Rectangle sample,long now,out bool fresh)
     {
