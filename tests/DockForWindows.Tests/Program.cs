@@ -31,6 +31,7 @@ internal static class Program
         if(args.Length==2&&args[0]=="--preview-widget-system")return WidgetSystemChecks.Run(new[]{args[1],"--preview"});
         if(args.Length==2&&args[0]=="--verify-widget-system")return WidgetSystemChecks.Run(new[]{args[1]});
         if(args.Length==2&&args[0]=="--verify-widget-desktop")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only"});
+        if(args.Length==2&&args[0]=="--verify-widget-desktop-visual")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only","--visual"});
         if(args.Length==2&&args[0]=="--verify-widget-system-live")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only","--live"});
         if(args.Length==2&&args[0]=="--verify-widget-gallery")return WidgetGalleryChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--preview-widget-gallery")return WidgetGalleryChecks.Run(args[1],true);
