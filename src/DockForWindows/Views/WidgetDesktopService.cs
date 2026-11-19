@@ -31,7 +31,10 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     // "show desktop" (Win+D) raises the desktop, so they are moved back above it whenever the foreground changes.
     private readonly WinEventProc _foregroundChanged;
     private nint _foregroundHook;
+    internal IReadOnlySet<nint> WindowHandles {get;private set;}=new HashSet<nint>();
     internal WidgetRuntime Runtime {get;}
+    internal DockSettings GlassMaterial=>_model.Settings.ControlCenter.Material(_model.Settings);
+    internal void LogGlassError(Exception error)=>_model.LogDiagnostic("Widget glass backdrop",error);
     internal static WidgetDesktopService? Current {get;private set;}
     public bool IsAvailable=>!_disposed&&WidgetDesktopLayout.DesktopParent()!=0;
     internal event Action? Changed;
@@ -86,12 +89,12 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     internal async Task Place(WidgetDesktopWindow window,Point physical)
     {
         try{var id=window.Instance.InstanceId;if(!_model.Settings.Widgets.Instances.Any(x=>x.InstanceId==id))return;
-            var screen=Forms.Screen.FromPoint(new System.Drawing.Point((int)physical.X,(int)physical.Y));double dpi=WidgetDesktopLayout.Dpi(screen),pitch=(WidgetSize.Unit+WidgetSize.Gap)*dpi/96;
+            var screen=Forms.Screen.FromPoint(new System.Drawing.Point((int)physical.X,(int)physical.Y));double dpi=WidgetDesktopLayout.Dpi(screen);
             var icons=await WidgetDesktopLayout.Icons();if(_disposed)return;
             // Copied after the await (up to seconds while desktop icons are read), so a save made meanwhile is not overwritten.
-            var draft=_model.Settings.Widgets.Copy();var item=draft.Instances.FirstOrDefault(x=>x.InstanceId==id);if(item==null)return;
+            var draft=_model.Settings.Widgets.Copy();var item=draft.Instances.FirstOrDefault(x=>x.InstanceId==id);if(item==null)return;double pitch=WidgetDesktopLayout.Pitch(item,dpi);
             var occupied=icons.Concat(OtherBounds(item.InstanceId)).ToArray();
-            int desiredX=(int)Math.Round((physical.X-screen.WorkingArea.Left)/pitch),desiredY=(int)Math.Round((physical.Y-screen.WorkingArea.Top)/pitch);
+            int desiredX=(int)Math.Round((physical.X-screen.WorkingArea.Left-WidgetDesktopLayout.EdgeInset*dpi/96)/pitch),desiredY=(int)Math.Round((physical.Y-screen.WorkingArea.Top-WidgetDesktopLayout.EdgeInset*dpi/96)/pitch);
             if(!WidgetDesktopLayout.FindSpace(item,screen,dpi,occupied,out int col,out int row,desiredX,desiredY))throw new InvalidOperationException(LocalizedText.Get("没有合适的空位，位置已恢复。"));
             item.Column=col;item.Row=row;item.Monitor=screen.DeviceName;if(!_model.TrySaveWidgets(draft))window.Position();
         }catch(Exception e){window.Position();MessageBox.Show(e.Message,LocalizedText.Get("移动小组件"));}
@@ -117,6 +120,7 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
         if(_disposed)return;var instances=_model.Settings.Widgets.Instances;
         foreach(var key in _windows.Keys.Where(id=>instances.All(x=>x.InstanceId!=id)).ToArray()){_windows[key].Close();_windows.Remove(key);}
         foreach(var item in instances){if(!_windows.TryGetValue(item.InstanceId,out var window)||!window.Attached){window?.Close();window=new(this,item);_windows[item.InstanceId]=window;try{window.Show();window.Attach();}catch{window.Close();_windows.Remove(item.InstanceId);continue;}}window.Update(item);}
+        WindowHandles=_windows.Values.Select(w=>w.Handle).Where(h=>h!=0).ToHashSet();
         Changed?.Invoke();
     }
     private void Refresh(WidgetKind? kind){if(_disposed)return;foreach(var w in _windows.Values){var d=WidgetRegistry.Get(w.Instance.DefinitionId);if(w.IsVisible&&w.ContentActive&&(kind==null||d.Kind==kind||kind==WidgetKind.Weather&&d.Layout==WidgetLayout.CalendarWeather||kind==WidgetKind.Clock&&d.Kind==WidgetKind.Calendar&&d.Layout is WidgetLayout.CalendarClock or WidgetLayout.CalendarGiant or WidgetLayout.CalendarPoster or WidgetLayout.CalendarMinimal))w.Render();}}
@@ -137,11 +141,13 @@ internal sealed class WidgetDesktopWindow : Window,DesktopWidgetLayers.ISource
 {
     private readonly WidgetDesktopService _service;
     private WidgetHost _host=null!;
+    private readonly ScaleTransform _desktopScale=new();
     private Point? _press;
     private Point _origin;
     private bool _dragging;
     private nint _handle,_parent;
     private bool _floating;
+    internal nint Handle=>_handle;
     internal WidgetInstance Instance {get;private set;}
     internal bool ContentActive {get;private set;}=true;
     private DesktopWidgetLayers.Snapshot? _snapshot;
@@ -212,15 +218,18 @@ internal sealed class WidgetDesktopWindow : Window,DesktopWidgetLayers.ISource
     internal void Update(WidgetInstance item)
     {
         Instance=item;var definition=WidgetRegistry.Get(item.DefinitionId) with {Size=item.Size};
-        if(_host==null||_host.Definition!=definition){_host=new(definition,item.Exponent);Content=new Border{Padding=new Thickness(24),Child=_host};}
-        Width=item.Size.Width*item.Appearance.PanelScale+48;Height=item.Size.Height*item.Appearance.PanelScale+48;_host.SetExponent(item.Exponent);Render();Menu();if(Attached)Position();
+        if(_host==null||_host.Definition!=definition){_host=new(definition,item.Exponent){LayoutTransform=_desktopScale};Content=new Border{Padding=new Thickness(24),Child=_host};}
+        double scale=WidgetDesktopLayout.ContentScale(item);_desktopScale.ScaleX=_desktopScale.ScaleY=scale;
+        Width=item.Size.Width*scale+48;Height=item.Size.Height*scale+48;_host.SetExponent(item.Exponent);Render();Menu();if(Attached)Position();
     }
-    internal void Render(){var data=_service.Data(Instance);_host.SetWeather(data.Weather);_host.SetMaterial(Instance.Material,Instance.Appearance);_host.SetContent(WidgetContent.Render(_host.Definition,data));if(_handle!=0)QueueSnapshot();}
+    internal void Render(){var data=_service.Data(Instance);_host.SetWeather(data.Weather);var appearance=Instance.Appearance.Copy();appearance.PanelScale=1;_host.SetMaterial(Instance.Material,appearance);_host.SetContent(WidgetContent.Render(_host.Definition,data));if(_handle!=0)QueueSnapshot();}
     internal void RefreshOcclusion()
     {
         if(!Attached||!IsVisible)return;GetWindowRect(_handle,out var rect);bool active=false;
         foreach(var point in new[]{(.5,.5),(.25,.25),(.75,.25),(.25,.75),(.75,.75)}){var hit=WindowFromPoint(new(){X=(int)(rect.Left+(rect.Right-rect.Left)*point.Item1),Y=(int)(rect.Top+(rect.Bottom-rect.Top)*point.Item2)});if(hit==_handle||IsChild(_handle,hit)){active=true;break;}}
-        if(active==ContentActive)return;ContentActive=active;_host.SetActive(active);if(active)Render();
+        if(active==ContentActive)return;ContentActive=active;
+        // Occlusion throttles refreshes; hiding content can turn transient hit-test misses into blank cards.
+        if(active)Render();
     }
     private void Menu()
     {

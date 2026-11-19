@@ -38,7 +38,7 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
     internal bool IsUpdating => _timer.IsEnabled;
     internal WidgetGalleryPage(WidgetOptions options, WidgetWeatherService? weatherService = null)
     {
-        _options = options; options.Normalize(); if(options.Material==WidgetMaterial.Glass)options.Material=WidgetMaterial.Light; _weatherService = weatherService ?? new();
+        _options = options; options.Normalize(); _weatherService = weatherService ?? new();
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; Focusable = false;
         AutomationProperties.SetAutomationId(this, "widget-gallery");
         // The page is a ScrollViewer of its own type, so it asks for the settings window's overlay scroll style by name.
@@ -46,7 +46,7 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         // The 小组件 tab names the page: it opens straight on the search and the categories.
         var body = new StackPanel { Margin = new Thickness(28, 18, 28, 28) }; Content = body;
         var appearance = new WrapPanel { Margin = new Thickness(0, 0, 0, 20), Orientation = Orientation.Horizontal };
-        var materials = new SettingsSegmentedControl { ItemsSource = new[] { LocalizedText.Get("浅色"), LocalizedText.Get("深色") }, SelectedIndex = options.Material == WidgetMaterial.Dark ? 1 : 0, Width = 224, Margin = new Thickness(0, 0, 12, 8) };
+        var materials = new SettingsSegmentedControl { ItemsSource = new[] { LocalizedText.Get("浅色"), LocalizedText.Get("深色"), LocalizedText.Get("液态玻璃") }, SelectedIndex = (int)options.Material, Width = 300, Margin = new Thickness(0, 0, 12, 8) };
         AutomationProperties.SetName(materials, LocalizedText.Get("小组件材质")); AutomationProperties.SetAutomationId(materials, "widget-material"); appearance.Children.Add(materials);
         var curves = new ComboBox { ItemsSource = new[] { LocalizedText.Get("柔和轮廓 · 2.5"), LocalizedText.Get("饱满轮廓 · 3") }, SelectedIndex = options.Exponent == 3 ? 1 : 0, Width = 154, Height = 34, Margin = new Thickness(0, 0, 0, 8) };
         AutomationProperties.SetName(curves, LocalizedText.Get("超椭圆指数")); AutomationProperties.SetAutomationId(curves, "widget-exponent"); appearance.Children.Add(curves); body.Children.Add(appearance);

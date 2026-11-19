@@ -39,12 +39,12 @@ internal static class WidgetInstanceEditor
 {
     internal static void Show(WidgetInstance original,Action<WidgetInstance> save)
     {
-        var copy=original.Copy();if(copy.Material==WidgetMaterial.Glass)copy.Material=WidgetMaterial.Light;var body=new StackPanel{Margin=new Thickness(22)};var window=WidgetDataEditor.Window(LocalizedText.Get("组件设置 · ")+WidgetRegistry.Get(copy.DefinitionId).Title,body,520,760);
+        var copy=original.Copy();var body=new StackPanel{Margin=new Thickness(22)};var window=WidgetDataEditor.Window(LocalizedText.Get("组件设置 · ")+WidgetRegistry.Get(copy.DefinitionId).Title,body,520,760);
         var preview=new WidgetHost(WidgetRegistry.Get(copy.DefinitionId) with{Size=copy.Size},copy.Exponent);var previewBox=new Viewbox{Child=preview,Stretch=Stretch.Uniform,Height=210,Margin=new Thickness(0,0,0,15)};body.Children.Add(previewBox);
         void Refresh(){preview.Resize(copy.Size);preview.SetMaterial(copy.Material,copy.Appearance);var data=WidgetDesktopService.Current?.Data(copy)??new WidgetRenderData(new(),copy.Source);preview.SetContent(WidgetContent.Render(preview.Definition,data with{Preview=true}));}
         ComboBox Choice(string title,object[] values,int index,Action<int> change){body.Children.Add(new TextBlock{Text=title,Margin=new Thickness(0,9,0,4)});var box=new ComboBox{ItemsSource=values,SelectedIndex=index,MinHeight=30};box.SelectionChanged+=(_,_)=>{if(box.SelectedIndex>=0){change(box.SelectedIndex);Refresh();}};body.Children.Add(box);return box;}
         var sizes=WidgetSizes.For(WidgetRegistry.Get(copy.DefinitionId)).ToArray();Choice(LocalizedText.Get("尺寸"),sizes.Cast<object>().ToArray(),Array.IndexOf(sizes,copy.Size),i=>copy.Size=sizes[i]);
-        Choice(LocalizedText.Get("材质"),new object[]{LocalizedText.Get("浅色"),LocalizedText.Get("深色")},copy.Material==WidgetMaterial.Dark?1:0,i=>copy.Material=(WidgetMaterial)i);
+        Choice(LocalizedText.Get("材质"),new object[]{LocalizedText.Get("浅色"),LocalizedText.Get("深色"),LocalizedText.Get("液态玻璃")},(int)copy.Material,i=>copy.Material=(WidgetMaterial)i);
         var zones=TimeZoneInfo.GetSystemTimeZones().ToArray();Choice(LocalizedText.Get("时区"),zones.Select(z=>(object)z.DisplayName).ToArray(),Array.FindIndex(zones,z=>z.Id==copy.Source.TimeZone),i=>copy.Source.TimeZone=zones[i].Id);
         var worlds=WidgetDataEditor.Field(body,LocalizedText.Get("世界时钟时区 ID（分号分隔）"),string.Join(";",copy.Source.WorldZones));worlds.TextChanged+=(_,_)=>{copy.Source.WorldZones=worlds.Text.Split(';',StringSplitOptions.TrimEntries|StringSplitOptions.RemoveEmptyEntries).ToList();copy.Source.Normalize();Refresh();};
         var list=WidgetDataEditor.Field(body,LocalizedText.Get("列表 / 笔记文件夹筛选（留空显示全部）"),copy.Source.List);list.TextChanged+=(_,_)=>{copy.Source.List=list.Text;Refresh();};

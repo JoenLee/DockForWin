@@ -47,6 +47,7 @@ internal partial class SettingsShellWindow
         Set("SettingsTertiary", p.Dark ? DesignSystem.Hex("#7C7C82") : p.TertiaryLabel);
         if (p.Dark) { Set("SettingsTrack", DesignSystem.Hex("#29FFFFFF")); Set("SettingsSwitchOff", DesignSystem.Hex("#38FFFFFF")); Set("SettingsHover", DesignSystem.Hex("#14FFFFFF")); Set("SettingsPressed", DesignSystem.Hex("#24FFFFFF")); }
         Set("SettingsControlFill", p.Dark ? DesignSystem.Hex("#3A3A3E") : DesignSystem.Hex("#FFFFFF"));
+        Resources["SettingsWidgetPreviewLighting"] = p.Dark || SystemParameters.HighContrast ? 0d : 1d;
         Resources["SettingsControlSheen"] = Brushes.Transparent;
         Resources["SettingsControlShadowOpacity"] = p.Dark ? .3 : .07;
         Set("SettingsRaised", p.Dark ? DesignSystem.Hex("#30353E") : Colors.White);
