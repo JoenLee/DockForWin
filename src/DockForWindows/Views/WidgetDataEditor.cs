@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using DockForWindows.Services;
 using DockForWindows.Models;
 
 namespace DockForWindows.Views;
@@ -38,19 +39,21 @@ internal static class WidgetInstanceEditor
 {
     internal static void Show(WidgetInstance original,Action<WidgetInstance> save)
     {
-        var copy=original.Copy();if(copy.Material==WidgetMaterial.Glass)copy.Material=WidgetMaterial.Light;var body=new StackPanel{Margin=new Thickness(22)};var window=WidgetDataEditor.Window(LocalizedText.Get("组件设置 · ")+WidgetRegistry.Get(copy.DefinitionId).Title,body,520,760);
+        var copy=original.Copy();var body=new StackPanel{Margin=new Thickness(22)};var window=WidgetDataEditor.Window(LocalizedText.Get("组件设置 · ")+WidgetRegistry.Get(copy.DefinitionId).Title,body,520,760);
         var preview=new WidgetHost(WidgetRegistry.Get(copy.DefinitionId) with{Size=copy.Size},copy.Exponent);var previewBox=new Viewbox{Child=preview,Stretch=Stretch.Uniform,Height=210,Margin=new Thickness(0,0,0,15)};body.Children.Add(previewBox);
         void Refresh(){preview.Resize(copy.Size);preview.SetMaterial(copy.Material,copy.Appearance);var data=WidgetDesktopService.Current?.Data(copy)??new WidgetRenderData(new(),copy.Source);preview.SetContent(WidgetContent.Render(preview.Definition,data with{Preview=true}));}
         ComboBox Choice(string title,object[] values,int index,Action<int> change){body.Children.Add(new TextBlock{Text=title,Margin=new Thickness(0,9,0,4)});var box=new ComboBox{ItemsSource=values,SelectedIndex=index,MinHeight=30};box.SelectionChanged+=(_,_)=>{if(box.SelectedIndex>=0){change(box.SelectedIndex);Refresh();}};body.Children.Add(box);return box;}
         var sizes=WidgetSizes.For(WidgetRegistry.Get(copy.DefinitionId)).ToArray();Choice(LocalizedText.Get("尺寸"),sizes.Cast<object>().ToArray(),Array.IndexOf(sizes,copy.Size),i=>copy.Size=sizes[i]);
-        Choice(LocalizedText.Get("材质"),new object[]{LocalizedText.Get("浅色"),LocalizedText.Get("深色")},copy.Material==WidgetMaterial.Dark?1:0,i=>copy.Material=(WidgetMaterial)i);
+        Choice(LocalizedText.Get("材质"),new object[]{LocalizedText.Get("浅色"),LocalizedText.Get("深色"),LocalizedText.Get("液态玻璃")},(int)copy.Material,i=>copy.Material=(WidgetMaterial)i);
         var zones=TimeZoneInfo.GetSystemTimeZones().ToArray();Choice(LocalizedText.Get("时区"),zones.Select(z=>(object)z.DisplayName).ToArray(),Array.FindIndex(zones,z=>z.Id==copy.Source.TimeZone),i=>copy.Source.TimeZone=zones[i].Id);
         var worlds=WidgetDataEditor.Field(body,LocalizedText.Get("世界时钟时区 ID（分号分隔）"),string.Join(";",copy.Source.WorldZones));worlds.TextChanged+=(_,_)=>{copy.Source.WorldZones=worlds.Text.Split(';',StringSplitOptions.TrimEntries|StringSplitOptions.RemoveEmptyEntries).ToList();copy.Source.Normalize();Refresh();};
         var list=WidgetDataEditor.Field(body,LocalizedText.Get("列表 / 笔记文件夹筛选（留空显示全部）"),copy.Source.List);list.TextChanged+=(_,_)=>{copy.Source.List=list.Text;Refresh();};
         var folder=WidgetDataEditor.Field(body,LocalizedText.Get("本地笔记文件夹（只读 .txt / .md）"),copy.Source.NotesFolder);folder.TextChanged+=(_,_)=>{copy.Source.NotesFolder=folder.Text;Refresh();};
+        var location=new CheckBox{Content=UiText.IsEnglish?"Use current location":"使用当前位置",IsChecked=copy.Source.UseCurrentLocation,Margin=new Thickness(0,8,0,4)};location.Checked+=(_,_)=>{copy.Source.UseCurrentLocation=true;Refresh();};location.Unchecked+=(_,_)=>{copy.Source.UseCurrentLocation=false;Refresh();};body.Children.Add(location);
+        var microsoft=new CheckBox{Content="Microsoft To Do / OneNote",IsChecked=copy.Source.MicrosoftAccount,Margin=new Thickness(0,8,0,4)};microsoft.Checked+=(_,_)=>{copy.Source.MicrosoftAccount=true;Refresh();};microsoft.Unchecked+=(_,_)=>{copy.Source.MicrosoftAccount=false;Refresh();};body.Children.Add(microsoft);
         var city=WidgetDataEditor.Field(body,LocalizedText.Get("天气城市"),copy.Source.City);var cityResults=new ComboBox{MinHeight=30,Margin=new Thickness(0,8,0,0)};body.Children.Add(cityResults);
         var search=new Button{Content=LocalizedText.Get("查找城市"),Padding=new Thickness(10,6,10,6),Margin=new Thickness(0,7,0,7)};body.Children.Add(search);search.Click+=async(_,_)=>{search.IsEnabled=false;try{cityResults.ItemsSource=await new Services.WidgetWeatherService().SearchAsync(city.Text,default);}catch(Exception e){MessageBox.Show(e.Message,LocalizedText.Get("查找城市"));}finally{search.IsEnabled=true;}};
-        cityResults.SelectionChanged+=(_,_)=>{if(cityResults.SelectedItem is Services.WidgetLocation location){copy.Source.City=location.Name;copy.Source.Latitude=location.Latitude;copy.Source.Longitude=location.Longitude;Refresh();}};
+        cityResults.SelectionChanged+=(_,_)=>{if(cityResults.SelectedItem is Services.WidgetLocation location){copy.Source.UseCurrentLocation=false;copy.Source.City=location.Name;copy.Source.Latitude=location.Latitude;copy.Source.Longitude=location.Longitude;Refresh();}};
         var bg=WidgetDataEditor.Field(body,LocalizedText.Get("背景 HEX（留空跟随模板）"),copy.Appearance.Background);var fg=WidgetDataEditor.Field(body,LocalizedText.Get("文字 HEX"),copy.Appearance.Foreground);var accent=WidgetDataEditor.Field(body,LocalizedText.Get("强调色 HEX"),copy.Appearance.Accent);var end=WidgetDataEditor.Field(body,LocalizedText.Get("渐变终点 HEX（可留空）"),copy.Appearance.GradientEnd);
         void Colors(){copy.Appearance.Background=bg.Text;copy.Appearance.Foreground=fg.Text;copy.Appearance.Accent=accent.Text;copy.Appearance.GradientEnd=end.Text;Refresh();}bg.TextChanged+=(_,_)=>Colors();fg.TextChanged+=(_,_)=>Colors();accent.TextChanged+=(_,_)=>Colors();end.TextChanged+=(_,_)=>Colors();
         Choice(LocalizedText.Get("数字字体"),new object[]{LocalizedText.Get("标准"),LocalizedText.Get("圆润"),LocalizedText.Get("空心"),LocalizedText.Get("艺术")},(int)copy.Appearance.NumberStyle,i=>copy.Appearance.NumberStyle=(WidgetNumberStyle)i);

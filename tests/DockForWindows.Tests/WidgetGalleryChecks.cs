@@ -217,7 +217,7 @@ internal static class WidgetGalleryChecks
                 bg.Text="#1C3550";ink.Text="#FFFFFF";accent.Text="#FFD966";
                 Find<CheckBox>(page,"widget-color-gradient-weather").IsChecked=true;
                 foreach(var mode in new[]{1,2,0}){material.SelectedIndex=mode;Assert(((SolidColorBrush)host.Resources["WidgetInk"]).Color==Colors.White,"custom palette survives material switch "+mode);
-                    if(mode==2){var tint=((System.Windows.Shapes.Path)Field(host,"_tint")).Fill as LinearGradientBrush;Assert(tint!=null&&tint.GradientStops.All(s=>s.Color.A<255)&&((System.Windows.Shapes.Path)Field(host,"_plate")).Fill is ImageBrush,"glass custom gradients retain a transparent tint and the shared background");}}
+                    if(mode==2){var tint=((System.Windows.Shapes.Path)Field(host,"_tint")).Fill as LinearGradientBrush;Assert(tint!=null&&tint.Opacity<1&&Field(host,"_glass") is DockSurface{UseGlass:true},"glass custom gradients retain a transparent tint and the shared liquid glass surface");}}
                 Find<ListBox>(page,"widget-appearance-tab-weather").SelectedIndex=1;await Task.Delay(70);window.UpdateLayout();
                 Find<ComboBox>(page,"widget-number-style-weather").SelectedIndex=2;
                 var weatherViewport=(FrameworkElement)Field(weather,"_viewport");double weatherY=weather.TranslatePoint(new Point(),page).Y+page.VerticalOffset;page.ScrollToVerticalOffset(Math.Max(0,weatherY-70));
@@ -225,7 +225,7 @@ internal static class WidgetGalleryChecks
                 var digits=Tree<FrameworkElement>(host).First(t=>t.GetType().Name=="WidgetText");
                 var digitOutline=(Geometry)Property(digits,"OutlineGeometry");Assert(digitOutline.IsFrozen&&!digitOutline.Bounds.IsEmpty,"large outlined digits use a frozen text geometry");
                 host.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice,Environment.TickCount){RoutedEvent=Mouse.MouseEnterEvent});await Task.Delay(350);
-                Assert((double)Property(host,"HoverScale")>1.01&&ReferenceEquals(digitOutline,Property(digits,"OutlineGeometry")),"hover gently enlarges the surface without rebuilding text outlines");
+                Assert(Math.Abs((double)Property(host,"HoverScale")-1)<.000001&&ReferenceEquals(digitOutline,Property(digits,"OutlineGeometry")),"hover preserves the surface size and existing text outlines");
                 var hoverBounds=hosts.Select(h=>VisibleBounds(h,weatherViewport)).ToArray();Assert(Enumerable.Range(1,hoverBounds.Length-1).All(i=>hoverBounds[i].Left-hoverBounds[i-1].Right>20),"hover keeps neighboring cards separated");
                 host.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice,Environment.TickCount){RoutedEvent=Mouse.MouseLeaveEvent});await Task.Delay(650);
                 Assert(Math.Abs((double)Property(host,"HoverScale")-1)<.000001,"hover leaves return to the original scale");

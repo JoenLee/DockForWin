@@ -29,8 +29,11 @@ internal static class Program
         if(args.Length==2&&args[0]=="--verify-themed-menus")return ThemedMenuChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--verify-sidebar-preview")return SidebarPreviewChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--preview-widget-system")return WidgetSystemChecks.Run(new[]{args[1],"--preview"});
+        if(args.Length==2&&args[0]=="--verify-widget-connected")return WidgetConnectedChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--verify-widget-system")return WidgetSystemChecks.Run(new[]{args[1]});
         if(args.Length==2&&args[0]=="--verify-widget-desktop")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only"});
+        if(args.Length==2&&args[0]=="--verify-widget-desktop-layout")return WidgetSystemChecks.Run(new[]{args[1],"--layout-only"});
+        if(args.Length==2&&args[0]=="--verify-widget-glass")return WidgetGlassChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--verify-widget-desktop-visual")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only","--visual"});
         if(args.Length==2&&args[0]=="--verify-widget-system-live")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only","--live"});
         if(args.Length==2&&args[0]=="--verify-widget-gallery")return WidgetGalleryChecks.Run(args[1]);

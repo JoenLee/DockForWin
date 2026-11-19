@@ -12,16 +12,21 @@ namespace DockForWindows.Services;
 
 internal static class WidgetDesktopLayout
 {
+    internal const double DesktopScale=.85,EdgeInset=24;
+    internal static double ContentScale(WidgetInstance instance)=>DesktopScale*instance.Appearance.PanelScale;
+    internal static double Pitch(WidgetInstance instance,double dpi)=>(WidgetSize.Unit+WidgetSize.Gap)*ContentScale(instance)*dpi/96;
     internal static Rect Bounds(WidgetInstance instance,Forms.Screen screen,double dpi)
     {
-        double scale=dpi/96;return new Rect(screen.WorkingArea.Left+instance.Column*(WidgetSize.Unit+WidgetSize.Gap)*scale,
-            screen.WorkingArea.Top+instance.Row*(WidgetSize.Unit+WidgetSize.Gap)*scale,instance.Size.Width*instance.Appearance.PanelScale*scale,instance.Size.Height*instance.Appearance.PanelScale*scale);
+        double scale=dpi/96,pitch=Pitch(instance,dpi);return new Rect(screen.WorkingArea.Left+EdgeInset*scale+instance.Column*pitch,
+            screen.WorkingArea.Top+EdgeInset*scale+instance.Row*pitch,instance.Size.Width*ContentScale(instance)*scale,instance.Size.Height*ContentScale(instance)*scale);
     }
     internal static bool FindSpace(WidgetInstance item,Forms.Screen screen,double dpi,IReadOnlyList<Rect> occupied,out int column,out int row,int? desiredColumn=null,int? desiredRow=null)
     {
-        double scale=dpi/96,pitch=(WidgetSize.Unit+WidgetSize.Gap)*scale,width=item.Size.Width*item.Appearance.PanelScale*scale,height=item.Size.Height*item.Appearance.PanelScale*scale;int maxX=(int)Math.Floor((screen.WorkingArea.Width-width)/pitch),maxY=(int)Math.Floor((screen.WorkingArea.Height-height)/pitch);
+        double scale=dpi/96,pitch=Pitch(item,dpi),width=item.Size.Width*ContentScale(item)*scale,height=item.Size.Height*ContentScale(item)*scale;int maxX=(int)Math.Floor((screen.WorkingArea.Width-2*EdgeInset*scale-width)/pitch),maxY=(int)Math.Floor((screen.WorkingArea.Height-2*EdgeInset*scale-height)/pitch);
         var cells=from y in Enumerable.Range(0,Math.Max(0,maxY+1)) from x in Enumerable.Range(0,Math.Max(0,maxX+1)) orderby desiredColumn.HasValue?(x-desiredColumn.Value)*(x-desiredColumn.Value)+(y-desiredRow!.Value)*(y-desiredRow.Value):y*1000+x select (x,y);
-        foreach(var cell in cells){var candidate=new Rect(screen.WorkingArea.Left+cell.x*pitch,screen.WorkingArea.Top+cell.y*pitch,width,height);candidate.Inflate(8*scale,8*scale);
+        // One scaled gutter belongs to every span, so adjacent squares and a wider card share their outer edges.
+        double clearance=WidgetSize.Gap*ContentScale(item)*scale-.001;
+        foreach(var cell in cells){var candidate=new Rect(screen.WorkingArea.Left+EdgeInset*scale+cell.x*pitch,screen.WorkingArea.Top+EdgeInset*scale+cell.y*pitch,width,height);candidate.Inflate(clearance,clearance);
             if(occupied.All(r=>!r.IntersectsWith(candidate))){column=cell.x;row=cell.y;return true;}}
         column=row=0;return false;
     }
@@ -48,7 +53,7 @@ internal static class WidgetDesktopLayout
     {
         var progman=FindWindow("Progman",null);if(progman==0)return 0;
         nint parent=0;EnumWindows((h,_)=>{if(FindWindowEx(h,0,"SHELLDLL_DefView",null)!=0){parent=h;return false;}return true;},0);
-        // Parent to the same desktop view container: widgets are children, behind ordinary app windows.
+        // Use the top-level Explorer desktop as the owner of per-pixel transparent widget windows.
         return parent!=0?parent:progman;
     }
     [StructLayout(LayoutKind.Sequential)] internal struct PointI{public int X,Y;}

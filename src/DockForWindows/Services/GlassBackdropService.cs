@@ -45,6 +45,8 @@ public sealed class GlassBackdropService : IDisposable
     private byte[]? _pixelBuffer;
     public string LastSourceWindows { get; private set; } = "";
     public bool RetainWindowSamples {get;set;}
+    // A widget excludes its peer windows so its own glass cannot sample widgets back into itself.
+    internal IReadOnlySet<nint>? ExcludedWindows {get;set;}
     private sealed record SavedSample(Bitmap Image,Rectangle Bounds,NativeRect Window,long Time,WindowFrameCapture.FrameStamp? Stamp){public long LastUsed=Time,LastConfirmed=Time;}
     private readonly Dictionary<nint,SavedSample> _savedSamples=new();
     // Last raw (Dock) frame, the pixels it was made from and what it showed, for exact reuse while idle.
@@ -182,7 +184,7 @@ public sealed class GlassBackdropService : IDisposable
         for(nint child=GetWindow(desktop,5);child!=0;child=GetWindow(child,2))
         {
             DesktopWidgetLayers.ISource? source=null;foreach(var candidate in sources)if(candidate.Handle==child){source=candidate;break;}
-            if(source is null||!IsWindowVisible(child)||!GetWindowRect(child,out var r))continue;
+            if(source is null||ExcludedWindows?.Contains(child)==true||!IsWindowVisible(child)||!GetWindowRect(child,out var r))continue;
             var rectangle=Rectangle.FromLTRB(r.Left,r.Top,r.Right,r.Bottom);if(!rectangle.IntersectsWith(sample))continue;
             _widgetLayers[child]=source;layers.Add((child,rectangle));
         }
@@ -328,14 +330,14 @@ public sealed class GlassBackdropService : IDisposable
         }
         finally { if (initialized >= 0) RoUninitialize(); SetThreadDpiAwarenessContext(oldDpi); }
     }
-    private static List<(nint Window, Rectangle Bounds)> Layers(nint dock, nint desktop, Rectangle sample)
+    private List<(nint Window, Rectangle Bounds)> Layers(nint dock, nint desktop, Rectangle sample)
     {
         var layers = new List<(nint Window, Rectangle Bounds)>();
         bool below = false;
         EnumWindows((window, _) =>
         {
             if (window == dock) { below = true; return true; }
-            if (!below || window == desktop || !IsWindowVisible(window) || IsIconic(window)) return true;
+            if (!below || window == desktop || ExcludedWindows?.Contains(window)==true || !IsWindowVisible(window) || IsIconic(window)) return true;
             var buffer = _className ??= new char[128]; int count = GetClassNameChars(window, buffer, buffer.Length);
             var name = buffer.AsSpan(0, Math.Max(0, count));
             if (name.SequenceEqual("WorkerW") || name.SequenceEqual("Progman") || name.SequenceEqual("CEF-OSC-WIDGET")) return true;

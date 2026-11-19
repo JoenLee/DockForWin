@@ -9,7 +9,7 @@ using DockForWindows.Models;
 
 namespace DockForWindows.Services;
 
-internal sealed class WidgetRuntime : IDisposable
+internal sealed partial class WidgetRuntime : IDisposable
 {
     private readonly Dispatcher _dispatcher;
     private readonly MediaControlService _media=new();
@@ -28,11 +28,13 @@ internal sealed class WidgetRuntime : IDisposable
     private readonly Dictionary<string,byte[]> _historyArt=new();
     internal IReadOnlyDictionary<string,byte[]> HistoryArt=>_historyArt;
     internal IReadOnlyList<WidgetMusicEntry> History=>_options().MusicHistory;
+    internal WidgetMicrosoftService Microsoft {get;}
     internal MediaState? Media {get;private set;}
     internal string? MediaError {get;private set;}
     internal event Action<WidgetKind?>? Changed;
     internal WidgetRuntime(Dispatcher dispatcher,Func<WidgetOptions> options,Func<WidgetOptions,bool>? save=null,string? cacheDirectory=null)
     {
+        Microsoft=new WidgetMicrosoftService(cacheDirectory==null?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DockForWin","widget-account"):Path.Combine(Path.GetDirectoryName(cacheDirectory)!,"widget-account"));Microsoft.Changed+=MicrosoftChanged;
         _dispatcher=dispatcher;_options=options;_save=save;_cacheDirectory=cacheDirectory;_minute=DateTime.Now.Ticks/TimeSpan.TicksPerMinute;
         _timer=new DispatcherTimer(TimeSpan.FromSeconds(1),DispatcherPriority.Background,Tick,dispatcher);_timer.Start();
         _media.Changed+=MediaChanged;_ = Initialize();
@@ -74,16 +76,16 @@ internal sealed class WidgetRuntime : IDisposable
     internal async void Command(string command){try{await _media.Command(command);await ReadMedia();}catch(Exception e){MediaError=e.Message;Changed?.Invoke(WidgetKind.Music);}}
     private void Tick(object? sender,EventArgs e)
     {
-        long minute=DateTime.Now.Ticks/TimeSpan.TicksPerMinute;if(minute!=_minute){_minute=minute;Changed?.Invoke(WidgetKind.Clock);if(DateTime.Today!=_date){_date=DateTime.Today;Changed?.Invoke(WidgetKind.Calendar);}if(_forecasts.Values.Any(x=>x.Next<=DateTime.Now))Changed?.Invoke(WidgetKind.Weather);Changed?.Invoke(WidgetKind.Notes);}
+        long minute=DateTime.Now.Ticks/TimeSpan.TicksPerMinute;if(minute!=_minute){_minute=minute;Changed?.Invoke(WidgetKind.Clock);if(DateTime.Today!=_date){_date=DateTime.Today;Changed?.Invoke(WidgetKind.Calendar);}if(_forecasts.Values.Any(x=>x.Next<=DateTime.Now)||_nextLocation<=DateTime.Now&&(_location!=null||_options().Sources.Values.Any(x=>x.UseCurrentLocation)||_options().Instances.Any(x=>x.Source.UseCurrentLocation)))Changed?.Invoke(WidgetKind.Weather);Changed?.Invoke(WidgetKind.Notes);Changed?.Invoke(WidgetKind.Reminders);}
         if(Media?.Playing==true&&DateTime.Now.Second%10==0)_ =ReadMedia();
     }
     private static string Key(WidgetSource source)=>FormattableString.Invariant($"{source.Latitude:F6},{source.Longitude:F6}");
     internal (WidgetWeatherSnapshot? Weather,string? Error) Weather(WidgetSource source)
     {
-        if(source.Latitude is not double lat||source.Longitude is not double lon)return(null,LocalizedText.Get("选择天气城市"));string key=Key(source);
+        source=ResolvedSource(source);if(source.Latitude is not double lat||source.Longitude is not double lon)return(null,source.UseCurrentLocation?_locationError??LocalizedText.Get("正在获取当前位置…"):LocalizedText.Get("选择天气城市"));string key=Key(source);
         _forecasts.TryGetValue(key,out var result);
         if(result.Next<=DateTime.Now&&_requests.Add(key))_ =ReadWeather(key,lat,lon);
-        return(result.Weather,result.Error);
+        return(result.Weather,result.Error??(source.UseCurrentLocation?_locationError:null));
     }
     private async Task ReadWeather(string key,double latitude,double longitude)
     {
@@ -109,5 +111,5 @@ internal sealed class WidgetRuntime : IDisposable
         }catch(OperationCanceledException){return;}catch(Exception e){if(!_disposed)_folders[folder]=(Array.Empty<WidgetNote>(),LocalizedText.Get("笔记读取失败：")+e.Message,DateTime.Now.AddMinutes(1));}
         finally{_requests.Remove("folder:"+folder);if(!_disposed)Changed?.Invoke(WidgetKind.Notes);}
     }
-    public void Dispose(){if(_disposed)return;_disposed=true;_timer.Stop();_timer.Tick-=Tick;_lifetime.Cancel();_media.Changed-=MediaChanged;_media.Dispose();_lifetime.Dispose();Changed=null;}
+    public void Dispose(){if(_disposed)return;_disposed=true;_timer.Stop();_timer.Tick-=Tick;_lifetime.Cancel();_media.Changed-=MediaChanged;_media.Dispose();Microsoft.Changed-=MicrosoftChanged;Microsoft.Dispose();_lifetime.Dispose();Changed=null;}
 }

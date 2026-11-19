@@ -7,6 +7,8 @@ namespace DockForWindows.Models;
 
 public sealed class WidgetSource
 {
+    public bool UseCurrentLocation {get;set;}
+    public bool MicrosoftAccount {get;set;}
     public string City {get;set;}="";
     public double? Latitude {get;set;}
     public double? Longitude {get;set;}
@@ -43,6 +45,8 @@ public sealed class WidgetTask
 {
     public Guid Id {get;set;}=Guid.NewGuid();
     public string Title {get;set;}="";
+    [System.Text.Json.Serialization.JsonIgnore] public string RemoteId {get;set;}="";
+    [System.Text.Json.Serialization.JsonIgnore] public string RemoteListId {get;set;}="";
     public string Detail {get;set;}="";
     public string List {get;set;}=LocalizedText.Get("提醒事项");
     public DateTime? Due {get;set;}
@@ -56,6 +60,7 @@ public sealed class WidgetNote
     public string Body {get;set;}="";
     public string Folder {get;set;}=LocalizedText.Get("备忘录");
     public DateTime Modified {get;set;}=DateTime.Now;
+    [System.Text.Json.Serialization.JsonIgnore] public string WebUrl {get;set;}="";
     [System.Text.Json.Serialization.JsonIgnore] public string FilePath {get;set;}="";
     public WidgetNote Copy()=>(WidgetNote)MemberwiseClone();
 }
@@ -89,8 +94,8 @@ public static class WidgetSizes
         WidgetKind.Weather=>LocalizedText.Get("当前实况与当地预报 · Open-Meteo"),
         WidgetKind.Calendar=>LocalizedText.Get("日期、农历与本应用日程"),
         WidgetKind.Clock=>LocalizedText.Get("本地与世界时间 · 可选择时区"),
-        WidgetKind.Reminders=>LocalizedText.Get("本应用待办 · 列表与截止日期"),
-        WidgetKind.Notes=>LocalizedText.Get("应用笔记或你选择的本地文件夹"),
+        WidgetKind.Reminders=>LocalizedText.Get("Microsoft To Do 或本应用待办 · 清单与截止日期"),
+        WidgetKind.Notes=>LocalizedText.Get("OneNote、应用笔记或本地文件夹"),
         _=>LocalizedText.Get("系统媒体会话与本应用观察到的播放记录")};
 }
 public sealed partial class WidgetOptions

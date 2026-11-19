@@ -36,14 +36,14 @@ internal partial class SettingsShellWindow
     }
     private FrameworkElement BuildWidgetNavigator(Action<string> filter)
     {
-        var navigator=new WrapPanel{Margin=new Thickness(0,0,0,14)};
-        var search=new TextBox{Height=32,Width=180,MaxLength=100,Padding=new Thickness(30,2,9,2)};AutomationProperties.SetAutomationId(search,"widget-template-search");AutomationProperties.SetName(search,LocalizedText.Get("搜索模板"));
+        var navigator=new WrapPanel{Margin=new Thickness(0,0,0,10)};
+        var search=new TextBox{Height=32,Width=160,MaxLength=100,Padding=new Thickness(30,2,9,2)};AutomationProperties.SetAutomationId(search,"widget-template-search");AutomationProperties.SetName(search,LocalizedText.Get("搜索模板"));
         var host=new Grid{Height=32,Margin=new Thickness(0,0,10,7)};host.Children.Add(search);
         var glass=new System.Windows.Shapes.Path{Data=System.Windows.Media.Geometry.Parse("M6,1.2 A4.8,4.8 0 1 1 5.99,1.2 Z M9.6,9.6 L13,13"),StrokeThickness=1.5,Width=14,Height=14,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(11,0,0,0),IsHitTestVisible=false};glass.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty,"SettingsTertiary");host.Children.Add(glass);
         var hint=new TextBlock{Text=LocalizedText.Get("搜索模板"),FontSize=13,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(31,0,0,0),IsHitTestVisible=false};hint.SetResourceReference(TextBlock.ForegroundProperty,"SettingsTertiary");host.Children.Add(hint);
         search.TextChanged+=(_,_)=>{hint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;filter(search.Text.Trim());};navigator.Children.Add(host);
         foreach(var kind in Enum.GetValues<WidgetKind>()){
-            var button=new Button{Content=WidgetSizes.Category(kind),Height=32,Padding=new Thickness(13,0,13,0),Margin=new Thickness(0,0,8,7),Template=WidgetGalleryPage.CategoryTemplate()};AutomationProperties.SetAutomationId(button,"widget-category-"+kind.ToString().ToLowerInvariant());button.Click+=(_,_)=>OpenWidgetCategory(kind);navigator.Children.Add(button);
+            var button=new Button{Content=WidgetSizes.Category(kind),Height=32,Padding=new Thickness(8,0,8,0),Margin=new Thickness(0,0,8,7),Template=WidgetGalleryPage.CategoryTemplate()};AutomationProperties.SetAutomationId(button,"widget-category-"+kind.ToString().ToLowerInvariant());button.Click+=(_,_)=>OpenWidgetCategory(kind);navigator.Children.Add(button);
         }
         return navigator;
     }

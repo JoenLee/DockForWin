@@ -38,7 +38,7 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
     internal bool IsUpdating => _timer.IsEnabled;
     internal WidgetGalleryPage(WidgetOptions options, WidgetWeatherService? weatherService = null)
     {
-        _options = options; options.Normalize(); if(options.Material==WidgetMaterial.Glass)options.Material=WidgetMaterial.Light; _weatherService = weatherService ?? new();
+        _options = options; options.Normalize(); _weatherService = weatherService ?? new();
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled; Focusable = false;
         AutomationProperties.SetAutomationId(this, "widget-gallery");
         // The page is a ScrollViewer of its own type, so it asks for the settings window's overlay scroll style by name.
@@ -46,7 +46,7 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         // The 小组件 tab names the page: it opens straight on the search and the categories.
         var body = new StackPanel { Margin = new Thickness(28, 18, 28, 28) }; Content = body;
         var appearance = new WrapPanel { Margin = new Thickness(0, 0, 0, 20), Orientation = Orientation.Horizontal };
-        var materials = new SettingsSegmentedControl { ItemsSource = new[] { LocalizedText.Get("浅色"), LocalizedText.Get("深色") }, SelectedIndex = options.Material == WidgetMaterial.Dark ? 1 : 0, Width = 224, Margin = new Thickness(0, 0, 12, 8) };
+        var materials = new SettingsSegmentedControl { ItemsSource = new[] { LocalizedText.Get("浅色"), LocalizedText.Get("深色"), LocalizedText.Get("液态玻璃") }, SelectedIndex = (int)options.Material, Width = 300, Margin = new Thickness(0, 0, 12, 8) };
         AutomationProperties.SetName(materials, LocalizedText.Get("小组件材质")); AutomationProperties.SetAutomationId(materials, "widget-material"); appearance.Children.Add(materials);
         var curves = new ComboBox { ItemsSource = new[] { LocalizedText.Get("柔和轮廓 · 2.5"), LocalizedText.Get("饱满轮廓 · 3") }, SelectedIndex = options.Exponent == 3 ? 1 : 0, Width = 154, Height = 34, Margin = new Thickness(0, 0, 0, 8) };
         AutomationProperties.SetName(curves, LocalizedText.Get("超椭圆指数")); AutomationProperties.SetAutomationId(curves, "widget-exponent"); appearance.Children.Add(curves); body.Children.Add(appearance);
@@ -59,7 +59,7 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         CalendarCarousel.SelectionChanged += async index => { options.CalendarSelection = index; if(WeatherNeeded()&&_options.Latitude.HasValue&&_weatherRequest==null&&_nextWeather<=DateTimeOffset.Now)await RefreshWeatherAsync(); };
         var (weatherSurface, weatherBody) = Section(LocalizedText.Get("天气"), "weather"); _weatherSection = weatherSurface; body.Children.Add(weatherSurface);
         _searchCity = ActionButton(LocalizedText.Get("查找城市"), async () => await SearchCitiesAsync(), "widget-city-search");
-        _refreshWeather = ActionButton(LocalizedText.Get("刷新天气"), async () => await RefreshWeatherAsync(), "widget-weather-refresh");
+        _refreshWeather = ActionButton(LocalizedText.Get("刷新天气"), async () => {if(_runtime!=null)await _runtime.RefreshWeatherAsync(Source(WeatherCarousel.Hosts[WeatherCarousel.SelectedIndex].Definition));else await RefreshWeatherAsync();}, "widget-weather-refresh");
         var searchRow = new Grid(); searchRow.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); searchRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         AutomationProperties.SetAutomationId(_city, "widget-city-input"); AutomationProperties.SetName(_city, LocalizedText.Get("城市名，例如北京或 Shanghai")); _city.ToolTip = LocalizedText.Get("城市名，例如北京或 Shanghai");
         searchRow.Children.Add(_city); Grid.SetColumn(_searchCity, 1); _searchCity.Margin = new Thickness(8, 0, 0, 0); searchRow.Children.Add(_searchCity);
@@ -69,11 +69,11 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         _city.KeyDown += async (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) { e.Handled = true; await SearchCitiesAsync(); } };
         _cities.SelectionChanged += async (_, _) => {
             if (_cities.SelectedItem is not WidgetLocation location) return;
-            _options.City = location.Name; _options.Latitude = location.Latitude; _options.Longitude = location.Longitude;
+            _options.City = location.Name; _options.Latitude = location.Latitude; _options.Longitude = location.Longitude;var selectedWeather=WeatherCarousel.Hosts[WeatherCarousel.SelectedIndex].Definition;var selectedSource=Source(selectedWeather).Copy();selectedSource.City=location.Name;selectedSource.Latitude=location.Latitude;selectedSource.Longitude=location.Longitude;selectedSource.UseCurrentLocation=false;_options.Sources[selectedWeather.Id]=selectedSource;
             _weather = null; _cityEditor.Header = LocalizedText.Get("城市 · ") + location; _cityEditor.IsExpanded = false; _refreshWeather.IsEnabled = true; RenderWeather(); RenderCalendar(); await RefreshWeatherAsync();
         };
         weatherBody.Children.Add(TemplateHeading(WeatherCarousel)); weatherBody.Children.Add(WeatherCarousel); weatherBody.Children.Add(TemplateControls(WeatherCarousel,"weather")); AddPlacementButton(weatherBody, "weather"); weatherBody.Children.Add(BuildColorEditor(WeatherCarousel,"weather")); weatherBody.Children.Add(_weatherStatus);
-        _refreshWeather.IsEnabled = options.Latitude.HasValue; _refreshWeather.HorizontalAlignment = HorizontalAlignment.Stretch;_refreshWeather.ToolTip=LocalizedText.Get("选择天气城市后刷新数据");
+        _refreshWeather.IsEnabled = true; _refreshWeather.HorizontalAlignment = HorizontalAlignment.Stretch;_refreshWeather.ToolTip=LocalizedText.Get("选择天气城市后刷新数据");
         _refreshWeather.Margin = new Thickness(0, 12, 0, 0); weatherBody.Children.Add(_refreshWeather);
         var attribution = new TextBlock { FontSize = 10, Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
         attribution.SetResourceReference(TextBlock.ForegroundProperty, "SettingsMuted");

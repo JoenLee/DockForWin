@@ -56,6 +56,13 @@ internal sealed class WidgetHost : Grid
     private readonly Path _plate, _shadow, _tint;
     private readonly Grid _content;
     private readonly Grid _visual;
+    private DockSurface? _glass;
+    private WidgetGlassBackdrop? _capture;
+    private readonly AdaptiveGlassAppearance _contrast=new();
+    private bool? _lightInk;
+    private bool _customInk;
+    private Rect _glassPane=Rect.Empty;
+    private WidgetDesktopWindow? _glassOwner;
     private readonly ScaleTransform _visualScale=new(1,1);
     private bool _gestureActive;
     private static readonly DependencyProperty HoverScaleProperty=DependencyProperty.Register(nameof(HoverScale),typeof(double),typeof(WidgetHost),
@@ -64,10 +71,10 @@ internal sealed class WidgetHost : Grid
     internal double PanelScale {get;private set;}=1;
     internal double VisualScale=>PanelScale*HoverScale;
     internal event Action? VisualScaleChanged;
-    private static Brush? _glass;
     private static readonly DropShadowEffect Shadow = CreateShadow();
+    private bool _galleryShadow;
     private double _shadowStrength=1,_shadowBaseOpacity=.14;
-    internal void UseGalleryShadow(){_shadowBaseOpacity=.19;_shadow.Effect=new DropShadowEffect{BlurRadius=24,ShadowDepth=8,Direction=270,Opacity=.19,Color=Color.FromRgb(39,69,74),RenderingBias=RenderingBias.Performance};}
+    internal void UseGalleryShadow(){_galleryShadow=true;_shadowBaseOpacity=.19;_shadow.Effect=new DropShadowEffect{BlurRadius=24,ShadowDepth=8,Direction=270,Opacity=.19,Color=Color.FromRgb(39,69,74),RenderingBias=RenderingBias.Performance};}
     internal WidgetDefinition Definition { get; private set; }
     internal WidgetMaterial Material { get; private set; }
     internal Geometry Outline { get; private set; } = null!;
@@ -82,17 +89,16 @@ internal sealed class WidgetHost : Grid
         _visual=new Grid{Width=Width,Height=Height,RenderTransformOrigin=new Point(.5,.5),RenderTransform=_visualScale};
         _visual.Children.Add(_shadow); _visual.Children.Add(_plate); _visual.Children.Add(_tint); _visual.Children.Add(_content);Children.Add(_visual);
         SetExponent(exponent); SetMaterial(WidgetMaterial.Light);
-        MouseEnter+=(_,_)=>{if(!_gestureActive)ControlMotion.To(this,HoverScaleProperty,1.025,speed:2.4);};
-        MouseLeave+=(_,_)=>{if(!_gestureActive)ControlMotion.To(this,HoverScaleProperty,1,speed:2.4);};
-        Unloaded+=(_,_)=>{_gestureActive=false;ControlMotion.Stop(this,HoverScaleProperty,1);};
+        Loaded+=(_,_)=>UpdateGlassCapture();
+        Unloaded+=(_,_)=>{_gestureActive=false;ControlMotion.Stop(this,HoverScaleProperty,1);ReleaseGlassCapture();};
     }
     private void UpdateVisualScale(){_visualScale.ScaleX=_visualScale.ScaleY=VisualScale;VisualScaleChanged?.Invoke();}
     internal Rect VisualBounds(Visual ancestor)=>_visual.TransformToAncestor(ancestor).TransformBounds(new Rect(_visual.RenderSize));
-    internal void SetGestureActive(bool active){if(_gestureActive==active)return;_gestureActive=active;ControlMotion.Stop(this,HoverScaleProperty,1);if(!active&&IsMouseOver)ControlMotion.To(this,HoverScaleProperty,1.025,speed:2.4);}
+    internal void SetGestureActive(bool active){if(_gestureActive==active)return;_gestureActive=active;ControlMotion.Stop(this,HoverScaleProperty,1);}
     internal void Resize(WidgetSize size){Definition=Definition with {Size=size};Width=size.Width;Height=size.Height;_visual.Width=Width;_visual.Height=Height;SetExponent(_exponent);VisualScaleChanged?.Invoke();}
     private double _exponent=2.5;
     private bool _active=true;
-    internal bool SetActive(bool active){if(_active==active)return false;_active=active;_content.Visibility=active?Visibility.Visible:Visibility.Hidden;return true;}
+    internal bool SetActive(bool active){if(_active==active)return false;_active=active;_content.Visibility=active?Visibility.Visible:Visibility.Hidden;UpdateGlassCapture();return true;}
     internal void SetContent(FrameworkElement content)
     {
         _content.Children.Clear(); _content.Children.Add(content);
@@ -102,10 +108,13 @@ internal sealed class WidgetHost : Grid
         _exponent=exponent;Outline = WidgetGeometry.Get(Width, Height, exponent);
         _plate.Data = _shadow.Data = _tint.Data = Outline;
         _content.Clip = Outline;
+        if(_glass is not null){_glass.Radius=Math.Min(20,Math.Min(Width,Height)*.19)/(Math.Min(Width,Height)/2)*100;_glass.CornerExponent=exponent;_glass.Clip=Outline;_glass.InvalidateVisual();}
     }
     internal void SetMaterial(WidgetMaterial material, WidgetCardColors? colors = null)
     {
         Material = material; bool dark = material == WidgetMaterial.Dark;
+        _customInk=ThemeAppearance.TryColor(colors?.Foreground,out _);
+        _lightInk=null;
         var defaults = Definition.Layout switch {
             WidgetLayout.WeatherHourly => (Background:dark?"#122949":"#327FBB",Ink:"#F8FCFF",Accent:"#DBF3FF",Gradient:true),
             WidgetLayout.CalendarGiant or WidgetLayout.CalendarMinimal => (Background:dark?"#10233B":"#EEF1F6",Ink:dark?"#A7C5FF":"#125BCE",Accent:"#EB786D",Gradient:false),
@@ -138,22 +147,23 @@ internal sealed class WidgetHost : Grid
         Resources["WidgetNumberStyle"] = colors?.NumberStyle??WidgetNumberStyle.Standard;
         Resources["WidgetTextWeight"] = colors?.TextWeight??WidgetTextWeight.Automatic;
         Resources["WidgetTextScale"] = colors?.TextScale??1d;
-        double strength=Math.Clamp(colors?.Shadow??1,0,2);
+        double strength=_galleryShadow?1:Math.Clamp(colors?.Shadow??1,0,2);
         if(Math.Abs(strength-_shadowStrength)>.000001&&_shadow.Effect is DropShadowEffect shadow){_shadowStrength=strength;if(shadow.IsFrozen){shadow=shadow.Clone();_shadow.Effect=shadow;}shadow.Opacity=_shadowBaseOpacity*strength;}_plate.Opacity=_tint.Opacity=colors?.Opacity??1;
         if(colors?.Curvature is double curve)SetExponent(curve);
         double panelScale=colors?.PanelScale??1;
         if(Math.Abs(PanelScale-panelScale)>.000001){PanelScale=panelScale;UpdateVisualScale();}
-        _plate.Fill = material == WidgetMaterial.Glass ? GlassBrush() : WidgetBrushes.Surface(background,colors?.Gradient??defaults.Gradient);
-        _tint.Fill = material == WidgetMaterial.Glass ? WidgetBrushes.Surface("#BF"+background[1..],colors?.Gradient??defaults.Gradient) : Brushes.Transparent;
+        _plate.Fill = WidgetBrushes.Surface(background,colors?.Gradient??defaults.Gradient);
+        _tint.Fill = material == WidgetMaterial.Glass ? WidgetBrushes.Surface("#20"+background[1..],colors?.Gradient??defaults.Gradient) : Brushes.Transparent;
         if(ThemeAppearance.TryColor(colors?.GradientEnd,out var gradientEnd)){
             var fill=new LinearGradientBrush(WidgetBrushes.Get(background).Color,WidgetBrushes.Get(gradientEnd).Color,45);fill.Freeze();
-            if(material==WidgetMaterial.Glass){fill=fill.Clone();fill.Opacity=.75;fill.Freeze();_tint.Fill=fill;}else _plate.Fill=fill;
+            if(material==WidgetMaterial.Glass){fill=fill.Clone();fill.Opacity=.12;fill.Freeze();_tint.Fill=fill;}else _plate.Fill=fill;
         }
         if (SystemParameters.HighContrast) {
             _plate.Fill = SystemColors.WindowBrush; _tint.Fill = Brushes.Transparent;
             Resources["WidgetInk"] = Resources["WidgetMuted"] = SystemColors.WindowTextBrush;
             Resources["WidgetAccent"] = SystemColors.HighlightBrush;
         }
+        ConfigureGlass(colors);
         VisualScaleChanged?.Invoke();
     }
     private static DropShadowEffect CreateShadow()
@@ -161,16 +171,46 @@ internal sealed class WidgetHost : Grid
         var effect = new DropShadowEffect { BlurRadius = 22, ShadowDepth = 7, Direction = 270, Opacity = .14, Color = Color.FromRgb(39, 69, 74), RenderingBias = RenderingBias.Performance };
         effect.Freeze(); return effect;
     }
-    private static Brush GlassBrush()
+    private void ConfigureGlass(WidgetCardColors? colors)
     {
-        if (_glass != null) return _glass;
-        var image = new Image { Source = new BitmapImage(new Uri("pack://application:,,,/DockForWindows;component/Assets/PreviewWallpaper.png")),
-            Stretch = Stretch.UniformToFill, Width = 512, Height = 256, Effect = new BlurEffect { Radius = 24 } };
-        image.Measure(new Size(512, 256)); image.Arrange(new Rect(0, 0, 512, 256));
-        var snapshot = new RenderTargetBitmap(512, 256, 96, 96, PixelFormats.Pbgra32); snapshot.Render(image); snapshot.Freeze();
-        var brush = new ImageBrush(snapshot) { Stretch = Stretch.UniformToFill }; brush.Freeze();
-        return _glass = brush;
+        bool enabled=Material==WidgetMaterial.Glass&&!SystemParameters.HighContrast;
+        if(enabled){
+            if(_glass is null){_glass=new DockSurface{UseGlass=true,FusedOptics=true,ConstrainFrostToOutline=true,Fill=Brushes.White,StrokeWidth=0,IsHitTestVisible=false};_glass.UseControlCenterLighting();_visual.Children.Insert(2,_glass);SetExponent(_exponent);}
+            var settings=WidgetDesktopService.Current?.GlassMaterial??new DockSettings();
+            _glass.GlassIntensity=settings.GlassIntensity;_glass.GlassDistortion=settings.GlassDistortion;_glass.GlassFrost=settings.GlassFrost;_glass.GlassHighlight=settings.GlassHighlight;_glass.GlassHighlightWidth=settings.GlassHighlightWidth;_glass.GlassTint=settings.GlassTint;_glass.GlassTintColor=GlassTint.Resolve(settings);_glass.GlassGrain=settings.GlassGrain;_glass.GlassOpacity=settings.GlassOpacity*(colors?.Opacity??1);_glass.Visibility=Visibility.Visible;_glass.InvalidateVisual();
+            _plate.Visibility=_glass.Backdrop is null?Visibility.Visible:Visibility.Hidden;
+        }else{if(_glass is not null){_glass.Visibility=Visibility.Collapsed;_glass.Backdrop=null;}_plate.Visibility=Visibility.Visible;}
+        UpdateGlassCapture();
     }
+    private void UpdateGlassCapture()
+    {
+        if(!IsLoaded||!_active||Material!=WidgetMaterial.Glass||SystemParameters.HighContrast){ReleaseGlassCapture();return;}
+        if(_capture is not null&&!_capture.Matches(this))ReleaseGlassCapture();
+        if(_capture is null){_capture=WidgetGlassBackdrop.Attach(this);if(_capture is not null&&Window.GetWindow(this) is WidgetDesktopWindow owner){_glassOwner=owner;owner.LocationChanged+=GlassOwnerMoved;owner.DpiChanged+=GlassOwnerDpiChanged;}}
+    }
+    private void GlassOwnerMoved(object? sender,EventArgs e)=>UpdateGlassCapture();
+    private void GlassOwnerDpiChanged(object sender,DpiChangedEventArgs e)=>UpdateGlassCapture();
+    private void ReleaseGlassCapture(){if(_glassOwner is not null){_glassOwner.LocationChanged-=GlassOwnerMoved;_glassOwner.DpiChanged-=GlassOwnerDpiChanged;_glassOwner=null;}_capture?.Detach(this);_capture=null;if(_glass is not null)_glass.Backdrop=null;_plate.Visibility=Visibility.Visible;}
+    internal bool TryGlassBounds(out Rect bounds)
+    {
+        bounds=Rect.Empty;if(_glass is null||!IsLoaded||!IsVisible||!_active||_glass.ActualWidth<=0||_glass.ActualHeight<=0)return false;
+        if(Window.GetWindow(this) is WidgetDesktopWindow desktop&&!desktop.ContentActive)return false;
+        bounds=new Rect(_glass.PointToScreen(new Point()),_glass.PointToScreen(new Point(_glass.ActualWidth,_glass.ActualHeight)));return !bounds.IsEmpty&&bounds.Width>0&&bounds.Height>0;
+    }
+    internal void SetGlassBackdrop(BitmapSource frame,Rect bounds,Rect pane,bool changed)
+    {
+        if(_glass is null||Material!=WidgetMaterial.Glass)return;
+        var dpi=new DpiScale(pane.Width/_glass.ActualWidth,pane.Height/_glass.ActualHeight);
+        bool mapping=_glass.BackdropScreenBounds!=bounds||_glassPane!=pane||!Equals(_glass.CapturePixelScale,dpi)||!ReferenceEquals(_glass.Backdrop,frame);
+        _glassPane=pane;
+        _glass.CapturePixelScale=dpi;_glass.BackdropScreenBounds=bounds;
+        if(!ReferenceEquals(_glass.Backdrop,frame))_glass.Backdrop=frame;else if(changed||mapping)_glass.InvalidateVisual();
+        _plate.Visibility=Visibility.Hidden;
+        if(!_customInk){_contrast.Observe(frame,new Int32Rect((int)(pane.X-bounds.X),(int)(pane.Y-bounds.Y),Math.Max(1,(int)pane.Width),Math.Max(1,(int)pane.Height)),System.Diagnostics.Stopwatch.GetTimestamp()/(double)System.Diagnostics.Stopwatch.Frequency);
+            bool light=AdaptiveGlassAppearance.LightIndicator(_contrast.Luminance,_lightInk);if(_lightInk!=light){_lightInk=light;Resources["WidgetInk"]=WidgetBrushes.Get(light?"#F3F7F7":"#24383B");Resources["WidgetMuted"]=WidgetBrushes.Get(light?"#B8F3F7F7":"#B824383B");}}
+        ToolTip=(RenderCapability.Tier>>16)<2?(Services.UiText.IsEnglish?"Hardware refraction is unavailable on this device; showing the supported glass effects.":"当前设备不支持硬件折射，显示可用的玻璃效果。"):null;
+    }
+    internal void GlassCaptureFailed(Exception error)=>ToolTip=(Services.UiText.IsEnglish?"Glass background is unavailable: ":"玻璃背景暂不可用：")+error.Message;
 }
 
 internal static class WidgetIcons

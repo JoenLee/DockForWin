@@ -55,6 +55,7 @@ public sealed class WidgetWeatherService
         }
         return await task.WaitAsync(cancellation).ConfigureAwait(false);
     }
+    internal static void Invalidate(double latitude,double longitude){lock(CacheGate)Cache.TryRemove(FormattableString.Invariant($"{latitude:F6},{longitude:F6}"),out _);}
     private async Task<WidgetWeatherSnapshot> ReadCoreAsync(double latitude,double longitude,CancellationToken cancellation)
     {
         ValidateLocation(latitude, longitude);
