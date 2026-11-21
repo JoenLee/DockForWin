@@ -34,8 +34,8 @@ internal static class WidgetGlassChecks
     private static async Task Verify(string output)
     {
         var root=new Canvas{Width=540,Height=375,Background=Brushes.Transparent};
-        var rear=new Window{Title="小组件背景验证",WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Width=root.Width,Height=root.Height,Left=SystemParameters.WorkArea.Left+50,Top=SystemParameters.WorkArea.Top+70,ShowInTaskbar=false,ShowActivated=false,Topmost=true,Background=new SolidColorBrush(Color.FromRgb(210,70,30))};
-        var front=new Window{Title="小组件液态玻璃验证",WindowStyle=WindowStyle.None,AllowsTransparency=true,Background=Brushes.Transparent,ResizeMode=ResizeMode.NoResize,Width=root.Width,Height=root.Height,Left=rear.Left,Top=rear.Top,ShowInTaskbar=false,ShowActivated=false,Topmost=true,Content=root};
+        var rear=new Window{Title="小组件背景验证",WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Width=root.Width+64,Height=root.Height+64,Left=SystemParameters.WorkArea.Left+18,Top=SystemParameters.WorkArea.Top+38,ShowInTaskbar=false,ShowActivated=false,Topmost=true,Background=new SolidColorBrush(Color.FromRgb(210,70,30))};
+        var front=new Window{Title="小组件液态玻璃验证",WindowStyle=WindowStyle.None,AllowsTransparency=true,Background=Brushes.Transparent,ResizeMode=ResizeMode.NoResize,Width=root.Width,Height=root.Height,Left=rear.Left+32,Top=rear.Top+32,ShowInTaskbar=false,ShowActivated=false,Topmost=true,Content=root};
         var hosts=new List<WidgetHost>();
         try{
             int index=0;foreach(string id in new[]{"weather-small","calendar-day","clock-classic","reminder-list","notes-small","music-small"}){

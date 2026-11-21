@@ -135,6 +135,8 @@ internal sealed partial class WidgetGalleryPage : ScrollViewer
         ["clock"] = "M10,1.8 A8.2,8.2 0 1 1 9.99,1.8 Z M10,5.5 V10 L13,12",
         ["reminders"] = "M2.5,4.8 L4,6.3 L6.5,3.6 M9.5,5 H17.5 M2.5,10.3 L4,11.8 L6.5,9.1 M9.5,10.5 H17.5 M3,16 H5.5 M9.5,16 H17.5",
         ["notes"] = "M5,2 H12 L16.5,6.5 V16.5 A1.5,1.5 0 0 1 15,18 H5 A1.5,1.5 0 0 1 3.5,16.5 V3.5 A1.5,1.5 0 0 1 5,2 Z M12,2 V6.5 H16.5 M6.8,10.5 H13.2 M6.8,13.8 H11",
+        ["status"]="M2,7 H17 V15 H2 Z M17,9 H19 V13 H17 M5,9 V13 M8,9 V13 M11,9 V13",
+        ["aiusage"]="M3,4 H17 V17 H3 Z M6,12 V14 M10,9 V14 M14,6 V14",
         ["music"] = "M7.5,15.2 V4.2 L17,2 V13 M7.5,15.2 A2.4,2.4 0 1 1 5.1,12.8 A2.4,2.4 0 0 1 7.5,15.2 Z M17,13 A2.4,2.4 0 1 1 14.6,10.6 A2.4,2.4 0 0 1 17,13 Z",
     };
     private static (Border Surface, StackPanel Body) Section(string title, string category)

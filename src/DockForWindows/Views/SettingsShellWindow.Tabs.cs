@@ -28,7 +28,7 @@ internal partial class SettingsShellWindow
         bar.ColumnDefinitions.Add(new());bar.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
         System.Windows.Data.BindingOperations.SetBinding(bar.ColumnDefinitions[0],ColumnDefinition.WidthProperty,new System.Windows.Data.Binding("Width"){Source=_sidebarColumn});
         var header=new Grid{ClipToBounds=true,IsHitTestVisible=false};
-        var sample=new VisualBrush(_pages){ViewboxUnits=BrushMappingMode.Absolute,Stretch=Stretch.Fill,AlignmentX=AlignmentX.Left,AlignmentY=AlignmentY.Top};
+        var sample=new VisualBrush(_pages){AutoLayoutContent=false,ViewboxUnits=BrushMappingMode.Absolute,Stretch=Stretch.Fill,AlignmentX=AlignmentX.Left,AlignmentY=AlignmentY.Top};
         // The page under the bar is sampled and blurred at half resolution: the blur radius is in DIPs, so it looks
         // the same (and shows through the 82% tint at half opacity), but each scrolled frame touches a quarter of the pixels.
         _toolbarBlur=new System.Windows.Shapes.Rectangle{Fill=sample,Opacity=0,Effect=new System.Windows.Media.Effects.BlurEffect{Radius=10,KernelType=System.Windows.Media.Effects.KernelType.Gaussian}};
@@ -99,7 +99,7 @@ internal partial class SettingsShellWindow
     }
     private Button Traffic(string name,string id,string glyph,string fill,string edge,Action action)
     {
-        var button=new Button{Style=(Style)FindResource("SettingsTrafficButton"),Background=DesignSystem.Brush(DesignSystem.Hex(fill)),BorderBrush=DesignSystem.Brush(DesignSystem.Hex(edge)),Content=new WindowControlGlyph(glyph,DesignSystem.Brush(DesignSystem.Hex(edge))),ToolTip=name,Margin=new Thickness(2,0,2,0)};
+        var button=new Button{Style=(Style)FindResource("SettingsTrafficButton"),Background=DesignSystem.Brush(DesignSystem.Hex(fill)),BorderBrush=DesignSystem.Brush(DesignSystem.Hex(edge)),Content=new WindowControlGlyph(glyph,DesignSystem.Brush(DesignSystem.Hex(edge)),DesignSystem.Brush(DesignSystem.Hex(fill))),ToolTip=name,Margin=new Thickness(2,0,2,0)};
         AutomationProperties.SetAutomationId(button,"settings-shell-window-"+id);AutomationProperties.SetName(button,name);WindowChrome.SetIsHitTestVisibleInChrome(button,true);var scale=new ScaleTransform(1,1);button.RenderTransform=scale;button.RenderTransformOrigin=new Point(.5,.5);
         void Hover(double target){double seconds=_draft.Animations&&SystemParameters.ClientAreaAnimation ? .12 : 0;foreach(var property in new[]{ScaleTransform.ScaleXProperty,ScaleTransform.ScaleYProperty})scale.BeginAnimation(property,new System.Windows.Media.Animation.DoubleAnimation(target,TimeSpan.FromSeconds(seconds)){EasingFunction=new System.Windows.Media.Animation.CubicEase{EasingMode=System.Windows.Media.Animation.EasingMode.EaseOut}});}
         button.MouseEnter+=(_,_)=>Hover(1.12);button.MouseLeave+=(_,_)=>Hover(1);button.Click+=(_,_)=>action();return button;

@@ -300,14 +300,10 @@
       <Setter.Value>
         <ControlTemplate TargetType="Button">
           <Grid Background="Transparent">
-            <Grid><Grid.CacheMode><BitmapCache SnapsToDevicePixels="True"/></Grid.CacheMode>
-              <Ellipse x:Name="Light" Width="18" Height="18" Fill="{TemplateBinding Background}"><Ellipse.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity=".16"/></Ellipse.Effect></Ellipse>
-            </Grid>
-            <ContentPresenter x:Name="Glyph" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="1"/>
+            <ContentPresenter x:Name="Glyph" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Grid>
           <ControlTemplate.Triggers>
-            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=StackPanel}}" Value="True"><Setter TargetName="Glyph" Property="Opacity" Value="1"/></DataTrigger>
-            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Light" Property="Opacity" Value=".72"/></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Glyph" Property="Opacity" Value=".72"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>

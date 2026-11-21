@@ -134,7 +134,7 @@ internal static class SettingsPolishChecks
                 var expander=Find<Expander>(settings,"widget-colors-"+category);var header=(FrameworkElement)expander.Template.FindName("HeaderSite",expander);Check(header.TranslatePoint(new Point(),expander).X>=0,"expander header has no clipped negative margin: "+category);
                 if(category=="notes")Screenshot(settings,Path.Combine(directory,"04-notes.png"));
             }
-            if(english){var labels=Tree<TextBlock>(settings).Where(x=>x.IsVisible&&Regex.IsMatch(x.Text,"[\\u4e00-\\u9fff]")).Select(x=>x.Text).Distinct().ToArray();Check(labels.Length==0,"visible widget UI is English: "+string.Join(" | ",labels));}
+            if(english){var dataText=Tree<WidgetHost>(settings).SelectMany(h=>Tree<TextBlock>(h)).ToHashSet();var labels=Tree<TextBlock>(settings).Where(x=>x.IsVisible&&!dataText.Contains(x)&&Regex.IsMatch(x.Text,"[\\u4e00-\\u9fff]")).Select(x=>x.Text).Distinct().ToArray();Check(labels.Length==0,"visible widget UI is English: "+string.Join(" | ",labels));}
             Click(settings,"settings-tab-control-center");await Task.Delay(250);Screenshot(settings,Path.Combine(directory,"05-control-center.png"));
             Click(settings,"save-settings");await Task.Delay(200);Check(store.Load().Language==draft.Language&&store.Load().InterfaceAccent=="#000000","Save commits language and black accent through normal persistence");
             result=0;

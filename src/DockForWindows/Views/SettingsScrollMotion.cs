@@ -56,7 +56,7 @@ internal static class SettingsScrollMotion
             ControlMotion.To(viewer,OffsetProperty,state.Target,speed:1.12,completed:()=>EndGlide(state));e.Handled=true;
         };
         viewer.PreviewMouseDown+=(_,_)=>Stop(viewer,state);viewer.PreviewKeyDown+=(_,_)=>Stop(viewer,state);
-        viewer.IsVisibleChanged+=(_,_)=>{if(!viewer.IsVisible)Stop(viewer,state);};viewer.Unloaded+=(_,_)=>Stop(viewer,state);
+        viewer.IsVisibleChanged+=(_,_)=>{if(!viewer.IsVisible)Stop(viewer,state);};viewer.Unloaded+=(_,_)=>Stop(viewer,state);viewer.SizeChanged+=(_,_)=>Stop(viewer,state);
     }
     private static void Stop(ScrollViewer viewer,State state){EndGlide(state);state.Target=viewer.VerticalOffset;state.LastInput=0;ControlMotion.Stop(viewer,OffsetProperty,viewer.VerticalOffset);ControlMotion.Stop(viewer,BounceProperty,0);}
 }

@@ -23,7 +23,13 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if(args.Length==2&&args[0]=="--verify-release-profile-clocks")return ReleaseProfileClockChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-figma-visual-correction")return FigmaVisualCorrectionChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-figma-live")return FigmaLiveChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-figma-widgets")return FigmaWidgetChecks.Run(args[1]);
         if(args.Length==3&&args[0]=="--preview-settings-polish")return SettingsPolishChecks.Preview(args[1],args[2]=="en-US");
+        if(args.Length==2&&args[0]=="--verify-settings-stability")return SettingsStabilityChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-settings-stability-en")return SettingsStabilityChecks.Run(args[1],true);
         if(args.Length==2&&args[0]=="--verify-settings-polish")return SettingsPolishChecks.Run(args[1],false);
         if(args.Length==2&&args[0]=="--verify-settings-polish-en")return SettingsPolishChecks.Run(args[1],true);
         if(args.Length==2&&args[0]=="--verify-themed-menus")return ThemedMenuChecks.Run(args[1]);
@@ -33,6 +39,15 @@ internal static class Program
         if(args.Length==2&&args[0]=="--verify-widget-system")return WidgetSystemChecks.Run(new[]{args[1]});
         if(args.Length==2&&args[0]=="--verify-widget-desktop")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only"});
         if(args.Length==2&&args[0]=="--verify-widget-desktop-layout")return WidgetSystemChecks.Run(new[]{args[1],"--layout-only"});
+        if(args.Length==2&&args[0]=="--verify-widget-ai-live")return WidgetStyleChecks.LiveUsage(args[1]);
+        if(args.Length==2&&args[0]=="--capture-widget-reference-live")return WidgetReferenceChecks.Run(args[1],false,true);
+        if(args.Length==2&&args[0]=="--verify-widget-playback")return WidgetPlaybackChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-window-control-alignment")return WindowControlAlignmentChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-reference-players")return ReferencePlayerChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-document-clocks")return DocumentClockChecks.Run(args[1]);
+        if(args.Length==2&&args[0]=="--verify-widget-reference")return WidgetReferenceChecks.Run(args[1],false);
+        if(args.Length==2&&args[0]=="--capture-widget-reference")return WidgetReferenceChecks.Run(args[1],true);
+        if(args.Length==2&&args[0]=="--verify-widget-styles")return WidgetStyleChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--verify-widget-glass")return WidgetGlassChecks.Run(args[1]);
         if(args.Length==2&&args[0]=="--verify-widget-desktop-visual")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only","--visual"});
         if(args.Length==2&&args[0]=="--verify-widget-system-live")return WidgetSystemChecks.Run(new[]{args[1],"--desktop-only","--live"});

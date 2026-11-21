@@ -1,17 +1,20 @@
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #ifndef PayloadDir
   #error PayloadDir must be supplied
 #endif
 #ifndef DestinationDir
-  #define DestinationDir "D:\DockForWin"
+  #define DestinationDir "."
 #endif
 
 [Setup]
 AppId={{F5D103D5-7084-4BC2-933D-833CA18DAE86}
 AppName=DockForWin
-AppVersion=0.6.0
-AppVerName=DockForWin 0.6.0
+AppVersion={#AppVersion}
+AppVerName=DockForWin {#AppVersion}
 AppPublisher=DockForWin
-DefaultDirName={code:DefaultLocation}
+DefaultDirName={localappdata}\Programs\DockForWin
 DefaultGroupName=DockForWin
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -19,12 +22,15 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 OutputDir={#DestinationDir}
-OutputBaseFilename=DockForWin-Setup-0.6.0-x64
+OutputBaseFilename=DockForWin-Setup-{#AppVersion}-x64
 SetupIconFile=..\src\DockForWindows\Assets\DockForWindows.ico
 UninstallDisplayIcon={app}\DockForWindows.exe
-VersionInfoVersion=0.6.0.0
+VersionInfoVersion={#AppVersion}.0
 VersionInfoProductName=DockForWin
-Compression=lzma2/normal
+Compression=lzma2/ultra64
+LZMADictionarySize=131072
+LZMANumBlockThreads=1
+LZMAUseSeparateProcess=yes
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
@@ -40,7 +46,8 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 
 [Files]
 Source: "{#PayloadDir}\DockForWindows.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "Install-Readme.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\Install-Readme.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\Licenses\*"; DestDir: "{app}\Licenses"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 Name: "{group}\DockForWin"; Filename: "{app}\DockForWindows.exe"; WorkingDir: "{app}"
@@ -66,11 +73,6 @@ begin
   if Event <> 0 then begin SetEvent(Event); CloseHandle(Event); Sleep(900); end;
 end;
 
-function DefaultLocation(Param: String): String;
-begin
-  if DirExists('D:\') then Result := 'D:\DockForWin\App'
-  else Result := ExpandConstant('{localappdata}\Programs\DockForWin');
-end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin RequestDockExit; Result := ''; end;

@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="428" height="108" viewBox="0 0 428 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path id="Solar arc" d="M2 106C114 106 114 2 214 2C314 2 314 106 426 106" stroke-width="4" stroke-linecap="round" stroke="url(#paint0_linear_0_11)"/>
+<defs>
+<linearGradient id="paint0_linear_0_11" x1="214" y1="2" x2="214" y2="106" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3B9CC4" stop-opacity="0.95"/>
+<stop offset="0.748" stop-color="#3B9CC4" stop-opacity="0.95"/>
+<stop offset="0.752" stop-color="#5486A4" stop-opacity="0.22"/>
+<stop offset="1" stop-color="#5486A4" stop-opacity="0.22"/>
+</linearGradient>
+</defs>
+</svg>

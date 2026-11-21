@@ -70,7 +70,9 @@ internal partial class SettingsShellWindow:Window
         var root=_right=new Grid();AutomationProperties.SetAutomationId(root,"settings-shell-two-columns");
         root.RowDefinitions.Add(new(){Height=new GridLength(0)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var shell=new Grid();shell.SetResourceReference(Panel.BackgroundProperty,"SettingsCanvas");
-        shell.SizeChanged+=(_,_)=>UpdateShellOutline(shell);StateChanged+=(_,_)=>UpdateShellOutline(shell);
+        shell.SizeChanged+=(_,_)=>UpdateShellOutline(shell);
+        void RefreshOutline()=>Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render,()=>UpdateShellOutline(shell));
+        Loaded+=(_,_)=>RefreshOutline();StateChanged+=(_,_)=>RefreshOutline();DpiChanged+=(_,_)=>RefreshOutline();IsVisibleChanged+=(_,_)=>{if(IsVisible)RefreshOutline();};
         shell.RowDefinitions.Add(new(){Height=new GridLength(TabBarHeight)});shell.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});
         _sidebarColumn=new ColumnDefinition{Width=new GridLength(204)};shell.ColumnDefinitions.Add(_sidebarColumn);shell.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
         Grid.SetRow(root,0);Grid.SetRowSpan(root,2);Grid.SetColumn(root,1);shell.Children.Add(root);_shellContent=shell;Content=shell;

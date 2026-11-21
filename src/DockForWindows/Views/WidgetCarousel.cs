@@ -176,7 +176,7 @@ internal sealed class WidgetCarousel : Grid
         if (!new Rect(_viewport.RenderSize).Contains(point)) return;
         DependencyObject? source = e.OriginalSource as DependencyObject; WidgetHost? clicked = null;
         for (var at = source; at != null && at != this; at = at is Visual?VisualTreeHelper.GetParent(at):LogicalTreeHelper.GetParent(at)) {
-            if (at is ButtonBase or TextBoxBase or Selector) return;
+            if (at is ButtonBase or TextBoxBase or Selector or Slider) return;
             if (at is WidgetHost host) clicked = host;
         }
         _pressedIndex = clicked == null ? SelectedIndex : _cards.FindIndex(c => c.Host == clicked);

@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="144" height="52.6708" viewBox="0 0 144 52.6708" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="sienna-dune">
+<path id="Vector" d="M0 4.67081C24.5714 -3.90062 44.5714 0.0993827 65.1429 10.3851C90.8571 23.528 116.571 24.0994 144 13.8137V52.6708H0V4.67081Z" fill="url(#paint0_linear_0_131)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_131" x1="34.8571" y1="1.81367" x2="58.8571" y2="53.2422" gradientUnits="userSpaceOnUse">
+<stop stop-color="#B45B40"/>
+<stop offset="1" stop-color="#873B30"/>
+</linearGradient>
+</defs>
+</svg>

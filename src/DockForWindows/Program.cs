@@ -38,8 +38,7 @@ public static class Program
         int profileIndex=Array.IndexOf(args,"--data-directory");
         string? explicitProfile=profileIndex>=0 && profileIndex+1<args.Length ? args[profileIndex+1] : null;
         var store = new SettingsService(explicitProfile);
-        if (explicitProfile is null && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DOCKFORWINDOWS_DATA"))) store.TryImportFrom(@"D:\DockForWindows\data");
-        store.Log(LocalizedText.Get("启动 DockForWindows 0.6.0"));
+        store.Log("DockForWindows " + typeof(Program).Assembly.GetName().Version + " started");
         try
         {
             var settings = store.Load();

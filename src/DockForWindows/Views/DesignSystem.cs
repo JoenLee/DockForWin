@@ -30,7 +30,7 @@ public static class DesignSystem
     // Rhythm between sections of a page, and the height of input-like controls (segments, menus, fields, buttons).
     public const double SectionGap = 20, ControlHeight = 28;
     // Shape and rhythm: groups r12 with 10 between them, 20 page inset, sidebar floating 8 from the frame.
-    public const double GroupRadius = 12, ControlRadius = 7, TileRadius = 6.5, RowHeight = 44, RowInset = 14, PageInset = 28, SidebarInset = 8, SidebarRadius = 14;
+    public const double GroupRadius = 12, ControlRadius = 7, TileRadius = 6.5, RowHeight = 42, RowInset = 14, PageInset = 28, SidebarInset = 8, SidebarRadius = 14;
 
     public static DesignPalette Palette(bool dark,string? accent=null)
     {

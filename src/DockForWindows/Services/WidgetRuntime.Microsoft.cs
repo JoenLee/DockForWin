@@ -10,6 +10,7 @@ internal sealed partial class WidgetRuntime
     private void MicrosoftChanged(WidgetKind? kind){if(!_disposed)Changed?.Invoke(kind);}
     internal WidgetRenderData Populate(WidgetRenderData data,WidgetKind kind)
     {
+        data=PopulateExtras(data,kind);
         if(!data.Source.MicrosoftAccount||kind is not (WidgetKind.Reminders or WidgetKind.Notes))return data;
         Microsoft.Ensure(kind);Microsoft.Errors.TryGetValue(kind,out var error);
         return data with{

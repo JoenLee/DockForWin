@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using DockForWindows.Models;
 using DockForWindows.Services;
 
@@ -31,7 +32,7 @@ internal sealed partial class WidgetGalleryPage
     private WidgetRuntime? _runtime;
     private bool _ownsRuntime;private event Action<WidgetKind?>? SourceStatusChanged;
     private WidgetCarousel Carousel(string category)=>category switch{"weather"=>WeatherCarousel,"calendar"=>CalendarCarousel,_=>_extraCarousels[category]};
-    private WidgetSource Source(WidgetDefinition d)=>_options.Sources.TryGetValue(d.Id,out var s)?s:new(){City=_options.City,Latitude=_options.Latitude,Longitude=_options.Longitude,UseCurrentLocation=!_options.Latitude.HasValue};
+    private WidgetSource Source(WidgetDefinition d)=>_options.Sources.TryGetValue(d.Id,out var s)?s:DocumentClockStyles.DefaultSource(d.Id)??FigmaWidgetCatalog.DefaultSource(d.Id)??new(){City=_options.City,Latitude=_options.Latitude,Longitude=_options.Longitude,UseCurrentLocation=!_options.Latitude.HasValue};
     private FrameworkElement TemplateHeading(WidgetCarousel carousel)
     {
         var title=new TextBlock{FontSize=15,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,9,0,3)};var desc=Note("",new Thickness(0,0,0,0));
@@ -50,7 +51,7 @@ internal sealed partial class WidgetGalleryPage
     }
     private void BuildAdditionalCategories(StackPanel body)
     {
-        foreach(var kind in new[]{WidgetKind.Clock,WidgetKind.Reminders,WidgetKind.Notes,WidgetKind.Music}){
+        foreach(var kind in new[]{WidgetKind.Clock,WidgetKind.Reminders,WidgetKind.Notes,WidgetKind.Music,WidgetKind.Status,WidgetKind.AiUsage}){
             string key=kind.ToString().ToLowerInvariant();var carousel=new WidgetCarousel(WidgetRegistry.Definitions.Where(d=>d.Kind==kind).ToArray(),_options.Selections.GetValueOrDefault(key),_options.Exponent);
             _extraCarousels[key]=carousel;AutomationProperties.SetAutomationId(carousel,key+"-carousel");carousel.SelectionChanged+=index=>_options.Selections[key]=index;
             var (surface,section)=Section(WidgetSizes.Category(kind),key);_extraSections[key]=surface;body.Children.Add(surface);
@@ -82,13 +83,14 @@ internal sealed partial class WidgetGalleryPage
     private void RefreshExtras(WidgetKind? kind){foreach(var pair in _extraCarousels){if(kind!=null&&pair.Value.Hosts[0].Definition.Kind!=kind)continue;if(IsLoaded&&!OnScreen(_extraSections[pair.Key]))continue;foreach(var host in pair.Value.Hosts)RenderHost(host);}}
     private void RenderHost(WidgetHost host)
     {
+        if(Mouse.Captured is DependencyObject captured&&host.IsAncestorOf(captured))return;
         var source=Source(host.Definition);WidgetWeatherSnapshot? weather=_weather;string? error=null;
         bool weatherKind=host.Definition.Kind==WidgetKind.Weather||host.Definition.Layout==WidgetLayout.CalendarWeather;
         if(_runtime!=null&&weatherKind){var result=_runtime.Weather(source);weather=result.Weather;error=result.Error;}
         if(_runtime!=null&&weatherKind)source=_runtime.ResolvedSource(source);var notes=host.Definition.Kind==WidgetKind.Notes?_runtime?.Folder(source.NotesFolder):null;
         host.SetWeather(weather);host.SetMaterial(_options.Material,_options.CardColors.GetValueOrDefault(host.Definition.Id));
         var data=new WidgetRenderData(_options,source,weather,_runtime?.Media,notes?.Notes,notes?.Error??(weatherKind?error:host.Definition.Kind==WidgetKind.Music?_runtime?.MediaError:null),Month:_month,SelectedDate:_selected,SelectDate:host.Definition.Kind==WidgetKind.Calendar?SelectDate:null,HistoryArt:_runtime?.HistoryArt,MediaCommand:_runtime==null?null:_runtime.Command);
-        if(_runtime!=null)data=_runtime.Populate(data,host.Definition.Kind);host.SetContent(WidgetContent.Render(host.Definition,data));
+        if(_runtime!=null)data=_runtime.Populate(data,host.Definition.Kind);host.SetData(data);
     }
     private void UpdateVisibleHosts()
     {

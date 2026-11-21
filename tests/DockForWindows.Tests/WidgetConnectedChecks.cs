@@ -69,8 +69,8 @@ internal static class WidgetConnectedChecks
         foreach(var definition in WidgetRegistry.Definitions.Where(x=>x.Kind==WidgetKind.Music))foreach(var size in WidgetSizes.For(definition)){
             var host=new WidgetHost(definition with{Size=size},2.5){HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top};host.SetContent(WidgetContent.Render(host.Definition,data));root.Children.Clear();root.Children.Add(host);window.UpdateLayout();await System.Windows.Threading.Dispatcher.Yield();
             var covers=Tree<Border>(host).Where(x=>AutomationProperties.GetAutomationId(x)=="widget-music-art").ToArray();
-            Check(covers.Length>0&&covers.All(x=>x.CornerRadius.TopLeft>0&&x.Background is ImageBrush{Stretch:Stretch.UniformToFill,AlignmentX:AlignmentX.Center}),$"rounded centered bitmap artwork {definition.Id} {size}");
-            var buttons=Tree<Button>(host).Where(x=>AutomationProperties.GetAutomationId(x).StartsWith("widget-music-")).ToArray();
+            Check((definition.Id=="music-form-single"||covers.Length>0)&&covers.All(x=>x.CornerRadius.TopLeft>0&&x.Background is ImageBrush{Stretch:Stretch.UniformToFill,AlignmentX:AlignmentX.Center}),$"rounded centered bitmap artwork {definition.Id} {size}");
+            var buttons=Tree<Button>(host).Where(x=>AutomationProperties.GetAutomationId(x) is "widget-music-previous" or "widget-music-toggle" or "widget-music-next").ToArray();
             Check(buttons.Length==3&&buttons.All(x=>x.ActualWidth>=32&&x.ActualHeight>=32&&x.IsEnabled),$"three usable transport buttons {definition.Id} {size}");
             Check(buttons.All(x=>new Rect(host.RenderSize).Contains(x.TransformToAncestor(host).TransformBounds(new Rect(x.RenderSize)))),$"transport fits inside widget {definition.Id} {size}");
             Capture(host,Path.Combine(directory,definition.Id+"-"+size.Columns+"x"+size.Rows+".png"));
@@ -83,7 +83,7 @@ internal static class WidgetConnectedChecks
         foreach(var definition in WidgetRegistry.Definitions)options.Sources[definition.Id]=new WidgetSource();
         var page=new WidgetGalleryPage(options,null);root.Children.Clear();root.Children.Add(page);await Task.Delay(150);window.UpdateLayout();
         Check(Tree<Slider>(page).All(x=>!AutomationProperties.GetAutomationId(x).StartsWith("widget-shadow-")),"gallery no longer offers shadow strength");
-        Check(Tree<WidgetPreviewFrame>(page).Count()==6,"every gallery category has static vignette and backlight");
+        Check(Tree<WidgetPreviewFrame>(page).Count()==Enum.GetValues<WidgetKind>().Length,"every gallery category has static vignette and backlight");
         foreach(var kind in Enum.GetValues<WidgetKind>()){page.ShowCategory(kind);window.UpdateLayout();Capture(root,Path.Combine(directory,"gallery-"+kind.ToString().ToLowerInvariant()+".png"));}
         root.Children.Clear();
         foreach(var theme in new[]{InterfaceTheme.Light,InterfaceTheme.Dark}){

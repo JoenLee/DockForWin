@@ -5,8 +5,8 @@ using System.Linq;
 namespace DockForWindows.Models;
 
 public enum WidgetMaterial { Light, Dark, Glass }
-public enum WidgetKind { Weather, Calendar, Clock, Reminders, Notes, Music }
-public enum WidgetLayout { Standard, WeatherPoster, WeatherOutlook, CalendarPoster, CalendarWeather, CalendarClock, WeatherHourly, CalendarGiant, CalendarMinimal, CalendarDate, CalendarUpcoming, CalendarTimeline, CalendarGroups, ClockClassic, ClockMinimal, ClockWorld, ClockMonth, ClockDate, ReminderList, ReminderDate, ReminderGroups, ReminderDetail, NotesSmall, NotesWide, NotesList, NotesDetail, MusicSmall, MusicWide, MusicList, MusicLarge, MusicNow }
+public enum WidgetKind { Weather, Calendar, Clock, Reminders, Notes, Music, Status, AiUsage }
+public enum WidgetLayout { Standard, WeatherPoster, WeatherOutlook, CalendarPoster, CalendarWeather, CalendarClock, WeatherHourly, CalendarGiant, CalendarMinimal, CalendarDate, CalendarUpcoming, CalendarTimeline, CalendarGroups, ClockClassic, ClockMinimal, ClockWorld, ClockMonth, ClockDate, ReminderList, ReminderDate, ReminderGroups, ReminderDetail, NotesSmall, NotesWide, NotesList, NotesDetail, MusicSmall, MusicWide, MusicList, MusicLarge, MusicNow, ClockDot, ClockDotWide, ClockOrbit, WeatherDot, WeatherSplit, CalendarDot, CalendarMiniGrid, ProgressRings, CountdownDot, CountdownWide, BatterySegments, BatteryRing, StorageGauge, AiCodex, AiClaude, AiDual, AiHistory, MusicVinyl, MusicVinylWide, MusicPoster, MusicFrosted, MusicRetro, MusicCassette, MusicMini }
 public enum WidgetNumberStyle { Standard, Rounded, Outline, Art }
 public enum WidgetTextWeight { Automatic, Light, Normal, Bold }
 public readonly record struct WidgetSize(int Columns, int Rows)
@@ -54,11 +54,23 @@ public static class WidgetRegistry
         new("notes-wide",WidgetKind.Notes,"横向备忘录",new(4,2),WidgetLayout.NotesWide),
         new("notes-list",WidgetKind.Notes,"备忘录列表",new(4,4),WidgetLayout.NotesList),
         new("notes-detail",WidgetKind.Notes,"完整备忘录",new(4,6),WidgetLayout.NotesDetail),
-        new("music-small",WidgetKind.Music,"最近播放",new(2,2),WidgetLayout.MusicSmall),
-        new("music-wide",WidgetKind.Music,"横向播放",new(4,2),WidgetLayout.MusicWide),
-        new("music-list",WidgetKind.Music,"播放记录",new(4,4),WidgetLayout.MusicList),
         new("music-large",WidgetKind.Music,"完整播放记录",new(4,6),WidgetLayout.MusicLarge),
-        new("music-now",WidgetKind.Music,"当前播放",new(4,4),WidgetLayout.MusicNow) });
+        new("clock-orbit",WidgetKind.Clock,"轨道表盘",new(2,2),WidgetLayout.ClockOrbit),
+        new("weather-dot",WidgetKind.Weather,"点阵 · 实况天气",new(2,2),WidgetLayout.WeatherDot),
+        new("weather-split",WidgetKind.Weather,"圆角温度面板",new(4,2),WidgetLayout.WeatherSplit),
+        new("calendar-dot",WidgetKind.Calendar,"点阵 · 日期卡片",new(2,2),WidgetLayout.CalendarDot),
+        new("calendar-minigrid",WidgetKind.Calendar,"极简月历",new(2,2),WidgetLayout.CalendarMiniGrid),
+        new("progress-rings",WidgetKind.Calendar,"年、月、日剩余",new(2,2),WidgetLayout.ProgressRings),
+        new("countdown-dot",WidgetKind.Calendar,"点阵 · 倒数日",new(2,2),WidgetLayout.CountdownDot),
+        new("countdown-wide",WidgetKind.Calendar,"纪念日横卡",new(4,2),WidgetLayout.CountdownWide),
+        new("status-battery",WidgetKind.Status,"分段电池",new(2,2),WidgetLayout.BatterySegments),
+        new("status-battery-ring",WidgetKind.Status,"环形电量",new(2,2),WidgetLayout.BatteryRing),
+        new("status-storage",WidgetKind.Status,"磁盘容量仪表",new(2,2),WidgetLayout.StorageGauge),
+        new("ai-codex",WidgetKind.AiUsage,"Codex 额度",new(2,2),WidgetLayout.AiCodex),
+        new("ai-claude",WidgetKind.AiUsage,"Claude 额度",new(2,2),WidgetLayout.AiClaude),
+        new("ai-dual",WidgetKind.AiUsage,"Codex 与 Claude",new(4,2),WidgetLayout.AiDual),
+        new("ai-history",WidgetKind.AiUsage,"额度与本机 Token 记录",new(4,2),WidgetLayout.AiHistory),
+        }.Concat(DocumentClockStyles.Definitions).Concat(FigmaWidgetCatalog.Definitions).ToArray());
     private static readonly Lazy<IReadOnlyList<WidgetDefinition>> EnglishDefinitions=new(()=>Array.AsReadOnly(ChineseDefinitions.Select(d=>d with{Title=LocalizedText.Get(d.Title)}).ToArray()));
     public static IReadOnlyList<WidgetDefinition> Definitions=>LocalizedText.IsEnglish?EnglishDefinitions.Value:ChineseDefinitions;
     public static WidgetDefinition Get(string id) => Definitions.FirstOrDefault(d => d.Id == id)
@@ -66,7 +78,7 @@ public static class WidgetRegistry
     public static WidgetInstance CreateInstance(string id, WidgetMaterial material, WidgetOptions? configuration = null)
     {
         var copy = configuration?.Copy() ?? new(); copy.Material = material; copy.Normalize();
-        return new WidgetInstance { DefinitionId=Get(id).Id, Material=material, Appearance=copy.CardColors.GetValueOrDefault(id)?.Copy()??new(), Source=copy.Sources.TryGetValue(id,out var source)?source.Copy():new(){City=copy.City,Latitude=copy.Latitude,Longitude=copy.Longitude,UseCurrentLocation=!copy.Latitude.HasValue}, Size=Get(id).Size, Exponent=copy.Exponent };
+        return new WidgetInstance { DefinitionId=Get(id).Id, Material=material, Appearance=copy.CardColors.GetValueOrDefault(id)?.Copy()??new(), Source=copy.Sources.TryGetValue(id,out var source)?source.Copy():DocumentClockStyles.DefaultSource(id)??FigmaWidgetCatalog.DefaultSource(id)??new(){City=copy.City,Latitude=copy.Latitude,Longitude=copy.Longitude,UseCurrentLocation=!copy.Latitude.HasValue}, Size=Get(id).Size, Exponent=copy.Exponent };
     }
 }
 
@@ -101,12 +113,16 @@ public sealed class WidgetCardColors
     public double PanelScale { get; set; } = 1;
     public double Shadow {get;set;}=1;
     public double Opacity {get;set;}=1;
+    public double? GlassFrost {get;set;}
+    public double? GlassTint {get;set;}
     public double? Curvature {get;set;}
     public string GradientEnd {get;set;}="";
     internal bool HasColors => Background.Length > 0 || Foreground.Length > 0 || Accent.Length > 0 || Gradient != null;
-    internal bool IsDefault => Shadow==1 && Opacity==1 && Curvature==null && GradientEnd.Length==0 && !HasColors && NumberStyle==WidgetNumberStyle.Standard && TextWeight==WidgetTextWeight.Automatic && TextScale==1 && PanelScale==1;
+    internal bool IsDefault => Shadow==1 && Opacity==1 && GlassFrost==null && GlassTint==null && Curvature==null && GradientEnd.Length==0 && !HasColors && NumberStyle==WidgetNumberStyle.Standard && TextWeight==WidgetTextWeight.Automatic && TextScale==1 && PanelScale==1;
     public void Normalize()
     {
+        GlassFrost=GlassFrost is double frost&&double.IsFinite(frost)?Math.Clamp(frost,0,1):null;
+        GlassTint=GlassTint is double tint&&double.IsFinite(tint)?Math.Clamp(tint,0,.25):null;
         Shadow=double.IsFinite(Shadow)?Math.Clamp(Shadow,0,2):1;
         Opacity=double.IsFinite(Opacity)?Math.Clamp(Opacity,.1,1):1;
         if(Curvature!=null)Curvature=Curvature==3?3:2.5;

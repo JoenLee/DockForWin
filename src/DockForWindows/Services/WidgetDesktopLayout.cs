@@ -21,14 +21,31 @@ internal static class WidgetDesktopLayout
             screen.WorkingArea.Top+EdgeInset*scale+instance.Row*pitch,instance.Size.Width*ContentScale(instance)*scale,instance.Size.Height*ContentScale(instance)*scale);
     }
     internal static bool FindSpace(WidgetInstance item,Forms.Screen screen,double dpi,IReadOnlyList<Rect> occupied,out int column,out int row,int? desiredColumn=null,int? desiredRow=null)
+        =>FindSpaceInArea(item,new Rect(screen.WorkingArea.X,screen.WorkingArea.Y,screen.WorkingArea.Width,screen.WorkingArea.Height),dpi,occupied,out column,out row,desiredColumn,desiredRow);
+
+    internal static bool FindDropSpace(WidgetInstance item,Rect area,double dpi,IReadOnlyList<Rect> occupied,Point physical,out int column,out int row)
     {
-        double scale=dpi/96,pitch=Pitch(item,dpi),width=item.Size.Width*ContentScale(item)*scale,height=item.Size.Height*ContentScale(item)*scale;int maxX=(int)Math.Floor((screen.WorkingArea.Width-2*EdgeInset*scale-width)/pitch),maxY=(int)Math.Floor((screen.WorkingArea.Height-2*EdgeInset*scale-height)/pitch);
-        var cells=from y in Enumerable.Range(0,Math.Max(0,maxY+1)) from x in Enumerable.Range(0,Math.Max(0,maxX+1)) orderby desiredColumn.HasValue?(x-desiredColumn.Value)*(x-desiredColumn.Value)+(y-desiredRow!.Value)*(y-desiredRow.Value):y*1000+x select (x,y);
-        // One scaled gutter belongs to every span, so adjacent squares and a wider card share their outer edges.
+        double pitch=Pitch(item,dpi),edge=EdgeInset*dpi/96;
+        int x=(int)Math.Round((physical.X-area.Left-edge)/pitch),y=(int)Math.Round((physical.Y-area.Top-edge)/pitch);
+        return FindSpaceInArea(item,area,dpi,occupied,out column,out row,x,y,keepRow:true);
+    }
+    private static bool FindSpaceInArea(WidgetInstance item,Rect area,double dpi,IReadOnlyList<Rect> occupied,out int column,out int row,int? desiredColumn=null,int? desiredRow=null,bool keepRow=false)
+    {
+        double scale=dpi/96,pitch=Pitch(item,dpi),width=item.Size.Width*ContentScale(item)*scale,height=item.Size.Height*ContentScale(item)*scale;
+        int maxX=(int)Math.Floor((area.Width-2*EdgeInset*scale-width)/pitch),maxY=(int)Math.Floor((area.Height-2*EdgeInset*scale-height)/pitch);
+        column=row=0;if(maxX<0||maxY<0)return false;
+        bool desired=desiredColumn.HasValue&&desiredRow.HasValue;
+        int targetX=Math.Clamp(desiredColumn??0,0,maxX),targetY=Math.Clamp(desiredRow??0,0,maxY);
+        // Clamp the whole card footprint first. A horizontal drop uses free cells on its row before moving vertically.
+        var cells=from y in Enumerable.Range(0,maxY+1) from x in Enumerable.Range(0,maxX+1)
+            let dx=x-targetX let dy=y-targetY
+            orderby keepRow?Math.Abs(dy):0,
+                keepRow?Math.Abs(dx):desired?dx*dx+dy*dy:y*1000+x,
+                keepRow&&dy<0?1:0,y,x select (x,y);
         double clearance=WidgetSize.Gap*ContentScale(item)*scale-.001;
-        foreach(var cell in cells){var candidate=new Rect(screen.WorkingArea.Left+EdgeInset*scale+cell.x*pitch,screen.WorkingArea.Top+EdgeInset*scale+cell.y*pitch,width,height);candidate.Inflate(clearance,clearance);
+        foreach(var cell in cells){var candidate=new Rect(area.Left+EdgeInset*scale+cell.x*pitch,area.Top+EdgeInset*scale+cell.y*pitch,width,height);candidate.Inflate(clearance,clearance);
             if(occupied.All(r=>!r.IntersectsWith(candidate))){column=cell.x;row=cell.y;return true;}}
-        column=row=0;return false;
+        return false;
     }
     private static Task<IReadOnlyList<Rect>>? _iconRead;
     internal static async Task<IReadOnlyList<Rect>> Icons()

@@ -21,13 +21,26 @@ internal sealed record WidgetRenderData(WidgetOptions Options,WidgetSource Sourc
     DateTime? Month=null,DateTime? SelectedDate=null,Action<DateTime>? SelectDate=null,IReadOnlyDictionary<string,byte[]>? HistoryArt=null)
 {
     internal IReadOnlyList<WidgetTask>? RemoteTasks {get;init;}
+    internal WidgetAiSnapshot? AiUsage {get;init;}
+    internal PowerState? Power {get;init;}
+    internal WidgetStorageState? Storage {get;init;}
+    internal DateTime? Now {get;init;}
+    internal Action<TimeSpan>? Seek {get;init;}
+    internal AudioState? Audio {get;init;}
+    internal string? AudioError {get;init;}
+    internal Action<double>? SetVolume {get;init;}
+    internal bool MotionEnabled {get;init;}=true;
+    internal bool DesignReference {get;init;}
+    internal string? OutputName {get;init;}
+    internal bool IsFavorite {get;init;}
+    internal Action? ToggleFavorite {get;init;}
 }
 
 internal static partial class WidgetContent
 {
     private static readonly ControlTemplate PlainButton=(ControlTemplate)System.Windows.Markup.XamlReader.Parse("<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' TargetType='Button'><Border Background='{TemplateBinding Background}' Padding='{TemplateBinding Padding}'><ContentPresenter HorizontalAlignment='Center' VerticalAlignment='Center'/></Border><ControlTemplate.Triggers><Trigger Property='IsMouseOver' Value='True'><Setter Property='Opacity' Value='.75'/></Trigger><Trigger Property='IsPressed' Value='True'><Setter Property='Opacity' Value='.5'/></Trigger><Trigger Property='IsEnabled' Value='False'><Setter Property='Opacity' Value='.4'/></Trigger></ControlTemplate.Triggers></ControlTemplate>");
     private static CultureInfo Chinese => UiText.Culture;
-    internal static FrameworkElement Render(WidgetDefinition d,WidgetRenderData data)=>d.Kind switch{
+    internal static FrameworkElement Render(WidgetDefinition d,WidgetRenderData data)=>FigmaWidgetCatalog.Find(d.Id)!=null?new FigmaWidgetView(d,data):DocumentClockStyles.Find(d.Id) is {} css?DocumentClock(d,data,css):d.Kind==WidgetKind.Music?new WidgetMusicView(d,data):WidgetSampleTokens.Applies(d.Layout)?ReferenceSample(d,data):ExtraLayout(d.Layout)?Extra(d,data):d.Kind switch{
         WidgetKind.Weather=>Weather(d,data),WidgetKind.Calendar=>Calendar(d,data),WidgetKind.Clock=>Clock(d,data),
         WidgetKind.Reminders=>Reminders(d,data),WidgetKind.Notes=>Notes(d,data),_=>Music(d,data)};
     private static FrameworkElement T(string text,double size=12,string ink="WidgetInk",bool bold=false)
@@ -139,9 +152,9 @@ internal static partial class WidgetContent
         if(d.Layout==WidgetLayout.ClockWorld){var zones=data.Source.WorldZones;var layout=new UniformGrid{Columns=d.Size.Rows>=4?2:Math.Min(3,Math.Max(1,zones.Count))};
             foreach(var id in zones){var z=TimeZoneInfo.FindSystemTimeZoneById(id);var local=TimeZoneInfo.ConvertTime(DateTimeOffset.Now,z);var p=Stack(T(ZoneName(z),12,"WidgetMuted"),T(local.ToString("HH:mm"),d.Size.Rows>=4?38:31),T(local.ToString(LocalizedText.Get("M月d日")),10,"WidgetMuted"));p.Margin=new Thickness(5,8,5,8);p.VerticalAlignment=VerticalAlignment.Center;layout.Children.Add(p);}g.Children.Add(layout);return g;}
         bool simple=d.Layout is WidgetLayout.ClockClassic or WidgetLayout.ClockMinimal;
-        if(simple){g.Children.Add(new WidgetClock(zone,d.Layout==WidgetLayout.ClockMinimal));return g;}
+        if(simple){g.Children.Add(new WidgetClock(zone,d.Layout==WidgetLayout.ClockMinimal,data.Now,data.MotionEnabled));return g;}
         bool tall=d.Size.Rows>=4;if(tall)Rows(g,1,1);else Columns(g,1,1.2);
-        At(g,new WidgetClock(zone,false));FrameworkElement right=d.Layout==WidgetLayout.ClockMonth?Month(now,tall):Stack(T(now.ToString("dddd",Chinese),13,"WidgetAccent",true),T(now.Day.ToString(),72),T(now.ToString(LocalizedText.Get("yyyy年 M月"),Chinese),12,"WidgetMuted"),T(Lunar(now),11,"WidgetMuted"));
+        At(g,new WidgetClock(zone,false,data.Now,data.MotionEnabled));FrameworkElement right=d.Layout==WidgetLayout.ClockMonth?Month(now,tall):Stack(T(now.ToString("dddd",Chinese),13,"WidgetAccent",true),T(now.Day.ToString(),72),T(now.ToString(LocalizedText.Get("yyyy年 M月"),Chinese),12,"WidgetMuted"),T(Lunar(now),11,"WidgetMuted"));
         right.Margin=new Thickness(tall?0:20,tall?18:0,0,0);At(g,right,column:tall?0:1,row:tall?1:0);return g;
     }
     internal static string ZoneName(TimeZoneInfo zone)=>zone.Id switch{"China Standard Time"=>LocalizedText.Get("北京"),"GMT Standard Time"=>LocalizedText.Get("伦敦"),"Eastern Standard Time"=>LocalizedText.Get("纽约"),"Tokyo Standard Time"=>LocalizedText.Get("东京"),_=>zone.DisplayName};
@@ -177,17 +190,34 @@ internal sealed class WidgetClock : Grid
 {
     private readonly TimeZoneInfo _zone;
     private readonly RotateTransform _hour=new(),_minute=new(),_second=new();
-    internal WidgetClock(TimeZoneInfo zone,bool minimal)
+    private readonly DateTime? _fixture;
+    private readonly bool _motion;
+    private readonly System.Windows.Threading.DispatcherTimer _resync = new() { Interval = TimeSpan.FromSeconds(1) };
+    internal WidgetClock(TimeZoneInfo zone,bool minimal,DateTime? fixture=null,bool motion=true)
     {
-        _zone=zone;var face=new Grid{Width=144,Height=144};var view=new Viewbox{Stretch=Stretch.Uniform,Child=face};Children.Add(view);
+        _zone=zone;_fixture=fixture;_motion=motion;_resync.Tick+=(_,_)=>Start();var face=new Grid{Width=144,Height=144};var view=new Viewbox{Stretch=Stretch.Uniform,Child=face};Children.Add(view);
         for(int i=0;i<60;i++){if(minimal&&i%5!=0)continue;var tick=new Rectangle{Width=i%5==0?3:1.6,Height=i%5==0?8:3.5,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,2,0,0),Opacity=i%5==0?.95:.55};tick.SetResourceReference(Shape.FillProperty,"WidgetInk");var wrapper=new Grid{RenderTransform=new RotateTransform(i*6),RenderTransformOrigin=new Point(.5,.5)};wrapper.Children.Add(tick);face.Children.Add(wrapper);}
         if(!minimal)for(int i=1;i<=12;i++){double angle=i*Math.PI/6;var label=new TextBlock{Text=i.ToString(),FontSize=11,FontWeight=FontWeights.Bold,FontFamily=new FontFamily("Segoe UI Variable"),Width=23,TextAlignment=TextAlignment.Center};label.SetResourceReference(TextBlock.ForegroundProperty,"WidgetInk");var c=new Canvas();Canvas.SetLeft(label,60.5+Math.Sin(angle)*52);Canvas.SetTop(label,64-Math.Cos(angle)*52);c.Children.Add(label);face.Children.Add(c);}
         Hand(_hour,34,4,"WidgetInk");Hand(_minute,49,2.7,"WidgetInk");Hand(_second,56,1.1,"WidgetAccent");var dot=new Ellipse{Width=6,Height=6};dot.SetResourceReference(Shape.FillProperty,"WidgetAccent");face.Children.Add(dot);
-        Loaded+=(_,_)=>Start();Unloaded+=(_,_)=>Stop();IsVisibleChanged+=(_,_)=>{if(IsVisible&&IsLoaded)Start();else Stop();};
+        Loaded+=(_,_)=>Start();Unloaded+=(_,_)=>Stop();IsVisibleChanged+=(_,_)=>{if(IsVisible&&IsLoaded)Start();else Stop();};Start();
         void Hand(RotateTransform rotate,double length,double width,string ink){var hand=new Grid{RenderTransform=rotate,RenderTransformOrigin=new Point(.5,.5)};var line=new Rectangle{Width=width,Height=length,RadiusX=width/2,RadiusY=width/2,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,72-length,0,0)};line.SetResourceReference(Shape.FillProperty,ink);hand.Children.Add(line);face.Children.Add(hand);}
     }
-    private void Start(){var now=TimeZoneInfo.ConvertTime(DateTimeOffset.Now,_zone);double seconds=now.TimeOfDay.TotalSeconds;
-        Animate(_hour,seconds/120,43200);Animate(_minute,seconds/10,3600);Animate(_second,seconds*6,60);}
-    private static void Animate(RotateTransform target,double angle,double seconds){target.BeginAnimation(RotateTransform.AngleProperty,new DoubleAnimation(angle%360,angle%360+360,TimeSpan.FromSeconds(seconds)){RepeatBehavior=RepeatBehavior.Forever});}
-    private void Stop(){foreach(var r in new[]{_hour,_minute,_second})r.BeginAnimation(RotateTransform.AngleProperty,null);}
+    private void Start()
+    {
+        var utc=_fixture is DateTime sample?new DateTimeOffset(DateTime.SpecifyKind(sample,DateTimeKind.Utc)):DateTimeOffset.UtcNow;
+        RefreshTime(utc);
+        if(IsLoaded&&IsVisible&&!_fixture.HasValue)_resync.Start();else _resync.Stop();
+    }
+    internal void RefreshTime(DateTimeOffset utc)
+    {
+        double seconds=TimeZoneInfo.ConvertTime(utc,_zone).TimeOfDay.TotalSeconds;
+        Animate(_hour,seconds/120,43200);Animate(_minute,seconds/10,3600);Animate(_second,seconds*6,60);
+    }
+    private void Animate(RotateTransform target,double angle,double seconds)
+    {
+        target.BeginAnimation(RotateTransform.AngleProperty,null);target.Angle=angle%360;
+        if(IsLoaded&&IsVisible&&!_fixture.HasValue&&_motion&&SystemParameters.ClientAreaAnimation&&!SystemParameters.HighContrast)
+            target.BeginAnimation(RotateTransform.AngleProperty,new DoubleAnimation(angle%360,angle%360+360,TimeSpan.FromSeconds(seconds)){RepeatBehavior=RepeatBehavior.Forever});
+    }
+    private void Stop(){_resync.Stop();foreach(var r in new[]{_hour,_minute,_second})r.BeginAnimation(RotateTransform.AngleProperty,null);}
 }

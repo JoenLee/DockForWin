@@ -6,7 +6,15 @@ using Windows.Foundation.Metadata;
 
 namespace DockForWindows.Services;
 
-public sealed record MediaState(string Title,string Artist,bool Playing,bool CanPlay,bool CanPrevious,bool CanNext,byte[]? Artwork,TimeSpan Position,TimeSpan Duration,bool CanSeek,double PlaybackRate=1);
+public sealed record MediaState(string Title,string Artist,bool Playing,bool CanPlay,bool CanPrevious,bool CanNext,byte[]? Artwork,TimeSpan Position,TimeSpan Duration,bool CanSeek,double PlaybackRate=1)
+{
+    public string Album {get;init;}="";
+    public string SourceApp {get;init;}="";
+    public bool CanShuffle {get;init;}
+    public bool CanRepeat {get;init;}
+    public bool? Shuffle {get;init;}
+    public Windows.Media.MediaPlaybackAutoRepeatMode? Repeat {get;init;}
+}
 public sealed class MediaControlService : IDisposable
 {
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
@@ -57,13 +65,14 @@ public sealed class MediaControlService : IDisposable
             if(republished||age>SeekAnchorLifetime||anchor.Track!=key)_seekAnchor=null;
             else position=PositionAt(anchor.Target,duration,playing,rate,age.TotalSeconds);
         }
-        return new(properties.Title,properties.Artist,playing,controls?.IsPlayPauseToggleEnabled==true,controls?.IsPreviousEnabled==true,controls?.IsNextEnabled==true,_artwork,position,duration,controls?.IsPlaybackPositionEnabled==true&&duration>TimeSpan.Zero,rate);
+        return new(properties.Title,properties.Artist,playing,controls?.IsPlayPauseToggleEnabled==true,controls?.IsPreviousEnabled==true,controls?.IsNextEnabled==true,_artwork,position,duration,controls?.IsPlaybackPositionEnabled==true&&duration>TimeSpan.Zero,rate){Album=properties.AlbumTitle??"",SourceApp=session.SourceAppUserModelId,CanShuffle=controls?.IsShuffleEnabled==true,CanRepeat=controls?.IsRepeatEnabled==true,Shuffle=playback.IsShuffleActive,Repeat=playback.AutoRepeatMode};
     }
     public static TimeSpan PositionAt(TimeSpan position,TimeSpan duration,bool playing,double rate,double elapsed)=>TimeSpan.FromSeconds(Math.Clamp(position.TotalSeconds+(playing?Math.Max(0,elapsed)*rate:0),0,Math.Max(0,duration.TotalSeconds)));
     public async Task Command(string command)
     {
         var session=_session??throw new InvalidOperationException(LocalizedText.Get("没有支持系统媒体控制的播放器。"));
-        bool result=command switch{"previous"=>await session.TrySkipPreviousAsync(),"next"=>await session.TrySkipNextAsync(),_=>await session.TryTogglePlayPauseAsync()};
+        var info=session.GetPlaybackInfo();
+        bool result=command switch{"previous"=>await session.TrySkipPreviousAsync(),"next"=>await session.TrySkipNextAsync(),"toggle" or "play"=>await session.TryTogglePlayPauseAsync(),"shuffle"=>await session.TryChangeShuffleActiveAsync(info.IsShuffleActive!=true),"repeat"=>await session.TryChangeAutoRepeatModeAsync(info.AutoRepeatMode==Windows.Media.MediaPlaybackAutoRepeatMode.None?Windows.Media.MediaPlaybackAutoRepeatMode.List:Windows.Media.MediaPlaybackAutoRepeatMode.None),_=>throw new ArgumentException("Unknown media command",nameof(command))};
         if(!result)throw new InvalidOperationException(LocalizedText.Get("播放器拒绝了此控制操作。"));
     }
     public static bool? ReadFocus()=>ApiInformation.IsTypePresent("Windows.UI.Shell.FocusSessionManager")&&FocusSessionManager.IsSupported?FocusSessionManager.GetDefault().IsFocusActive:null;

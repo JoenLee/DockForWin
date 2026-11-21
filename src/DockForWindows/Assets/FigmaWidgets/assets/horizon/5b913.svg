@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="329.771" height="179" viewBox="0 0 329.771 179" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path id="Fading sunlight" d="M0 51.744C96.811 -17.248 232.96 -17.248 329.771 51.744L164.885 179L0 51.744Z" fill="url(#paint0_linear_0_26)"/>
+<defs>
+<linearGradient id="paint0_linear_0_26" x1="164.885" y1="-1.90735e-06" x2="164.885" y2="179" gradientUnits="userSpaceOnUse">
+<stop stop-color="#8D72D9" stop-opacity="0.22"/>
+<stop offset="1" stop-color="#8D72D9" stop-opacity="0"/>
+</linearGradient>
+</defs>
+</svg>

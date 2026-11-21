@@ -73,7 +73,7 @@ internal sealed partial class SettingsWindow
     // 程序坞 › 高级设置: every detailed Dock control, one link away from the inspector.
     private StackPanel BuildDockAdvanced(Dictionary<int,string> details,string[] titles)
     {
-        var body=new StackPanel{Margin=new Thickness(0,18,0,0)};body.Children.Add(GroupTitle(LocalizedText.Get("高级设置")));
+        var body=new StackPanel{Margin=new Thickness(0,18,0,0)};
         StackPanel Group(string title){body.Children.Add(GroupTitle(title));var rows=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(rows);surface.Margin=new Thickness(0,0,0,22);body.Children.Add(surface);return rows;}
         string[] hints={LocalizedText.Get("主题、配色、透明度与圆角"),LocalizedText.Get("折射、磨砂、高光与暗边"),LocalizedText.Get("边框、阴影与运行点颜色")};
         var material=Group(LocalizedText.Get("精细调节"));

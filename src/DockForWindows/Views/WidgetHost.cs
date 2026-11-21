@@ -35,16 +35,16 @@ internal static class WidgetBrushes
 
 internal static class WidgetGeometry
 {
-    private static readonly Dictionary<(double Width, double Height, double N), Geometry> Cache = new();
+    private static readonly Dictionary<(double Width, double Height, double N, double Radius), Geometry> Cache = new();
     internal static int CachedCount => Cache.Count;
-    internal static Geometry Get(double width, double height, double exponent)
+    internal static Geometry Get(double width, double height, double exponent, double? cornerRadius = null)
     {
         if (!double.IsFinite(width) || !double.IsFinite(height) || width <= 0 || height <= 0 || exponent is not (2.5 or 3))
             throw new ArgumentOutOfRangeException(nameof(width));
-        var key = (width, height, exponent);
+        double radius = cornerRadius ?? Math.Min(20, Math.Min(width, height) * .19);
+        var key = (width, height, exponent, radius);
         if (Cache.TryGetValue(key, out var cached)) return cached;
         // The user's visual reference uses short continuous corners, with long straight card edges.
-        double radius = Math.Min(20, Math.Min(width, height) * .19);
         var shape = DockSurface.CreateGeometry(new Size(width, height), radius / (Math.Min(width, height) / 2) * 100, exponent: exponent);
         if (Cache.Count >= 48) Cache.Clear(); // Only discrete widget sizes are cached; cap unexpected future size combinations.
         Cache.Add(key, shape); return shape;
@@ -77,6 +77,7 @@ internal sealed class WidgetHost : Grid
     internal void UseGalleryShadow(){_galleryShadow=true;_shadowBaseOpacity=.19;_shadow.Effect=new DropShadowEffect{BlurRadius=24,ShadowDepth=8,Direction=270,Opacity=.19,Color=Color.FromRgb(39,69,74),RenderingBias=RenderingBias.Performance};}
     internal WidgetDefinition Definition { get; private set; }
     internal WidgetMaterial Material { get; private set; }
+    internal WidgetCardColors CardAppearance {get;private set;}=new();
     internal Geometry Outline { get; private set; } = null!;
     private Services.WidgetWeatherSnapshot? _weather;
     internal void SetWeather(Services.WidgetWeatherSnapshot? weather)=>_weather=weather;
@@ -97,28 +98,46 @@ internal sealed class WidgetHost : Grid
     internal void SetGestureActive(bool active){if(_gestureActive==active)return;_gestureActive=active;ControlMotion.Stop(this,HoverScaleProperty,1);}
     internal void Resize(WidgetSize size){Definition=Definition with {Size=size};Width=size.Width;Height=size.Height;_visual.Width=Width;_visual.Height=Height;SetExponent(_exponent);VisualScaleChanged?.Invoke();}
     private double _exponent=2.5;
+    internal double CornerExponent=>_exponent;
     private bool _active=true;
-    internal bool SetActive(bool active){if(_active==active)return false;_active=active;_content.Visibility=active?Visibility.Visible:Visibility.Hidden;UpdateGlassCapture();return true;}
+    internal bool SetActive(bool active){if(_active==active)return false;_active=active;_content.Visibility=active?Visibility.Visible:Visibility.Hidden;SetMotionActive(active);UpdateGlassCapture();return true;}
     internal void SetContent(FrameworkElement content)
     {
+        if(_content.Children.Count==1&&_content.Children[0] is FigmaWidgetView existing&&content is FigmaWidgetView incomingFigma&&existing.Definition==incomingFigma.Definition){existing.Update(incomingFigma.Data);return;}
+        if(_content.Children.Count==1&&_content.Children[0] is WidgetMusicView current&&content is WidgetMusicView incoming&&current.Definition==incoming.Definition){current.Update(incoming.Data);return;}
         _content.Children.Clear(); _content.Children.Add(content);
     }
+    internal void SetData(WidgetRenderData data)
+    {
+        if(_content.Children.Count==1&&_content.Children[0] is FigmaWidgetView figma&&figma.Definition==Definition){figma.Update(data);return;}
+        if(_content.Children.Count==1&&_content.Children[0] is WidgetMusicView player&&player.Definition==Definition)player.Update(data);
+        else SetContent(WidgetContent.Render(Definition,data));
+    }
+    internal void SetMotionActive(bool active){if(_content.Children.Count==1&&_content.Children[0] is FigmaWidgetView figma)figma.SetActive(active);if(_content.Children.Count==1&&_content.Children[0] is WidgetMusicView player)player.SetActive(active);}
+    private double OutlineRadius => Math.Min(20,Math.Min(Width,Height)*.19);
     internal void SetExponent(double exponent)
     {
-        _exponent=exponent;Outline = WidgetGeometry.Get(Width, Height, exponent);
+        _exponent=exponent;Outline = WidgetGeometry.Get(Width, Height, exponent, OutlineRadius);
         _plate.Data = _shadow.Data = _tint.Data = Outline;
         _content.Clip = Outline;
-        if(_glass is not null){_glass.Radius=Math.Min(20,Math.Min(Width,Height)*.19)/(Math.Min(Width,Height)/2)*100;_glass.CornerExponent=exponent;_glass.Clip=Outline;_glass.InvalidateVisual();}
+        if(_glass is not null){_glass.Radius=OutlineRadius/(Math.Min(Width,Height)/2)*100;_glass.CornerExponent=exponent;_glass.Clip=Outline;_glass.InvalidateVisual();}
     }
     internal void SetMaterial(WidgetMaterial material, WidgetCardColors? colors = null)
     {
-        Material = material; bool dark = material == WidgetMaterial.Dark;
+        CardAppearance=colors?.Copy()??new(); Material = material; bool dark = material == WidgetMaterial.Dark;
         _customInk=ThemeAppearance.TryColor(colors?.Foreground,out _);
         _lightInk=null;
+        var documentClock=DocumentClockStyles.Find(Definition.Id);
         var defaults = Definition.Layout switch {
+            _ when documentClock is {} css => (Background:css.Background,Ink:css.Ink,Accent:css.Accent,Gradient:false),
+            _ when WidgetSampleTokens.Applies(Definition.Layout) => (Background:dark?"#253135":"#FCFEFE",Ink:dark?"#F3F7F7":"#24383B",Accent:dark?"#7FD4CD":"#167F79",Gradient:false),
             WidgetLayout.WeatherHourly => (Background:dark?"#122949":"#327FBB",Ink:"#F8FCFF",Accent:"#DBF3FF",Gradient:true),
             WidgetLayout.CalendarGiant or WidgetLayout.CalendarMinimal => (Background:dark?"#10233B":"#EEF1F6",Ink:dark?"#A7C5FF":"#125BCE",Accent:"#EB786D",Gradient:false),
             WidgetLayout.CalendarDate => (Background:dark?"#242325":"#FFFDFC",Ink:dark?"#FFF9F1":"#252228",Accent:"#D05C51",Gradient:false),
+            _ when Definition.Layout is WidgetLayout.ClockDot or WidgetLayout.ClockDotWide or WidgetLayout.ClockOrbit or WidgetLayout.CalendarDot or WidgetLayout.CalendarMiniGrid or WidgetLayout.WeatherDot or WidgetLayout.WeatherSplit or WidgetLayout.ProgressRings or WidgetLayout.CountdownDot or WidgetLayout.CountdownWide => (Background:dark?"#1D1F23":"#F7F5F1",Ink:dark?"#F6F6F5":"#21232A",Accent:dark?"#FF9B45":"#DE6038",Gradient:false),
+            WidgetLayout.MusicFrosted => (Background:dark?"#25304D":"#D6D6EE",Ink:dark?"#F7F7FF":"#202337",Accent:dark?"#B6B2FF":"#6455B6",Gradient:true),
+            WidgetLayout.MusicRetro or WidgetLayout.MusicCassette => (Background:dark?"#2B2C2C":"#E9E9E6",Ink:dark?"#F7F7F5":"#222326",Accent:dark?"#C4CEC9":"#53625B",Gradient:false),
+            _ when Definition.Kind==WidgetKind.AiUsage => (Background:"#101216",Ink:"#F8F9FC",Accent:Definition.Layout==WidgetLayout.AiClaude?"#FFAC65":"#99EA71",Gradient:false),
             _ when Definition.Kind==WidgetKind.Music => (Background:"#202124",Ink:"#FFFFFF",Accent:"#FF708B",Gradient:false),
             _ when Definition.Kind==WidgetKind.Notes => (Background:dark?"#282724":"#FFFDF8",Ink:dark?"#FFF9EC":"#25251F",Accent:"#B68113",Gradient:false),
             _ when Definition.Kind==WidgetKind.Reminders => (Background:dark?"#24262A":"#FEFDFC",Ink:dark?"#FCFAF5":"#25262A",Accent:"#E27D40",Gradient:false),
@@ -153,10 +172,10 @@ internal sealed class WidgetHost : Grid
         double panelScale=colors?.PanelScale??1;
         if(Math.Abs(PanelScale-panelScale)>.000001){PanelScale=panelScale;UpdateVisualScale();}
         _plate.Fill = WidgetBrushes.Surface(background,colors?.Gradient??defaults.Gradient);
-        _tint.Fill = material == WidgetMaterial.Glass ? WidgetBrushes.Surface("#20"+background[1..],colors?.Gradient??defaults.Gradient) : Brushes.Transparent;
+        _tint.Fill = material == WidgetMaterial.Glass ? WidgetBrushes.Surface($"#{(byte)Math.Round((colors?.GlassTint??.035)*255):X2}"+background[1..],colors?.Gradient??defaults.Gradient) : Brushes.Transparent;
         if(ThemeAppearance.TryColor(colors?.GradientEnd,out var gradientEnd)){
             var fill=new LinearGradientBrush(WidgetBrushes.Get(background).Color,WidgetBrushes.Get(gradientEnd).Color,45);fill.Freeze();
-            if(material==WidgetMaterial.Glass){fill=fill.Clone();fill.Opacity=.12;fill.Freeze();_tint.Fill=fill;}else _plate.Fill=fill;
+            if(material==WidgetMaterial.Glass){fill=fill.Clone();fill.Opacity=colors?.GlassTint??.035;fill.Freeze();_tint.Fill=fill;}else _plate.Fill=fill;
         }
         if (SystemParameters.HighContrast) {
             _plate.Fill = SystemColors.WindowBrush; _tint.Fill = Brushes.Transparent;
@@ -177,7 +196,7 @@ internal sealed class WidgetHost : Grid
         if(enabled){
             if(_glass is null){_glass=new DockSurface{UseGlass=true,FusedOptics=true,ConstrainFrostToOutline=true,Fill=Brushes.White,StrokeWidth=0,IsHitTestVisible=false};_glass.UseControlCenterLighting();_visual.Children.Insert(2,_glass);SetExponent(_exponent);}
             var settings=WidgetDesktopService.Current?.GlassMaterial??new DockSettings();
-            _glass.GlassIntensity=settings.GlassIntensity;_glass.GlassDistortion=settings.GlassDistortion;_glass.GlassFrost=settings.GlassFrost;_glass.GlassHighlight=settings.GlassHighlight;_glass.GlassHighlightWidth=settings.GlassHighlightWidth;_glass.GlassTint=settings.GlassTint;_glass.GlassTintColor=GlassTint.Resolve(settings);_glass.GlassGrain=settings.GlassGrain;_glass.GlassOpacity=settings.GlassOpacity*(colors?.Opacity??1);_glass.Visibility=Visibility.Visible;_glass.InvalidateVisual();
+            _glass.GlassIntensity=settings.GlassIntensity;_glass.GlassDistortion=settings.GlassDistortion;_glass.GlassFrost=colors?.GlassFrost??.03;_glass.GlassHighlight=settings.GlassHighlight;_glass.GlassHighlightWidth=settings.GlassHighlightWidth;_glass.GlassTint=colors?.GlassTint??.035;_glass.GlassTintColor=GlassTint.Resolve(settings,colors?.GlassTint??.035);_glass.GlassGrain=settings.GlassGrain;_glass.GlassOpacity=settings.GlassOpacity*(colors?.Opacity??1);_glass.Visibility=Visibility.Visible;_glass.InvalidateVisual();
             _plate.Visibility=_glass.Backdrop is null?Visibility.Visible:Visibility.Hidden;
         }else{if(_glass is not null){_glass.Visibility=Visibility.Collapsed;_glass.Backdrop=null;}_plate.Visibility=Visibility.Visible;}
         UpdateGlassCapture();

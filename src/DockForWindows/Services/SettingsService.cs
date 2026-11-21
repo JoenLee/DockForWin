@@ -125,7 +125,7 @@ public sealed class SettingsService
         settings.Pins.Add(new PinnedItem { Name = LocalizedText.Get("文件资源管理器"), Target = Path.Combine(windows, "explorer.exe"), ExecutablePath = Path.Combine(windows, "explorer.exe") });
         var notepad = Path.Combine(windows, "System32", "notepad.exe");
         if (File.Exists(notepad)) settings.Pins.Add(new PinnedItem { Name = LocalizedText.Get("记事本"), Target = notepad, ExecutablePath = notepad });
-        settings.Pins.Add(new PinnedItem { Name = LocalizedText.Get("下载"), Kind = ItemKind.Folder, Target = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads") });
+        settings.Pins.Add(new PinnedItem { Name = LocalizedText.Get("下载"), Kind = ItemKind.Folder, Target = "shell:Downloads" });
         settings.Pins.Add(new PinnedItem { Name = LocalizedText.Get("回收站"), Kind = ItemKind.RecycleBin, Target = "shell:RecycleBinFolder" });
         return settings;
     }

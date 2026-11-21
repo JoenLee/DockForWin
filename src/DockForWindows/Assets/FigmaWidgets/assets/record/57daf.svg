@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="15.4286" height="79.4286" viewBox="0 0 15.4286 79.4286" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="espresso-monolith">
+<path id="Vector" d="M0 79.4286V12C0 4.57143 3.42857 0 8 0C12.5714 0 15.4286 4.57143 15.4286 12V79.4286H0Z" fill="url(#paint0_linear_0_84)"/>
+<path id="Vector_2" d="M0 12C0 5.14286 3.42857 0 8 0C4.57143 1.71429 2.28571 6.28571 2.28571 13.1429V78.2857L0 79.4286V12Z" fill="#654332" fill-opacity="0.45"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_84" x1="0.571429" y1="34.2857" x2="14.2857" y2="34.2857" gradientUnits="userSpaceOnUse">
+<stop stop-color="#39241F"/>
+<stop offset="0.75" stop-color="#291D1B"/>
+<stop offset="1" stop-color="#231B19"/>
+</linearGradient>
+</defs>
+</svg>

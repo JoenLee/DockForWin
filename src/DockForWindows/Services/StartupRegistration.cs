@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Reflection;
 using Microsoft.Win32;
 
 namespace DockForWindows.Services;
@@ -24,5 +23,5 @@ public static class StartupRegistration
         using var key=Registry.CurrentUser.CreateSubKey(registryPath??Key,true);
         if(command is null)key.DeleteValue(Name,false);else key.SetValue(Name,command,RegistryValueKind.String);
     }
-    public static string CurrentCommand(string profile) => BuildCommand(Environment.ProcessPath ?? throw new InvalidOperationException(LocalizedText.Get("无法确认程序路径")),Assembly.GetEntryAssembly()?.Location ?? "",profile);
+    public static string CurrentCommand(string profile) => BuildCommand(Environment.ProcessPath ?? throw new InvalidOperationException(LocalizedText.Get("无法确认程序路径")),Path.Combine(AppContext.BaseDirectory, typeof(StartupRegistration).Assembly.GetName().Name + ".dll"),profile);
 }

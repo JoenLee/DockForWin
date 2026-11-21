@@ -26,6 +26,7 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     private readonly DispatcherTimer _shellCheck;
     private bool _disposed;
     private bool _validating;
+    private int _placementsInFlight;
     private int _shellTicks;
     // Desktop widgets that are top-level windows (see WidgetDesktopWindow.Attach) follow the desktop in z-order;
     // "show desktop" (Win+D) raises the desktop, so they are moved back above it whenever the foreground changes.
@@ -33,6 +34,7 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     private nint _foregroundHook;
     internal IReadOnlySet<nint> WindowHandles {get;private set;}=new HashSet<nint>();
     internal WidgetRuntime Runtime {get;}
+    internal bool AnimationsEnabled=>_model.Settings.Animations;
     internal DockSettings GlassMaterial=>_model.Settings.ControlCenter.Material(_model.Settings);
     internal void LogGlassError(Exception error)=>_model.LogDiagnostic("Widget glass backdrop",error);
     internal static WidgetDesktopService? Current {get;private set;}
@@ -77,8 +79,8 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     }
     private async Task ValidatePositions()
     {
-        if(_disposed||_validating||_model.Settings.Widgets.Instances.Count==0)return;_validating=true;
-        try{var occupied=(await WidgetDesktopLayout.Icons()).ToList();if(_disposed)return;var draft=_model.Settings.Widgets.Copy();bool changed=false;
+        if(_disposed||_validating||_placementsInFlight>0||_windows.Values.Any(w=>w.IsDragging)||_model.Settings.Widgets.Instances.Count==0)return;_validating=true;
+        try{var occupied=(await WidgetDesktopLayout.Icons()).ToList();if(_disposed||_placementsInFlight>0||_windows.Values.Any(w=>w.IsDragging))return;var draft=_model.Settings.Widgets.Copy();bool changed=false;
             foreach(var item in draft.Instances){var screen=Forms.Screen.AllScreens.FirstOrDefault(s=>s.DeviceName==item.Monitor)??Forms.Screen.PrimaryScreen!;double dpi=WidgetDesktopLayout.Dpi(screen);
                 if(WidgetDesktopLayout.FindSpace(item,screen,dpi,occupied,out int col,out int row,item.Column,item.Row)){
                     changed|=col!=item.Column||row!=item.Row||item.Monitor!=screen.DeviceName;item.Column=col;item.Row=row;item.Monitor=screen.DeviceName;occupied.Add(WidgetDesktopLayout.Bounds(item,screen,dpi));if(_windows.TryGetValue(item.InstanceId,out var window)&&!window.IsVisible)window.Show();
@@ -88,16 +90,18 @@ internal sealed class WidgetDesktopService : IWidgetPlacementService,IDisposable
     }
     internal async Task Place(WidgetDesktopWindow window,Point physical)
     {
+        long version=window.PlacementVersion;_placementsInFlight++;
         try{var id=window.Instance.InstanceId;if(!_model.Settings.Widgets.Instances.Any(x=>x.InstanceId==id))return;
             var screen=Forms.Screen.FromPoint(new System.Drawing.Point((int)physical.X,(int)physical.Y));double dpi=WidgetDesktopLayout.Dpi(screen);
-            var icons=await WidgetDesktopLayout.Icons();if(_disposed)return;
+            var icons=await WidgetDesktopLayout.Icons();if(_disposed||version!=window.PlacementVersion||window.IsDragging)return;
             // Copied after the await (up to seconds while desktop icons are read), so a save made meanwhile is not overwritten.
-            var draft=_model.Settings.Widgets.Copy();var item=draft.Instances.FirstOrDefault(x=>x.InstanceId==id);if(item==null)return;double pitch=WidgetDesktopLayout.Pitch(item,dpi);
+            var draft=_model.Settings.Widgets.Copy();var item=draft.Instances.FirstOrDefault(x=>x.InstanceId==id);if(item==null)return;
             var occupied=icons.Concat(OtherBounds(item.InstanceId)).ToArray();
-            int desiredX=(int)Math.Round((physical.X-screen.WorkingArea.Left-WidgetDesktopLayout.EdgeInset*dpi/96)/pitch),desiredY=(int)Math.Round((physical.Y-screen.WorkingArea.Top-WidgetDesktopLayout.EdgeInset*dpi/96)/pitch);
-            if(!WidgetDesktopLayout.FindSpace(item,screen,dpi,occupied,out int col,out int row,desiredX,desiredY))throw new InvalidOperationException(LocalizedText.Get("没有合适的空位，位置已恢复。"));
+            var area=new Rect(screen.WorkingArea.X,screen.WorkingArea.Y,screen.WorkingArea.Width,screen.WorkingArea.Height);
+            if(!WidgetDesktopLayout.FindDropSpace(item,area,dpi,occupied,physical,out int col,out int row))throw new InvalidOperationException(LocalizedText.Get("没有合适的空位，位置已恢复。"));
             item.Column=col;item.Row=row;item.Monitor=screen.DeviceName;if(!_model.TrySaveWidgets(draft))window.Position();
-        }catch(Exception e){window.Position();MessageBox.Show(e.Message,LocalizedText.Get("移动小组件"));}
+        }catch(Exception e){if(!_disposed&&version==window.PlacementVersion){window.Position();MessageBox.Show(e.Message,LocalizedText.Get("移动小组件"));}}
+        finally{_placementsInFlight--;}
     }
     internal void Change(Guid id,Action<WidgetInstance> update)
     {
@@ -150,6 +154,8 @@ internal sealed class WidgetDesktopWindow : Window,DesktopWidgetLayers.ISource
     internal nint Handle=>_handle;
     internal WidgetInstance Instance {get;private set;}
     internal bool ContentActive {get;private set;}=true;
+    internal bool IsDragging=>_dragging;
+    internal long PlacementVersion {get;private set;}
     private DesktopWidgetLayers.Snapshot? _snapshot;
     private long _snapshotVersion,_snapshotTime=long.MinValue/2;
     private int _snapshotQueued;
@@ -160,14 +166,14 @@ internal sealed class WidgetDesktopWindow : Window,DesktopWidgetLayers.ISource
     {
         _service=service;Instance=instance;WindowStyle=WindowStyle.None;AllowsTransparency=true;Background=Brushes.Transparent;ShowInTaskbar=false;ShowActivated=false;ResizeMode=ResizeMode.NoResize;
         FontFamily=new FontFamily("Segoe UI Variable, Microsoft YaHei UI, Segoe UI");Update(instance);
-        PreviewMouseLeftButtonDown+=(_,e)=>{if(Instance.Locked||Interactive(e.OriginalSource as DependencyObject))return;GetCursorPos(out var p);_press=new(p.X,p.Y);_origin=PhysicalTopLeft();_dragging=false;};
+        PreviewMouseLeftButtonDown+=(_,e)=>{if(Instance.Locked||Interactive(e.OriginalSource as DependencyObject))return;PlacementVersion++;GetCursorPos(out var p);_press=new(p.X,p.Y);_origin=PhysicalTopLeft();_dragging=false;};
         PreviewMouseMove+=(_,e)=>{if(_press==null||e.LeftButton!=MouseButtonState.Pressed)return;GetCursorPos(out var cursor);var delta=new Point(cursor.X-_press.Value.X,cursor.Y-_press.Value.Y);
             if(!_dragging&&Math.Abs(delta.X)+Math.Abs(delta.Y)<7)return;if(!_dragging){_dragging=true;CaptureMouse();_host.SetGestureActive(true);}MovePhysical(_origin.X+delta.X,_origin.Y+delta.Y);e.Handled=true;};
         PreviewMouseLeftButtonUp+=async(_,e)=>{if(_press==null)return;bool moved=_dragging;_press=null;_dragging=false;if(IsMouseCaptured)ReleaseMouseCapture();_host.SetGestureActive(false);if(moved){e.Handled=true;var at=PhysicalTopLeft();await service.Place(this,at);}};
         LostMouseCapture+=(_,_)=>{if(_dragging){_dragging=false;_press=null;Position();_host.SetGestureActive(false);}};
-        Closed+=(_,_)=>{_press=null;if(IsMouseCaptured)ReleaseMouseCapture();DesktopWidgetLayers.Remove(this);Volatile.Write(ref _snapshot,null);};
+        Closed+=(_,_)=>{PlacementVersion++;_press=null;if(IsMouseCaptured)ReleaseMouseCapture();DesktopWidgetLayers.Remove(this);Volatile.Write(ref _snapshot,null);};
     }
-    private static bool Interactive(DependencyObject? node){while(node!=null){if(node is ButtonBase)return true;node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node);}return false;}
+    private static bool Interactive(DependencyObject? node){while(node!=null){if(node is ButtonBase or Slider)return true;node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node);}return false;}
     internal void Attach()
     {
         _handle=new WindowInteropHelper(this).Handle;_parent=WidgetDesktopLayout.DesktopParent();if(_parent==0)throw new InvalidOperationException(LocalizedText.Get("Explorer 桌面不可用。"));
@@ -222,12 +228,12 @@ internal sealed class WidgetDesktopWindow : Window,DesktopWidgetLayers.ISource
         double scale=WidgetDesktopLayout.ContentScale(item);_desktopScale.ScaleX=_desktopScale.ScaleY=scale;
         Width=item.Size.Width*scale+48;Height=item.Size.Height*scale+48;_host.SetExponent(item.Exponent);Render();Menu();if(Attached)Position();
     }
-    internal void Render(){var data=_service.Data(Instance);_host.SetWeather(data.Weather);var appearance=Instance.Appearance.Copy();appearance.PanelScale=1;_host.SetMaterial(Instance.Material,appearance);_host.SetContent(WidgetContent.Render(_host.Definition,data));if(_handle!=0)QueueSnapshot();}
+    internal void Render(){if(Mouse.Captured is DependencyObject captured&&_host.IsAncestorOf(captured))return;var data=_service.Data(Instance);_host.SetWeather(data.Weather);var appearance=Instance.Appearance.Copy();appearance.PanelScale=1;_host.SetMaterial(Instance.Material,appearance);_host.SetData(data);if(_handle!=0)QueueSnapshot();}
     internal void RefreshOcclusion()
     {
         if(!Attached||!IsVisible)return;GetWindowRect(_handle,out var rect);bool active=false;
         foreach(var point in new[]{(.5,.5),(.25,.25),(.75,.25),(.25,.75),(.75,.75)}){var hit=WindowFromPoint(new(){X=(int)(rect.Left+(rect.Right-rect.Left)*point.Item1),Y=(int)(rect.Top+(rect.Bottom-rect.Top)*point.Item2)});if(hit==_handle||IsChild(_handle,hit)){active=true;break;}}
-        if(active==ContentActive)return;ContentActive=active;
+        if(active==ContentActive)return;ContentActive=active;_host.SetMotionActive(active);
         // Occlusion throttles refreshes; hiding content can turn transient hit-test misses into blank cards.
         if(active)Render();
     }
