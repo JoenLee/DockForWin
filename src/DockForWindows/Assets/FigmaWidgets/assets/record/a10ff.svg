@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="144" height="43.4286" viewBox="0 0 144 43.4286" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="oxblood-sweep">
+<path id="Vector" d="M0 31.4286C20.5714 30.8571 37.7143 22.8571 57.7143 18.8571C85.7143 13.1429 115.429 18.2857 144 0V43.4286H0V31.4286Z" fill="url(#paint0_linear_0_80)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_80" x1="88" y1="8.57143" x2="93.7143" y2="43.4286" gradientUnits="userSpaceOnUse">
+<stop stop-color="#79352F"/>
+<stop offset="1" stop-color="#502526"/>
+</linearGradient>
+</defs>
+</svg>

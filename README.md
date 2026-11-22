@@ -1,67 +1,89 @@
-# DockForWindows · 开发预览 0.6.0
+# DockForWin 1.0.0
 
-Windows 上的 macOS 风格程序坞，带液态玻璃控制中心和桌面小组件。C# / WPF / .NET 10，开发预览 0.6.0，最低支持 Windows 10 2004。
+Windows 原生程序坞、液态玻璃控制中心和桌面小组件。使用 C# / WPF / .NET 10。
 
-## 首次克隆后的准备
+[下载安装包](https://github.com/JoenLee/DockForWin/releases/tag/v1.0.0) · [详细使用说明](docs/USAGE.md) · [更新记录](CHANGELOG.md)
 
-仓库不包含 SDK、NuGet 缓存、个人数据和第三方工具。在仓库根目录执行一次：
+## 安装与首次运行
+
+1. 从 **Releases → v1.0.0** 下载 `DockForWin-Setup-1.0.0-x64.exe`。
+2. 双击安装。新安装默认位置为 `%LOCALAPPDATA%\Programs\DockForWin`，不需要管理员权限；升级沿用已有安装目录。
+3. 从开始菜单打开 **DockForWin**。左键点击托盘图标进入设置，右键可退出。
+
+安装包已包含 .NET 10 桌面运行环境，无需另装 .NET。面向 x64 Windows，主要验证环境为 Windows 11；声明的 API 下限为 Windows 10 2004，但 Windows 10 的完整兼容性尚未验证。
+
+**新用户首次启动使用干净的默认配置：**
+
+- 桌面没有预先放置的小组件。
+- Dock 只固定文件资源管理器、可用时的记事本、下载和回收站；入口在使用者电脑上动态解析。
+- 不包含作者的软件固定项、账号、播放记录、城市坐标或显示器路径，也不会自动读取开发目录。
+- 已有用户配置会继续保留；升级不会重置你的固定项与桌面布局。
+
+安装器采用 LZMA2 高压缩，保留完整 WPF / COM 运行所需功能。为了兼容 WPF，未采用可能破坏资源与反射调用的裁剪。
+
+## 怎么使用
+
+| 操作 | 使用方式 |
+| --- | --- |
+| 固定应用、文件或文件夹 | 拖入 Dock；也可通过设置管理固定项 |
+| 启动 / 切换 / 收起窗口 | 点击 Dock 图标；多窗口应用可悬停查看预览 |
+| 打开设置 | 左键点击托盘图标，或右键 Dock → 设置 |
+| 打开控制中心 | 默认 **Ctrl+Win+A**；也可使用托盘或任务栏入口 |
+| 放置桌面小组件 | 设置 → 小组件，选择类型、样式和尺寸，点击“添加到桌面” |
+| 移动 / 删除小组件 | 拖动非交互区域；右键组件管理或删除 |
+| 调整小组件外观 | 在组件设置中修改配色、字号、材质和圆角 |
+| 时钟与世界时间 | 读取 Windows 系统时间；普通时钟默认本机时区，城市 / 世界时钟按所选时区换算 |
+| 音乐播放器 | 在支持 Windows 系统媒体接口的播放器中播放音乐，再使用组件的播放、暂停、切歌等按钮 |
+| 天气 | 选择城市，或授权使用位置；天气、日出与日落来自 Open-Meteo |
+
+指针表盘会持续按系统时间校准；关闭动画时仍更新时间。小组件库保留 40 款 Figma 设计样式，其中包含 18 款天气、12 款时钟、5 款 iPod、1 款唱机和 4 款 iOS 播放器。已按作者选择移除 18 款旧组件。
+
+完整操作、数据备份和能力限制见 [使用说明](docs/USAGE.md)。
+
+## 配置与隐私
+
+默认用户数据：`%LOCALAPPDATA%\DockForWindows`。
+
+- `settings.json`：偏好、固定项、小组件与布局。
+- `widget-media`：本机播放封面缓存；`widget-account`：可选的 Microsoft 数据连接。
+- `dock.log`：诊断日志。
+
+卸载保留用户数据。发行包和 Git 源码不包含 `data/`。开发启动使用仓库内 `data/`，和普通安装默认数据目录分别管理。
+
+天气查询会访问 Open-Meteo；Microsoft To Do / OneNote 仅在你主动连接账号并配置来源后使用。系统媒体信息取自 Windows 当前媒体会话，应用收藏与最近播放记录属于本应用，不会伪造播放器的完整队列或音质。
+
+## 从源码构建
+
+需要 Windows、`global.json` 指定的 .NET SDK，以及联网恢复 NuGet 依赖。SDK 和缓存不随源码仓库发布。
 
 ```powershell
-# 把 global.json 指定的 SDK 装到 tools\dotnet，不改系统 PATH
+# 在仓库根目录安装本地 SDK，不修改系统 PATH
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\dotnet-install.ps1 -Version 10.0.403 -InstallDir .\tools\dotnet
-```
 
-NuGet 包在第一次编译时下载到 `tools\.nuget`（需要联网）。
-
-任务栏适配（隐藏任务栏应用图标、在网络图标旁给控制中心入口留位置）依赖便携版 Windhawk 和 Windows 11 Taskbar Styler 模组，放在 `tools\windhawk\`，不在仓库里。没有这个目录时程序照常运行，任务栏保持原样。
-
-## 运行
-
-- `Run-Dev.cmd`：编译 Release 后启动，配置目录用仓库里的 `data\`。
-- `Open-Settings.cmd`：打开设置；程序已在运行时直接唤出设置窗口。
-- 退出：右键托盘图标 →“退出”。
-
-再次启动只会唤出已运行的实例。命令行参数：`--settings`、`--control-center`、`--data-directory <目录>`、`--shutdown`。
-
-## 编译与测试
-
-```powershell
+# 构建、默认逻辑检查
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Build.ps1 -Configuration Release
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Test.ps1
+
+# 验证干净默认配置和全部时钟；使用隔离数据，不改 Windows 系统时间
+.\tools\dotnet\dotnet.exe run --project .\tests\DockForWindows.Tests\DockForWindows.Tests.csproj -- --verify-release-profile-clocks .\tests\artifacts\release-clocks
 ```
 
-`Test.ps1` 跑默认的逻辑检查，不改系统设置。其余 `--verify-*` 定向检查列在 `tests/DockForWindows.Tests/Program.cs` 里；GUI 检查会移动鼠标、打开置顶窗口，运行前先看对应的检查代码。改了 `Shaders/LiquidGlass.hlsl` 要重新生成 `.ps`，`Build.ps1` 会自动调用 `tools\Compile-Shaders.ps1`。
+`Run-Dev.cmd` 构建并使用仓库 `data/` 启动。`Open-Settings.cmd` 唤出设置。GUI 定向检查可能打开置顶窗口，执行前请阅读对应检查代码。
 
-## 配置与数据
+生成安装包需要 **Inno Setup**：将 `ISCC.exe` 加到 PATH，或将工具放在 `tools\installer\inno\`，然后执行：
 
-- 开发运行：仓库根目录的 `data\`（已被 `.gitignore` 排除，不会提交）。
-- 安装版：`%LOCALAPPDATA%\DockForWindows`。
-- `settings.json` 是配置，`dock.log` 是日志，超过 2 MB 换新文件。
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Installer.ps1
+```
 
-## 会动到系统的地方
+输出到 `dist/`，包括安装 EXE、SHA-256 校验文件和临时 `payload/`。安装 EXE 完成验证后可以删除 `payload/`。构建脚本只收集发布程序和许可文件，不收集个人配置。
 
-| 功能 | 做了什么 | 怎么关 |
-| --- | --- | --- |
-| 接管托盘图标 | 点任务栏右侧的网络、音量、电池图标时打开程序坞的控制中心 | 按住 Ctrl 点击仍打开系统面板；设置里关闭“接管右侧快捷设置入口” |
-| 全局快捷键 | 默认 Ctrl+Win+A 打开控制中心 | 在控制中心设置里更换 |
-| 任务栏适配 | 找到 `tools\windhawk` 时启动便携版 Windhawk 修改资源管理器的任务栏；程序退出或崩溃后由守护脚本让它退出，任务栏恢复 | 删除或改名 `tools\windhawk` |
-| 开机自启 | 只有在设置里打开并保存时才写 `HKCU\...\Run` | 在设置里关闭 |
-| Wi-Fi 列表 | Windows 11 24H2 起列出附近网络需要开启位置服务；未开启时不去读取，界面提示并给出设置入口 | — |
-| 联网 | 只有天气小组件访问 Open-Meteo，发送的是所选城市名或坐标 | 不添加天气组件 |
+## 说明
 
-## 主要功能
+- 亮度、无线网络、蓝牙及部分系统操作取决于硬件、Windows 版本与权限。不可用时显示实际反馈，或打开 Windows 原生设置。
+- 音乐进度拖动、随机与循环取决于播放器向 Windows 暴露的能力；不支持时禁用。
+- Windows 没有通用的系统闹钟读取接口；闹钟组件提供 Windows 时钟入口，不显示虚构的下一次闹钟。
+- 可选的任务栏图标隐藏依赖用户自行配置的 Windhawk；本发行包不携带该工具，不会为此自动下载或接管它。
+- 本首发安装包未做商业代码签名。
 
-- **程序坞**：固定项在左，运行中和最近使用的应用在分隔线右侧，回收站在最右。拖入 exe、快捷方式、文件或文件夹即可固定；快捷方式复制到 `data\shortcuts`，原快捷方式删掉也能启动。点击启动或切换窗口，再点收起；多窗口应用悬停显示窗口预览，滚轮切换。前台全屏时自动退下。
-- **液态玻璃**：用 Windows Graphics Capture 取程序坞后方窗口的画面，在 GPU 上做边缘折射、高斯磨砂、高光和衬色。后方画面不变时复用上一帧，不重复上传。
-- **控制中心**：Wi-Fi、蓝牙、音量、亮度、媒体、深色模式、节能、投影等模块，可拖动排列、调整尺寸；系统操作以 Windows 实际返回的状态为准，做不到的直接打开系统设置。
-- **桌面小组件**：天气、日历、时钟等，可放到桌面。
-
-## 打包
-
-`packaging\Build-Installer.ps1` 生成自带运行时的单文件 exe 和 Inno Setup 安装包（需要 `tools\installer\inno`）。给内测用户发安装包，不要发整个开发目录。
-
-## 文档
-
-- `AGENTS.md`：开发规范，人和 AI 编码助手都按它来。
-- `HANDOFF-2026-11-11.md`、`PROJECT_HANDOFF.md`：原作者的交接记录，含历史实现和验证细节；里面的 `D:\DockForWindows` 等路径是原作者机器上的。
-- `docs/`：各轮设计、性能和验证记录，按日期命名，是历史资料。
+第三方字体与图标许可随安装包放在 `Licenses/`。架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；维护规范见 [AGENTS.md](AGENTS.md)。

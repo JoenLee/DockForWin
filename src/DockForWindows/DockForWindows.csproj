@@ -13,7 +13,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AssemblyName>DockForWindows</AssemblyName>
-    <Version>0.6.0</Version>
+    <Version>1.0.0</Version>
     <Product>DockForWin</Product>
     <Description>Windows 程序坞</Description>
     <ApplicationIcon>Assets\DockForWindows.ico</ApplicationIcon>
@@ -26,4 +26,5 @@
   <ItemGroup><PackageReference Include="System.Management" Version="10.0.0" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="DockForWindows.Tests" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Resources\Strings.en-US.json" WithCulture="false" LogicalName="DockForWindows.Resources.Strings.en-US.json" /></ItemGroup>
+  <ItemGroup><Resource Include="Assets\FigmaWidgets\**\*.png" /><Resource Include="Assets\FigmaWidgets\scenes.json" /><Resource Include="Assets\FigmaWidgets\fonts\Inter-*.ttf" /><Content Include="Assets\FigmaWidgets\fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
 </Project>

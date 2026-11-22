@@ -81,7 +81,7 @@ internal partial class SettingsShellWindow
     protected static FrameworkElement PageHeader(int section,string title,string description)
     {
         // Flat header: just the title and a quiet line of purpose, no icon tile.
-        var header=new Grid{Margin=new Thickness(0,12,0,string.IsNullOrWhiteSpace(description)?16:20)};header.ColumnDefinitions.Add(new(){Width=GridLength.Auto});header.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
+        var header=new Grid{Margin=new Thickness(0,8,0,string.IsNullOrWhiteSpace(description)?12:14)};header.ColumnDefinitions.Add(new(){Width=GridLength.Auto});header.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
         var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center};text.Children.Add(new TextBlock{Text=title,FontFamily=DesignSystem.DisplayFont,FontSize=DesignSystem.Title,FontWeight=FontWeights.SemiBold});
         if(!string.IsNullOrWhiteSpace(description))text.Children.Add(Muted(description,new Thickness(0,3,0,0)));Grid.SetColumn(text,1);header.Children.Add(text);return header;
     }
@@ -92,7 +92,7 @@ internal partial class SettingsShellWindow
     private static StackPanel Group(Panel body,string title)
     {
         body.Children.Add(GroupTitle(title));
-        var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(content);surface.Margin=new Thickness(0,0,0,22);body.Children.Add(surface);return content;
+        var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};var surface=GroupSurface(content);surface.Margin=new Thickness(0,0,0,18);body.Children.Add(surface);return content;
     }
     protected static Border RowSeparator(){var line=new Border{Height=1,SnapsToDevicePixels=true};line.SetResourceReference(Border.BackgroundProperty,"SettingsLine");return line;}
     protected static void AddRow(Panel group,UIElement child)

@@ -16,6 +16,9 @@ public sealed class WidgetSource
     public List<string> WorldZones {get;set;}=new(){"China Standard Time","GMT Standard Time","Eastern Standard Time"};
     public string List {get;set;}="";
     public string NotesFolder {get;set;}="";
+    public string UsageFile {get;set;}="";
+    public string EventName {get;set;}="";
+    public DateTime? TargetDate {get;set;}
     public WidgetSource Copy(){var c=(WidgetSource)MemberwiseClone();c.WorldZones=new(WorldZones);return c;}
     public void Normalize()
     {
@@ -24,6 +27,8 @@ public sealed class WidgetSource
         try{TimeZoneInfo.FindSystemTimeZoneById(TimeZone);}catch{TimeZone=TimeZoneInfo.Local.Id;}
         WorldZones=(WorldZones??new()).Where(id=>{try{TimeZoneInfo.FindSystemTimeZoneById(id);return true;}catch{return false;}}).Distinct().Take(6).ToList();
         List=(List??"").Trim();NotesFolder=(NotesFolder??"").Trim();
+        UsageFile=(UsageFile??"").Trim();if(UsageFile.Length>1024)UsageFile=UsageFile[..1024];
+        EventName=(EventName??"").Trim();if(EventName.Length>100)EventName=EventName[..100];TargetDate=TargetDate?.Date;
     }
 }
 public sealed class WidgetInstance
@@ -75,7 +80,15 @@ public sealed class WidgetMusicEntry
 public static class WidgetSizes
 {
     public static readonly WidgetSize[] All={new(2,2),new(4,2),new(4,4),new(4,6),new(6,2)};
-    public static IReadOnlyList<WidgetSize> For(WidgetDefinition d)=>d.Kind switch {
+    public static IReadOnlyList<WidgetSize> For(WidgetDefinition d)=>FigmaWidgetCatalog.Find(d.Id) is {} figma?new[]{figma.Size}:d.Id=="music-pocket"?new[]{new WidgetSize(4,7)}:d.Id is "music-form-room" or "music-studio-record"?new[]{new WidgetSize(4,4)}:d.Id=="music-form-single"?new[]{new WidgetSize(2,2)}:d.Id=="music-form-horizontal"?new[]{new WidgetSize(4,2)}:DocumentClockStyles.Find(d.Id) is {} clock?DocumentClockStyles.Sizes(clock):d.Kind switch {
+        _ when d.Layout is WidgetLayout.ClockDot or WidgetLayout.ClockOrbit or WidgetLayout.CalendarDot or WidgetLayout.CalendarMiniGrid or WidgetLayout.BatterySegments or WidgetLayout.BatteryRing or WidgetLayout.StorageGauge or WidgetLayout.AiCodex or WidgetLayout.AiClaude=>new[]{new WidgetSize(2,2),new(4,4)},
+        _ when d.Layout is WidgetLayout.ProgressRings or WidgetLayout.CountdownDot or WidgetLayout.CountdownWide or WidgetLayout.WeatherDot=>new[]{new WidgetSize(2,2),new(4,2)},
+        _ when d.Layout is WidgetLayout.ClockDotWide or WidgetLayout.WeatherSplit or WidgetLayout.AiDual or WidgetLayout.MusicVinylWide or WidgetLayout.MusicFrosted or WidgetLayout.MusicCassette=>new[]{new WidgetSize(4,2),new(6,2)},
+        _ when d.Layout==WidgetLayout.AiHistory=>new[]{new WidgetSize(4,2),new(4,4),new(6,2)},
+        _ when d.Layout==WidgetLayout.MusicVinyl=>new[]{new WidgetSize(2,2),new(4,2)},
+        _ when d.Layout is WidgetLayout.MusicPoster or WidgetLayout.MusicRetro=>new[]{new WidgetSize(4,4),new(4,6)},
+        _ when d.Layout==WidgetLayout.MusicMini=>new[]{new WidgetSize(4,1),new(6,1)},
+
         _ when d.Layout is WidgetLayout.CalendarWeather or WidgetLayout.CalendarGiant or WidgetLayout.CalendarMinimal or WidgetLayout.CalendarPoster=>new[]{new WidgetSize(4,2),new(4,4),new(6,2)},
         WidgetKind.Clock when d.Layout is WidgetLayout.ClockClassic or WidgetLayout.ClockMinimal=>new[]{new WidgetSize(2,2),new(4,4)},
         WidgetKind.Clock=>new[]{new WidgetSize(4,2),new(4,4),new(6,2)},
@@ -89,8 +102,10 @@ public static class WidgetSizes
         WidgetKind.Music when d.Layout==WidgetLayout.MusicWide=>new[]{new WidgetSize(4,2),new(6,2)},
         WidgetKind.Music when d.Layout is WidgetLayout.MusicList or WidgetLayout.MusicLarge=>new[]{new WidgetSize(4,4),new(4,6)},
         _=>All };
-    public static string Category(WidgetKind kind)=>kind switch{WidgetKind.Weather=>LocalizedText.Get("天气"),WidgetKind.Calendar=>LocalizedText.Get("日历"),WidgetKind.Clock=>LocalizedText.Get("时钟"),WidgetKind.Reminders=>LocalizedText.Get("提醒事项"),WidgetKind.Notes=>LocalizedText.Get("备忘录"),_=>LocalizedText.Get("音乐")};
+    public static string Category(WidgetKind kind)=>kind switch{WidgetKind.Weather=>LocalizedText.Get("天气"),WidgetKind.Calendar=>LocalizedText.Get("日历"),WidgetKind.Clock=>LocalizedText.Get("时钟"),WidgetKind.Reminders=>LocalizedText.Get("提醒事项"),WidgetKind.Notes=>LocalizedText.Get("备忘录"),WidgetKind.Status=>LocalizedText.Get("设备状态"),WidgetKind.AiUsage=>LocalizedText.Get("AI 额度"),_=>LocalizedText.Get("音乐")};
     public static string Description(WidgetDefinition d)=>d.Kind switch{
+        WidgetKind.Status=>LocalizedText.Get("Windows 真实电池状态与系统磁盘容量"),
+        WidgetKind.AiUsage=>LocalizedText.Get("Codex 本机记录或自定义用量 JSON"),
         WidgetKind.Weather=>LocalizedText.Get("当前实况与当地预报 · Open-Meteo"),
         WidgetKind.Calendar=>LocalizedText.Get("日期、农历与本应用日程"),
         WidgetKind.Clock=>LocalizedText.Get("本地与世界时间 · 可选择时区"),
@@ -104,6 +119,7 @@ public sealed partial class WidgetOptions
     public List<WidgetTask> Tasks {get;set;}=new();
     public List<WidgetNote> Notes {get;set;}=new();
     public List<WidgetMusicEntry> MusicHistory {get;set;}=new();
+    public List<string> FavoriteTracks {get;set;}=new();
     public Dictionary<string,int> Selections {get;set;}=new();
     public Dictionary<string,WidgetSize> Sizes {get;set;}=new();
     public Dictionary<string,WidgetSource> Sources {get;set;}=new();
@@ -119,6 +135,7 @@ public sealed partial class WidgetOptions
         foreach(var t in Tasks){t.Title=t.Title[..Math.Min(300,t.Title.Length)];t.Detail=(t.Detail??"");if(t.Detail.Length>4000)t.Detail=t.Detail[..4000];t.List=string.IsNullOrWhiteSpace(t.List)?LocalizedText.Get("提醒事项"):t.List;}
         Notes=(Notes??new()).Where(x=>x!=null).DistinctBy(x=>x.Id).Take(500).ToList();
         foreach(var n in Notes){n.Title??="";n.Body??="";n.Folder??=LocalizedText.Get("备忘录");if(n.Title.Length>300)n.Title=n.Title[..300];if(n.Body.Length>100000)n.Body=n.Body[..100000];}
+        FavoriteTracks=(FavoriteTracks??new()).Where(k=>k!=null&&k.Length==64&&k.All(Uri.IsHexDigit)).Distinct(StringComparer.Ordinal).Take(200).ToList();
         MusicHistory=(MusicHistory??new()).Where(x=>x!=null&&!string.IsNullOrWhiteSpace(x.Title)).Take(30).ToList();
         foreach(var entry in MusicHistory){entry.Title=entry.Title[..Math.Min(entry.Title.Length,300)];entry.Artist??="";if(entry.Artist.Length>300)entry.Artist=entry.Artist[..300];if(entry.ArtworkKey==null||entry.ArtworkKey.Length!=64||!entry.ArtworkKey.All(Uri.IsHexDigit))entry.ArtworkKey="";}
         Selections??=new();Sizes??=new();Sources=(Sources??new()).Where(x=>x.Value!=null&&WidgetRegistry.Definitions.Any(d=>d.Id==x.Key)).ToDictionary(x=>x.Key,x=>x.Value);foreach(var s in Sources.Values)s.Normalize();
@@ -127,12 +144,12 @@ public sealed partial class WidgetOptions
     private void CopySystem(WidgetOptions from)
     {
         Instances=from.Instances.Select(x=>x.Copy()).ToList();Tasks=from.Tasks.Select(x=>x.Copy()).ToList();Notes=from.Notes.Select(x=>x.Copy()).ToList();
-        MusicHistory=from.MusicHistory.Select(x=>x.Copy()).ToList();Selections=new(from.Selections);Sizes=new(from.Sizes);Sources=from.Sources.ToDictionary(x=>x.Key,x=>x.Value.Copy());
+        MusicHistory=from.MusicHistory.Select(x=>x.Copy()).ToList();FavoriteTracks=new(from.FavoriteTracks);Selections=new(from.Selections);Sizes=new(from.Sizes);Sources=from.Sources.ToDictionary(x=>x.Key,x=>x.Value.Copy());
     }
     // A stale settings draft must preserve independent desktop changes made since it opened.
     public void MergeLive(WidgetOptions baseline,WidgetOptions live)
     {
-        Instances=live.Instances.Select(x=>x.Copy()).ToList();MusicHistory=live.MusicHistory.Select(x=>x.Copy()).ToList();
+        Instances=live.Instances.Select(x=>x.Copy()).ToList();MusicHistory=live.MusicHistory.Select(x=>x.Copy()).ToList();FavoriteTracks=new(live.FavoriteTracks);
         Tasks=Merge(Tasks,baseline.Tasks,live.Tasks,x=>x.Id,x=>x.Copy());Notes=Merge(Notes,baseline.Notes,live.Notes,x=>x.Id,x=>x.Copy());Events=Merge(Events,baseline.Events,live.Events,x=>x.Id,x=>x.Copy());
     }
     private static List<T> Merge<T>(List<T> draft,List<T> baseline,List<T> live,Func<T,Guid> id,Func<T,T> copy)

@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="640" height="260" viewBox="0 0 640 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+<ellipse id="Soft moonlight" cx="320" cy="130" rx="320" ry="130" fill="url(#paint0_radial_0_53)"/>
+<defs>
+<radialGradient id="paint0_radial_0_53" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(320 130) scale(320 130)">
+<stop stop-color="#C5CEFF" stop-opacity="0.18"/>
+<stop offset="1" stop-color="#C5CEFF" stop-opacity="0"/>
+</radialGradient>
+</defs>
+</svg>

@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="144" height="66.9223" viewBox="0 0 144 66.9223" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="distant-coral-dune">
+<path id="Vector" d="M0 12.0652C19.4286 17.208 37.7143 19.4937 57.7143 16.6366C88.5714 12.6366 110.857 -3.3634 144 0.636599V66.9223H0V12.0652Z" fill="url(#paint0_linear_0_177)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_177" x1="68.5714" y1="-0.506257" x2="82.2857" y2="45.208" gradientUnits="userSpaceOnUse">
+<stop stop-color="#CA8166"/>
+<stop offset="1" stop-color="#AC5844"/>
+</linearGradient>
+</defs>
+</svg>

@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="108" height="108" viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle id="Sun halo" cx="54" cy="54" r="54" fill="url(#paint0_radial_0_85)"/>
+<defs>
+<radialGradient id="paint0_radial_0_85" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(54 54) scale(54)">
+<stop stop-color="#FFE7E7" stop-opacity="0.7"/>
+<stop offset="0.35" stop-color="#FFE7E7" stop-opacity="0.27"/>
+<stop offset="1" stop-color="#FFE7E7" stop-opacity="0"/>
+</radialGradient>
+</defs>
+</svg>

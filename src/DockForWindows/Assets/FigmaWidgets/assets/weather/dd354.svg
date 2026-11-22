@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="424" height="180" viewBox="0 0 424 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path id="Soft solar wash" d="M0 104C112 104 112 0 212 0C312 0 312 104 424 104V180H0V104Z" fill="url(#paint0_linear_0_12)"/>
+<defs>
+<linearGradient id="paint0_linear_0_12" x1="212" y1="0" x2="212" y2="180" gradientUnits="userSpaceOnUse">
+<stop stop-color="#74C5EF" stop-opacity="0.2"/>
+<stop offset="0.6" stop-color="#74C5EF" stop-opacity="0.04"/>
+<stop offset="1" stop-color="#74C5EF" stop-opacity="0"/>
+</linearGradient>
+</defs>
+</svg>

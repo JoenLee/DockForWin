@@ -30,3 +30,10 @@ tests/desktop-artifacts/
 /tests/*-results.txt
 /tests/pin-icon-audit.txt
 /packaging/*-results.txt
+
+# Reproducible release and profiling outputs
+/dist/
+*.etl
+*.dmp
+/docs/screenshots/
+/docs/*-preview/

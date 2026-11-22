@@ -14,6 +14,10 @@ namespace DockForWindows.Views;
 
 internal static partial class WidgetContent
 {
+    internal static ControlTemplate PlayerButtonTemplate=>PlainButton;
+    internal static FrameworkElement PlayerArt(byte[]? bytes,double extent)=>Art(bytes,extent);
+    internal static FrameworkElement PlayerLayout(WidgetDefinition definition,WidgetRenderData data)
+        =>ReferencePlayer(definition.Id)?ReferencePlayerLayout(definition,data):WidgetSampleTokens.Applies(definition.Layout)?ReferenceSample(definition,data):Music(definition,data);
     private static readonly Dictionary<byte[],BitmapSource> Images=new();
     private static FrameworkElement Art(byte[]? bytes,double extent)
     {
@@ -51,10 +55,12 @@ internal static partial class WidgetContent
             AutomationProperties.SetName(button,entry.Item3);AutomationProperties.SetAutomationId(button,"widget-music-"+entry.Item1);
             string command=entry.Item1;button.Click+=(_,e)=>{data.MediaCommand?.Invoke(command);e.Handled=true;};row.Children.Add(button);
         }
+        row.Children.Add(new WidgetVolumeButton(data){Margin=new Thickness(compact?2:5,0,compact?2:5,0)});
         return row;
     }
     private static FrameworkElement Music(WidgetDefinition d,WidgetRenderData data)
     {
+        if(d.Layout is WidgetLayout.MusicVinyl or WidgetLayout.MusicVinylWide or WidgetLayout.MusicPoster or WidgetLayout.MusicFrosted or WidgetLayout.MusicRetro or WidgetLayout.MusicCassette or WidgetLayout.MusicMini)return StyledMusic(d,data);
         bool small=d.Size.Columns==2,now=d.Layout==WidgetLayout.MusicNow&&d.Size.Rows>=4;
         bool history=d.Size.Rows>=4&&d.Layout is WidgetLayout.MusicList or WidgetLayout.MusicLarge;
         var m=data.Media;var g=new Grid{Margin=new Thickness(small?16:22),ClipToBounds=true};
@@ -67,8 +73,8 @@ internal static partial class WidgetContent
             var footer=new StackPanel();
             bool known=m?.Duration>TimeSpan.Zero;
             var progress=new ProgressBar{Maximum=known?m!.Duration.TotalSeconds:1,Value=known?m!.Position.TotalSeconds:0,Height=3,BorderThickness=new Thickness(0),Margin=new Thickness(0,7,0,5),IsEnabled=known};
-            progress.SetResourceReference(Control.ForegroundProperty,"WidgetAccent");footer.Children.Add(progress);
-            footer.Children.Add(T(known?$"{m!.Position:mm\\:ss} / {m.Duration:mm\\:ss}":"—:— / —:—",10,"WidgetMuted"));footer.Children.Add(Transport(data));
+            AutomationProperties.SetAutomationId(progress,"widget-music-readonly-progress");progress.SetResourceReference(Control.ForegroundProperty,"WidgetAccent");footer.Children.Add(progress);
+            var times=T(known?$"{m!.Position:mm\\:ss} / {m.Duration:mm\\:ss}":"—:— / —:—",10,"WidgetMuted");AutomationProperties.SetAutomationId(times,"widget-music-times");footer.Children.Add(times);footer.Children.Add(Transport(data));
             if(data.Error!=null)footer.Children.Add(T(data.Error,10,"WidgetMuted"));At(g,footer,row:2);return g;
         }
         if(small){

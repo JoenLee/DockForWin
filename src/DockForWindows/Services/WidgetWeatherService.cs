@@ -17,10 +17,13 @@ public sealed record WidgetWeatherSnapshot(double Temperature, int Code, bool Is
     DateTimeOffset RetrievedAt, IReadOnlyList<WidgetForecastDay> Days)
 {
     public IReadOnlyList<WidgetForecastHour> Hours {get;init;}=Array.Empty<WidgetForecastHour>();
+    public IReadOnlyList<WidgetSolarDay> SolarDays {get;init;}=Array.Empty<WidgetSolarDay>();
+    public string TimeZone {get;init;}="";
+    public int UtcOffsetSeconds {get;init;}
 }
 public sealed record WidgetForecastHour(DateTime Time,int Code,double Temperature);
 
-public sealed class WidgetWeatherService
+public sealed partial class WidgetWeatherService
 {
     private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromSeconds(12) };
     private readonly HttpClient _client;
@@ -61,7 +64,7 @@ public sealed class WidgetWeatherService
         ValidateLocation(latitude, longitude);
         string location = FormattableString.Invariant($"latitude={latitude:F6}&longitude={longitude:F6}");
         using var stream = await _client.GetStreamAsync("https://api.open-meteo.com/v1/forecast?" + location +
-            "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto", cancellation).ConfigureAwait(false);
+            "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=5&timezone=auto", cancellation).ConfigureAwait(false);
         using var json = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions { MaxDepth = 24 }, cancellation).ConfigureAwait(false);
         return Parse(json.RootElement);
     }
@@ -95,10 +98,12 @@ public sealed class WidgetWeatherService
             if(times.GetArrayLength()>400||temps.GetArrayLength()!=times.GetArrayLength()||hourCodes.GetArrayLength()!=times.GetArrayLength())throw new FormatException(LocalizedText.Get("逐小时天气数据不完整。"));
             for(int i=0;i<times.GetArrayLength();i++)hours.Add(new(DateTime.SpecifyKind(DateTime.Parse(times[i].GetString()!,CultureInfo.InvariantCulture),DateTimeKind.Unspecified),hourCodes[i].GetInt32(),Temperature(temps[i])));
         }
+        int offset=root.TryGetProperty("utc_offset_seconds",out var utcOffset)?utcOffset.GetInt32():0;
+        if(Math.Abs((long)offset)>14*3600)throw new FormatException("天气时区偏移无效。");
         return new(Temperature(current.GetProperty("temperature_2m")), current.GetProperty("weather_code").GetInt32(),
             current.GetProperty("is_day").GetInt32() == 1,
             DateTime.SpecifyKind(DateTime.Parse(current.GetProperty("time").GetString()!, CultureInfo.InvariantCulture), DateTimeKind.Unspecified),
-            DateTimeOffset.Now, days.AsReadOnly()){Hours=hours.AsReadOnly()};
+            DateTimeOffset.Now, days.AsReadOnly()){Hours=hours.AsReadOnly(),SolarDays=ParseSolar(daily,count),TimeZone=root.TryGetProperty("timezone",out var zone)?zone.GetString()??"":"",UtcOffsetSeconds=offset};
     }
     public static string Description(int code) => code switch {
         0 => LocalizedText.Get("晴"), 1 => LocalizedText.Get("大部晴朗"), 2 => LocalizedText.Get("局部多云"), 3 => LocalizedText.Get("阴"), 45 or 48 => LocalizedText.Get("雾"),

@@ -82,7 +82,7 @@ internal static class WidgetGalleryChecks
         var store = new SettingsService(Path.Combine(directory, "model-fixture")); store.Save(options); var loaded = store.Load();
         Assert(loaded.Widgets.Events.Single().Title == "草稿" && loaded.Widgets.Material == WidgetMaterial.Dark, "widgets persist through SettingsService");
         Assert(loaded.Widgets.CardColors["weather-square"].Accent=="#FF00AA","per-card palettes persist through SettingsService");
-        Assert(Enum.GetValues<WidgetKind>().Length==6&&WidgetRegistry.Definitions.Select(d=>d.Id).Distinct().Count()==WidgetRegistry.Definitions.Count,"six categories share unique registered templates");
+        Assert(Enum.GetValues<WidgetKind>().All(k=>WidgetRegistry.Definitions.Any(d=>d.Kind==k))&&WidgetRegistry.Definitions.Select(d=>d.Id).Distinct().Count()==WidgetRegistry.Definitions.Count,"six categories share unique registered templates");
         var instance = WidgetRegistry.CreateInstance("weather-forecast", WidgetMaterial.Glass);
         Assert(instance.InstanceId != Guid.Empty && WidgetRegistry.Get(instance.DefinitionId).Size == new WidgetSize(4, 2), "instance contract resolves a registered definition without creating desktop windows");
         var geometryType = AppAssembly.GetType("DockForWindows.Views.WidgetGeometry")!;

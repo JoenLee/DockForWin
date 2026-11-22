@@ -56,6 +56,7 @@ internal sealed class WidgetText : ContentControl
     {
         protected override void OnRender(DrawingContext context)=>owner.DrawOutline(context,RenderSize);
     }
+    internal void SetText(string text){if(_label.Text==text)return;_label.Text=text;_outline=null;InvalidateMeasure();_ink.InvalidateVisual();}
     internal Geometry? OutlineGeometry=>_outline;
     internal string? NumberFontOverride {set{if(value!=null)WidgetTypography.SetNumberFont(this,value);}}
     internal WidgetText(string text)

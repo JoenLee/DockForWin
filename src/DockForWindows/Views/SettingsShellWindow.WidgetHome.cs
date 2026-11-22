@@ -15,9 +15,9 @@ internal partial class SettingsShellWindow
     {
         var (page,body)=Page(LocalizedText.Get("小组件"),"");body.Margin=new Thickness(DesignSystem.PageInset,10,DesignSystem.PageInset,28);
         var cards=new Grid();cards.ColumnDefinitions.Add(new());cards.ColumnDefinitions.Add(new());
-        for(int row=0;row<3;row++)cards.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        for(int row=0;row<(Enum.GetValues<WidgetKind>().Length+1)/2;row++)cards.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var navigator=BuildWidgetNavigator(query=>{int visible=0;foreach(Button card in cards.Children){var kind=(WidgetKind)card.Tag;card.Visibility=WidgetSizes.Category(kind).Contains(query,StringComparison.OrdinalIgnoreCase)||WidgetRegistry.Definitions.Any(d=>d.Kind==kind&&d.Title.Contains(query,StringComparison.OrdinalIgnoreCase))?Visibility.Visible:Visibility.Collapsed;if(card.Visibility==Visibility.Visible){Grid.SetRow(card,visible/2);Grid.SetColumn(card,visible%2);visible++;}}});body.Children.Add(navigator);
-        string[] descriptions={LocalizedText.Get("实况、逐小时天气与多日预报"),LocalizedText.Get("月历、日期与本地日程"),LocalizedText.Get("本地时间、世界时钟与表盘"),LocalizedText.Get("管理待办，记录下一件要做的事"),LocalizedText.Get("便签、备忘录与文件夹笔记"),LocalizedText.Get("正在播放与最近播放的音乐")};
+        string[] descriptions={LocalizedText.Get("实况、逐小时天气与多日预报"),LocalizedText.Get("月历、日期与本地日程"),LocalizedText.Get("本地时间、世界时钟与表盘"),LocalizedText.Get("管理待办，记录下一件要做的事"),LocalizedText.Get("便签、备忘录与文件夹笔记"),LocalizedText.Get("正在播放与最近播放的音乐"),LocalizedText.Get("电池电量与系统磁盘容量"),LocalizedText.Get("Codex、Claude 额度与本机 Token 记录")};
         int index=0;
         foreach(var kind in Enum.GetValues<WidgetKind>()){
             // Heading and description at the top, the template count on the bottom edge: the six cards fill the

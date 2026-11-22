@@ -151,7 +151,7 @@ internal sealed partial class SettingsWindow : SettingsShellWindow
     // Inset group: title above, porcelain/graphite surface, footnote below.
     private StackPanel Section(Panel parent,string title,string help)
     {
-        var outer=new StackPanel{Margin=new Thickness(0,0,0,22)};var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};
+        var outer=new StackPanel{Margin=new Thickness(0,0,0,10)};var content=new StackPanel{Margin=new Thickness(DesignSystem.RowInset,0,DesignSystem.RowInset,0)};
         outer.Children.Add(GroupTitle(title));outer.Children.Add(GroupSurface(content));
         if(!string.IsNullOrWhiteSpace(help))Help(outer,help,new Thickness(DesignSystem.RowInset,8,8,0));parent.Children.Add(outer);_settingsSections.Add(new(parent,outer,title,help));return content;
     }
